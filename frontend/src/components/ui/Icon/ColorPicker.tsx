@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 
 interface ColorPickerProps {
   label?: string;
@@ -13,14 +14,15 @@ const COLORS = [
 ];
 
 export const ColorPicker: React.FC<ColorPickerProps> = ({ 
-  label = "Цвет", 
+  label = "Color", 
   selectedColor, 
   onSelect 
 }) => {
+  const {t} = useTranslation();
   return (
     <div className="space-y-2">
       <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-        {label}
+        {t(label)}
       </label>
       <div className="flex flex-wrap gap-2">
         {COLORS.map((c) => (

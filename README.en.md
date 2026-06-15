@@ -69,11 +69,15 @@ docker-compose up -d --build
 https://test1.your-domain.nip.io
 
 
-On first launch, the system automatically:
-- Creates database schemas and tenants
-- Syncs all permissions
-- Creates test users and roles
-- Seeds chart of accounts
+On first launch, the following happens automatically:
+- 🔐 **SSL certificate generation** — self-signed certificate is created by the `ssl-gen` service if not present in `nginx/ssl/`
+- 🗄️ **DB migrations** — schema and table creation
+- 🏢 **Tenant initialization** — companies and superusers
+- 🔑 **Permission sync** — all RBAC permissions for all tenants
+- 👥 **Seed data** — users, roles, chart of accounts, branches
+- 📦 **Static files** — Django collectstatic
+
+## 📁 Project structure (see file structure.txt)
 
 ## 👥 Test Users
 

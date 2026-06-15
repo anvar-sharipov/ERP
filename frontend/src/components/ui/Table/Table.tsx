@@ -3,8 +3,6 @@ import { playClickSound } from "../../../core/utils/sound";
 import { Eye, EyeOff, Printer, Settings2, ChevronDown, Search } from "lucide-react";
 import { Input } from "../Input";
 import { EmptyState } from "../EmptyState";
-// import * as XLSX from "xlsx";
-// import { TablePrintHeader } from "../TablePrintHeader";
 import { useCompany } from "../../../core/context/CompanyContext";
 import { useUser } from "../../../core/context/UserContext";
 import ExcelJS from "exceljs";
@@ -12,10 +10,9 @@ import { addExcelHeader } from "../../../core/utils/excelHelpers";
 import { iconFileName } from "../Icon/iconFileName";
 import { useTranslation } from "react-i18next";
 
-
 export interface Column<T> {
   header: string;
-  accessor?: keyof T; 
+  accessor?: keyof T;
   width?: string | number;
   render?: (item: T) => React.ReactNode;
   sortable?: boolean;
@@ -32,6 +29,7 @@ export interface Column<T> {
 }
 
 interface TableProps<T> {
+  selectedRowId?: string | number | null;
   columns: Column<T>[];
   data: T[];
   onRowClick?: (item: T) => void;
@@ -41,43 +39,6 @@ interface TableProps<T> {
   searchQuery?: string;
   onSearchChange?: (val: string) => void;
 }
-
-// const addHeaderToExcel = async (workbook: ExcelJS.Workbook, worksheet: ExcelJS.Worksheet, company: any, user: any) => {
-//   // 1. Добавляем логотип (квадратный)
-//   const logoPath = company?.logo || company?.logo2;
-//   if (logoPath) {
-//     try {
-//       const response = await fetch(logoPath);
-//       const blob = await response.blob();
-//       const arrayBuffer = await blob.arrayBuffer();
-//       const ext = logoPath.split(".").pop()?.split("?")[0] || "png";
-
-//       const imageId = workbook.addImage({
-//         buffer: arrayBuffer,
-//         extension: ext as "png" | "jpeg" | "jpg",
-//       });
-
-//       // Вставляем квадратный логотип (размер 80x80)
-//       worksheet.addImage(imageId, {
-//         tl: { col: 0, row: 0 },
-//         ext: { width: 80, height: 80 },
-//       });
-//     } catch (e) {
-//       console.error("Ошибка загрузки логотипа:", e);
-//     }
-//   }
-
-//   // 2. Добавляем информацию справа
-//   // Смещаем текст на 2 колонки вправо (col: 2)
-//   worksheet.getCell("C1").value = `Компания: ${company?.name || "—"}`;
-//   worksheet.getCell("C2").value = `Пользователь: ${user?.full_name || "—"}`;
-//   worksheet.getCell("C3").value = `Должность: ${user?.position || "—"}`;
-//   worksheet.getCell("C4").value = `Дата выгрузки: ${new Date().toLocaleString()}`;
-
-//   // Добавляем отступы, чтобы таблица началась после блока информации
-//   worksheet.addRow([]);
-//   worksheet.addRow([]);
-// };
 
 function usePersistedSet(key: string, defaultIndices: number[]): [Set<number>, (i: number) => void] {
   const [set, setSet] = useState<Set<number>>(() => {
@@ -102,7 +63,7 @@ function usePersistedSet(key: string, defaultIndices: number[]): [Set<number>, (
   return [set, toggle];
 }
 
-export const Table = <T extends { id: string | number }>({ columns, data, onRowClick, onRowDoubleClick, tableId = "", searchQuery, onSearchChange }: TableProps<T>) => {
+export const Table = <T extends { id: string | number }>({ columns, data, onRowClick, onRowDoubleClick, tableId = "", searchQuery, onSearchChange, selectedRowId }: TableProps<T>) => {
   const searchInputRef = useRef<HTMLInputElement>(null);
   const [selectedRow, setSelectedRow] = useState<string | number | null>(null);
   const [selectedCell, setSelectedCell] = useState<{ rowId: string | number; colIndex: number } | null>(null);
@@ -114,13 +75,46 @@ export const Table = <T extends { id: string | number }>({ columns, data, onRowC
   });
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
-  const {t} = useTranslation()
+  const { t } = useTranslation();
+  const isFirstRender = useRef(true);
 
   const [hiddenInView, toggleView] = usePersistedSet(
     tableId ? `table:${tableId}:hiddenView` : "",
     columns.map((c, i) => (c.hideInView ? i : -1)).filter((i) => i !== -1),
   );
 
+  useEffect(() => {
+    // Если это самый первый рендер, НЕ трогаем фокус (даем сработать фокусу на поиске)
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
+      // Но всё равно восстанавливаем selectedRow для подсветки, если нужно
+      if (selectedRowId != null) setSelectedRow(selectedRowId);
+      return;
+    }
+
+    // Если это не первый рендер и пришел ID — фокусируем ячейку
+    if (selectedRowId != null) {
+      setSelectedRow(selectedRowId);
+      const visibleCols = columns.map((_, i) => i).filter((i) => !hiddenInView.has(i));
+      if (visibleCols.length > 0) {
+        setSelectedCell({
+          rowId: selectedRowId,
+          colIndex: visibleCols[0],
+        });
+        // Если ячейка сфокусирована, убираем фокус с поиска (если он там был)
+        searchInputRef.current?.blur();
+      }
+    }
+  }, [selectedRowId, columns, hiddenInView]);
+
+  // useEffect(() => {
+  //   if (selectedRowId != null) {
+  //     setSelectedRow(selectedRowId);
+  //     // selectedCell НЕ трогаем — пусть мышь сама управляет ячейкой
+  //   }
+  // }, [selectedRowId]);
+
+  // 3. А вот этот useEffect (который ставит фокус на поиск) верните обратно:
   useEffect(() => {
     if (searchInputRef.current) {
       searchInputRef.current.focus();
@@ -483,12 +477,6 @@ export const Table = <T extends { id: string | number }>({ columns, data, onRowC
 
   return (
     <div className="flex flex-col gap-2">
-      {/* <TablePrintHeader
-        companyName={currentCompany?.name}
-        logoUrl={currentCompany?.logo_thumbnail ?? currentCompany?.logo2_thumbnail}
-        userName={currentUser?.full_name}
-        userPosition={currentUser?.position}
-      /> */}
       {/* Тулбар с поиском и настройками */}
       <div className="flex justify-between items-center print:hidden" ref={dropdownRef}>
         {/* Поиск теперь внутри таблицы */}
@@ -573,7 +561,7 @@ export const Table = <T extends { id: string | number }>({ columns, data, onRowC
                       ${hiddenInView.has(i) ? "hidden print:table-cell" : ""}
                       ${hiddenInPrint.has(i) ? "print:hidden" : ""}
                     `}
-                    style={{ width: col.width }}
+                      style={{ width: col.width }}
                     >
                       <div
                         className={`flex items-center gap-1 ${col.sortable ? "cursor-pointer hover:text-indigo-600 dark:hover:text-indigo-400" : ""}`}
@@ -592,7 +580,7 @@ export const Table = <T extends { id: string | number }>({ columns, data, onRowC
               {sortedData.map((item, index) => {
                 const isRowSelected = selectedRow === item.id;
                 return (
-                  <tr key={item.id} className={`${isRowSelected ? "bg-yellow-100 dark:bg-yellow-900/30" : "hover:bg-gray-50 dark:hover:bg-gray-800/60"} transition-colors`}>
+                  <tr key={item.id} data-row-id={item.id} className={`${isRowSelected ? "bg-yellow-100 dark:bg-yellow-900/30" : "hover:bg-gray-50 dark:hover:bg-gray-800/60"} transition-colors`}>
                     <td className="px-2 py-1 border border-gray-200 dark:border-gray-700 text-center text-gray-400 bg-gray-50/50 dark:bg-gray-800/30">{index + 1}</td>
                     {columns.map((col, i) => {
                       // if (hiddenInView.has(i)) return null;
@@ -612,7 +600,7 @@ export const Table = <T extends { id: string | number }>({ columns, data, onRowC
                           ${hiddenInView.has(i) ? "hidden print:table-cell" : ""}
                           ${hiddenInPrint.has(i) ? "print:hidden" : ""}
                         `}
-                        style={{ width: col.width }}
+                          style={{ width: col.width }}
                         >
                           {col.render ? col.render(item) : String(item[col.accessor as keyof T] ?? "")}
                         </td>

@@ -1,0 +1,2296 @@
+
+// // frontend/src/features/accounting/pages/admin/AccountPage.tsx
+// import { useEffect, useState, useMemo } from "react";
+// import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+// import { Plus, Folder } from "lucide-react";
+
+// import { useSidebar } from "../../../../core/context/SidebarRightContext";
+// import { useNotify } from "../../../../core/context/NotificationContext";
+// import { accountApi } from "../../services/usersApi";
+// import { type Account as AccountInterface } from "../../../../core/types";
+// import { Modal } from "../../../../components/ui/Modal/Modal";
+// import { Button } from "../../../../components/ui/Button";
+// import { Input } from "../../../../components/ui/Input";
+// import { Table, type Column } from "../../../../components/ui/Table/Table";
+// import { RBACGuard } from "../../../../components/ui/RBACGuard";
+// import { usePageAccess } from "../../../../core/hooks/usePageAccess";
+
+// interface AccountFormData {
+//   code: string;
+//   name: string;
+//   is_group: boolean;
+//   parent: number | null;
+//   account_type: string;
+// }
+
+// const EMPTY_FORM: AccountFormData = {
+//   code: "",
+//   name: "",
+//   is_group: false,
+//   parent: null,
+//   account_type: "AP",
+// };
+
+// const AccountPage = () => {
+//   const { setSidebarContent } = useSidebar();
+//   const notify = useNotify();
+//   const queryClient = useQueryClient();
+
+//   // Состояние
+//   const [searchQuery, setSearchQuery] = useState("");
+//   const [filterGroup, setFilterGroup] = useState<"all" | "group" | "account">("all");
+//   const [formModal, setFormModal] = useState(false);
+//   const [deleteModal, setDeleteModal] = useState(false);
+//   const [editingAccount, setEditingAccount] = useState<AccountInterface | null>(null);
+//   const [deleteTarget, setDeleteTarget] = useState<AccountInterface | null>(null);
+//   const [formData, setFormData] = useState<AccountFormData>(EMPTY_FORM);
+
+//   const { canView, canPost, canPut, canDelete } = usePageAccess("account");
+
+//   // Плоский список для таблицы
+//   const {
+//     data: accounts = [],
+//     isLoading,
+//     error,
+//   } = useQuery<AccountInterface[], Error>({
+//     queryKey: ["accounts"],
+//     queryFn: accountApi.getAccounts,
+//     retry: false,
+//     enabled: canView,
+//     staleTime: 1000 * 60 * 5,
+//   });
+
+//   // Группы для select родителя
+//   const groupOptions = accounts.filter((a) => a.is_group);
+
+//   // ── Мутации ──────────────────────────────────────────────────────────────
+//   const saveMutation = useMutation({
+//     // mutationFn: (data: AccountFormData) => accountApi.saveAccounts(editingAccount?.id ?? null, data),
+//     mutationFn: (data: AccountFormData) => {
+//       if (!canPost) throw new Error("Нет прав на создание"); // Защита от случайного вызова
+//       return accountApi.saveAccounts(editingAccount?.id ?? null, data);
+//     },
+//     onSuccess: () => {
+//       queryClient.invalidateQueries({ queryKey: ["accounts"] });
+//       setFormModal(false);
+//       notify("success", editingAccount ? "Счёт обновлён" : "Счёт создан");
+//     },
+//     onError: (err: any) => {
+//       if (err._handled) return;
+//       const msg =
+//         Object.values(err.response?.data || {})
+//           .flat()
+//           .join(", ") || "Ошибка сохранения";
+//       notify("error", msg);
+//     },
+//   });
+
+//   const deleteMutation = useMutation({
+//     mutationFn: (id: number) => {
+//       if (!canDelete) throw new Error("Нет прав на удаление");
+//       return accountApi.deleteAccount(id);
+//     },
+//     onSuccess: () => {
+//       queryClient.invalidateQueries({ queryKey: ["accounts"] });
+//       setDeleteModal(false);
+//       setDeleteTarget(null);
+//       notify("success", "Счёт удалён");
+//     },
+//     onError: (err: any) => {
+//       if (err._handled) return;
+//       const msg = err.response?.data?.detail || "Ошибка удаления";
+//       notify("error", msg);
+//     },
+//   });
+
+//   // ── Хелперы ──────────────────────────────────────────────────────────────
+//   const openCreate = () => {
+//     setEditingAccount(null);
+//     setFormData(EMPTY_FORM);
+//     setFormModal(true);
+//   };
+
+//   const openEdit = (account: AccountInterface) => {
+//     setEditingAccount(account);
+//     setFormData({
+//       code: account.code,
+//       name: account.name,
+//       is_group: account.is_group,
+//       parent: account.parent,
+//       account_type: account.account_type ?? "AP",
+//     });
+//     setFormModal(true);
+//   };
+
+//   const openDelete = (account: AccountInterface) => {
+//     setDeleteTarget(account);
+//     setDeleteModal(true);
+//   };
+
+//   // ── Колонки таблицы ───────────────────────────────────────────────────────
+//   const columns: Column<AccountInterface>[] = [
+//     { header: "ID", accessor: "id", sortable: true, excelWidth: 5, excelAlign: "center" },
+//     {
+//       header: "Счет",
+//       excelWidth: 5,
+//       excelAlign: "center",
+//       accessor: "code",
+//       sortable: true,
+//       render: (account) => (
+//         <span className={`${account.is_group ? "font-bold text-amber-700 dark:text-amber-400" : ""} flex items-center gap-2`}>
+//           <span>{account.is_group && <Folder size={14} className="text-amber-500" />} </span>
+//           <span>{account.code}</span>
+//         </span>
+//       ),
+//     },
+//     {
+//       header: "Наименование",
+//       accessor: "name",
+//       sortable: true,
+//       excelWidth: 30,
+//     },
+//     {
+//       header: "Родитель",
+//       accessor: "parent_code",
+//       excelAlign: "center",
+//       sortable: true,
+//       excelWidth: 5,
+//       excelValue: (a) => a.parent_code || "-",
+//       render: (account) => <span className="text-gray-500 dark:text-gray-400 text-xs font-mono">{account.parent_code ?? "—"}</span>,
+//     },
+//     {
+//       header: "Вид",
+//       accessor: "account_type_display",
+//       excelAlign: "center",
+//       excelWidth: 5,
+//       sortable: true,
+//     },
+//     {
+//       header: "Тип",
+//       accessor: "is_group",
+//       sortable: true,
+//       sortValue: (a) => (a.is_group ? 1 : 0),
+//       excelWidth: 15,
+//       excelValue: (a) => (a.is_group ? "Родитель" : ""),
+//       render: (account) =>
+//         account.is_group ? (
+//           <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400">
+//             <Folder size={11} /> Группа
+//           </span>
+//         ) : (
+//           <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400">Счёт</span>
+//         ),
+//     },
+//     {
+//       header: "Действия",
+//       render: (account) => (
+//         <div className="flex gap-2">
+//           <Button
+//             disabled={!canPut}
+//             variant="1c"
+//             icon={<span>✏️</span>}
+//             className="md:h-6 md:w-8 md:!p-0"
+//             onClick={(e) => {
+//               e.stopPropagation();
+//               openEdit(account);
+//             }}
+//           />
+//           <Button
+//             disabled={!canDelete}
+//             variant="1c"
+//             icon={<span>🗑️</span>}
+//             className="md:h-6 md:w-8 md:!p-0"
+//             onClick={(e) => {
+//               e.stopPropagation();
+//               openDelete(account);
+//             }}
+//           />
+//         </div>
+//       ),
+//     },
+//   ];
+
+//   // ── Sidebar ───────────────────────────────────────────────────────────────
+//   useEffect(() => {
+//     setSidebarContent(
+//       <div className="space-y-4">
+//         <div>
+//           <h4 className="font-bold text-indigo-300 mb-2">Действия</h4>
+//           <Button text="Добавить счёт" onClick={openCreate} className="w-full" icon={<Plus size={16} />} dark={true} disabled={!canPost} />
+//         </div>
+//         <div className="pt-4 border-t border-indigo-900/30">
+//           <h4 className="font-bold text-indigo-300 mb-2">Тип счёта</h4>
+//           <div className="flex flex-col gap-1">
+//             {(["all", "group", "account"] as const).map((f) => (
+//               <Button
+//                 key={f}
+//                 text={f === "all" ? "Все" : f === "group" ? "Только группы" : "Только счета"}
+//                 variant="ghost"
+//                 dark={true}
+//                 isActive={filterGroup === f}
+//                 className="w-full justify-start"
+//                 icon={f === "group" ? <Folder size={14} /> : undefined}
+//                 onClick={() => setFilterGroup(f)}
+//               />
+//             ))}
+//           </div>
+//         </div>
+//       </div>,
+//     );
+//   }, [setSidebarContent, filterGroup, canPost]);
+
+//   // Фильтрация и поиск
+//   const filteredAccounts = useMemo(() => {
+//     let result = accounts;
+
+//     // Фильтр по типу
+//     if (filterGroup === "group") result = result.filter((a) => a.is_group);
+//     if (filterGroup === "account") result = result.filter((a) => !a.is_group);
+
+//     // Фильтр по поиску
+//     if (searchQuery.trim()) {
+//       const q = searchQuery.toLowerCase();
+//       result = result.filter((a) => a.code.toLowerCase().includes(q) || a.name.toLowerCase().includes(q) || (a.parent_code ?? "").toLowerCase().includes(q));
+//     }
+
+//     return result;
+//   }, [accounts, filterGroup, searchQuery]); // ← добавь searchQuery в deps
+
+//   return (
+//     <RBACGuard isLoading={isLoading} error={error} canView={canView} forbiddenText="У вас нет прав на просмотр счетов">
+//       <Table columns={columns} data={filteredAccounts} tableId="accounts" searchQuery={searchQuery} onSearchChange={setSearchQuery} onRowDoubleClick={(account) => openEdit(account)} />
+
+//       {/* ── Модалка: Создание / Редактирование ── */}
+//       <Modal isOpen={formModal} onClose={() => setFormModal(false)} title={editingAccount ? `Редактировать: ${editingAccount.code}` : "Новый счёт"} closeOnOutsideClick={false}>
+//         <div className="space-y-4">
+//           <Input label="Код счёта" placeholder="Например: 60.1" value={formData.code} onChange={(e) => setFormData({ ...formData, code: e.target.value })} />
+//           <Input label="Наименование" placeholder="Расчёты с поставщиками" value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} />
+
+//           <div>
+//             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Родительский счёт</label>
+//             <select
+//               value={formData.parent ?? ""}
+//               onChange={(e) =>
+//                 setFormData({
+//                   ...formData,
+//                   parent: e.target.value ? Number(e.target.value) : null,
+//                 })
+//               }
+//               className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+//             >
+//               <option value="">— Корневой счёт —</option>
+//               {groupOptions.map((g) => (
+//                 <option key={g.id} value={g.id}>
+//                   {g.code} — {g.name}
+//                 </option>
+//               ))}
+//             </select>
+//           </div>
+
+//           <label className="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300 cursor-pointer">
+//             <input
+//               type="checkbox"
+//               checked={formData.is_group}
+//               onChange={(e) => setFormData({ ...formData, is_group: e.target.checked })}
+//               className="w-4 h-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+//             />
+//             Это группа (нельзя делать проводки)
+//           </label>
+
+//           <div>
+//             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Вид счёта</label>
+//             <select
+//               value={formData.account_type}
+//               onChange={(e) => setFormData({ ...formData, account_type: e.target.value })}
+//               className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+//             >
+//               <option value="A">Активный</option>
+//               <option value="P">Пассивный</option>
+//               <option value="AP">Активно-Пассивный</option>
+//             </select>
+//           </div>
+
+//           <div className="flex justify-end gap-2 pt-2">
+//             <Button text="Отмена" onClick={() => setFormModal(false)} />
+//             <Button text={saveMutation.isPending ? "Сохранение..." : "Сохранить"} variant="danger" onClick={() => saveMutation.mutate(formData)} />
+//           </div>
+//         </div>
+//       </Modal>
+
+//       {/* ── Модалка: Удаление ── */}
+//       <Modal isOpen={deleteModal} onClose={() => setDeleteModal(false)} size="sm" title="Удалить счёт?">
+//         <div className="mb-6 space-y-2">
+//           <p className="text-gray-700 dark:text-gray-300">Вы хотите удалить счёт:</p>
+//           <p className="font-bold text-gray-900 dark:text-gray-100">
+//             {deleteTarget?.code} — {deleteTarget?.name}
+//           </p>
+//           <p className="text-red-500 text-sm">Нельзя удалить счёт с субсчетами или проводками.</p>
+//         </div>
+//         <div className="flex justify-end gap-2">
+//           <Button text="Отмена" onClick={() => setDeleteModal(false)} />
+//           <Button text={deleteMutation.isPending ? "Удаление..." : "Удалить"} variant="danger" onClick={() => deleteTarget && deleteMutation.mutate(deleteTarget.id)} />
+//         </div>
+//       </Modal>
+//     </RBACGuard>
+//   );
+// };
+
+// export default AccountPage;
+
+
+
+
+
+
+
+
+
+
+
+// import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
+// import { usersApi } from "../../../../../accounting/services/usersApi";
+// import { useSidebar } from "../../../../../../core/context/SidebarRightContext";
+// import { useEffect, useState, useMemo } from "react";
+// import { Button } from "../../../../../../components/ui/Button";
+// import { Plus, User as UserIcon } from "lucide-react";
+// import { Input } from "../../../../../../components/ui/Input";
+// import { Table, type Column } from "../../../../../../components/ui/Table/Table";
+// import { type User as UserInterface } from "../../../../../../core/types";
+// import { Modal } from "../../../../../../components/ui/Modal/Modal";
+// import { ImagePreview } from "../../../../../../components/ui/ImagePreview";
+// import { AssignRolesModal } from "./AssignRolesModal";
+// import { Avatar } from "../../../../../../components/ui/Avatar";
+// import { useNotify } from "../../../../../../core/context/NotificationContext";
+// import { RBACGuard } from "../../../../../../components/ui/RBACGuard";
+// import { Badge } from "../../../../../../components/ui/Badge";
+// import { usePageAccess } from "../../../../../../core/hooks/usePageAccess";
+// import { useTranslation } from "react-i18next";
+
+// const CompanyAdminUser = () => {
+//   const { setSidebarContent } = useSidebar();
+//   const [userModalOpen, setUserModalOpen] = useState(false);
+//   const notify = useNotify();
+//   const [activeFilter, setActiveFilter] = useState<"all" | "active" | "inactive">("all");
+//   const { t } = useTranslation();
+
+//   // const { hasPermission } = useAccess();
+//   // const canViewPage = hasPermission("user", "GET");
+//   const { canView, canPost, canPut, canDelete } = usePageAccess("user");
+
+//   const [deleteModal, setDeleteModal] = useState(false);
+//   const [deleteTargetId, setDeleteTargetId] = useState<number | null>(null);
+
+//   const [searchQuery, setSearchQuery] = useState("");
+
+//   // const [editingUser, setEditingUser] = useState(null);
+//   const [editingUser, setEditingUser] = useState<UserInterface | null>(null);
+//   // const [selectedImage, setSelectedImage] = useState(null);
+//   const [selectedImage, setSelectedImage] = useState<string | null>(null);
+//   const [assignModal, setAssignModal] = useState<{ isOpen: boolean; userId: number | null; roles: number[] }>({
+//     isOpen: false,
+//     userId: null,
+//     roles: [],
+//   });
+
+//   const [formData, setFormData] = useState({ username: "", first_name: "", last_name: "", phone: "", position: "", is_active: true, password: "" });
+//   const queryClient = useQueryClient();
+
+//   const userMutation = useMutation({
+//     mutationFn: (data: any) => {
+//       if (editingUser && !canPut) throw new Error("Нет прав на редактирование");
+//       if (!editingUser && !canPost) throw new Error("Нет прав на создание");
+//       // ВАЖНО: Отправляй только то, что есть в Meta.fields сериализатора
+//       const payload = {
+//         username: data.username,
+//         first_name: data.first_name,
+//         last_name: data.last_name,
+//         phone: data.phone,
+//         position: data.position,
+//         is_active: data.is_active,
+//         ...(data.password && { password: data.password }),
+//         // email: data.email || "",
+//       };
+
+//       // Добавляем пароль только если он есть
+//       // if (data.password) {
+//       //   payload.password = data.password;
+//       // }
+//       // 2. Добавляем пароль ТОЛЬКО если он был введен
+//       if (data.password && data.password.trim() !== "") {
+//         payload.password = data.password;
+//       }
+
+//       const userId = editingUser?.id ? Number(editingUser.id) : null;
+//       return usersApi.saveUser(userId, data);
+//     },
+//     onSuccess: () => {
+//       queryClient.invalidateQueries({ queryKey: ["users"] });
+//       setUserModalOpen(false);
+//       setFormData({ username: "", first_name: "", last_name: "", phone: "", position: "", is_active: true, password: "" });
+//       notify("success", `Success ${editingUser ? "updated" : "created"} user ${editingUser?.username || formData.username}`);
+//     },
+//     // --- ЛОВИМ ОШИБКУ ТУТ ---
+//     onError: (error: any) => {
+//       if (error._handled) return; // уже показали уведомление глобально
+//       const message = error.response?.data?.message || error.message || "Произошла ошибка";
+//       notify("error", `Ошибка: ${message}`);
+//     },
+//   });
+
+//   useEffect(() => {
+//     if (editingUser) {
+//       setFormData({
+//         username: editingUser.username || "",
+//         // Если у вас в User есть только full_name, разбейте его или используйте отдельные поля
+//         first_name: editingUser.first_name || "",
+//         last_name: editingUser.last_name || "",
+//         phone: editingUser.phone || "",
+//         position: editingUser.position || "",
+//         is_active: editingUser.is_active ?? true, // Используем ?? для проверки на undefined
+//         password: "", // Пароль всегда пустой при редактировании
+//       });
+//     } else {
+//       // Сброс формы
+//       setFormData({
+//         username: "",
+//         first_name: "",
+//         last_name: "",
+//         phone: "",
+//         position: "",
+//         is_active: true,
+//         password: "",
+//       });
+//     }
+//   }, [editingUser]);
+
+//   // delete user
+//   const deleteUserMutation = useMutation({
+//     // Теперь вызываем метод из сервиса
+//     mutationFn: (id: number) => {
+//       if (!canDelete) throw new Error("Нет прав на удаление");
+//       return usersApi.deleteUser(id);
+//     },
+//     onSuccess: () => {
+//       queryClient.invalidateQueries({ queryKey: ["users"] });
+//       setDeleteModal(false);
+//       setDeleteTargetId(null);
+//       notify("success", "Пользователь успешно удален");
+//     },
+//     onError: (error: any) => {
+//       if (error._handled) return;
+//       notify("error", "Ошибка при удалении пользователя");
+//     },
+//   });
+
+//   // Установка контекстных действий в Right Sidebar
+//   useEffect(() => {
+//     setSidebarContent(
+//       <div className="space-y-4">
+//         {/* Кнопка Добавить (теперь она сверху) */}
+//         <div>
+//           <h4 className="font-bold text-indigo-300 mb-2">Действия</h4>
+//           <Button
+//             disabled={!canPost}
+//             text="Добавить пользователя"
+//             onClick={() => {
+//               setEditingUser(null);
+//               setUserModalOpen(true);
+//             }}
+//             className="w-full"
+//             icon={
+//               <div className="flex items-center gap-1">
+//                 <UserIcon className="w-5 h-5" />
+//                 <Plus className="w-3 h-3" />
+//               </div>
+//             }
+//             // variant="1c" // или используйте dark={true}, если это предусмотрено стилями
+//             dark={true}
+//           />
+//         </div>
+
+//         {/* Фильтр статуса */}
+//         <div className="pt-4 border-t border-indigo-900/30">
+//           <h4 className="font-bold text-indigo-300 mb-2">Фильтр статуса</h4>
+//           <div className="flex flex-col gap-1">
+//             {(["all", "active", "inactive"] as const).map((status) => (
+//               <Button
+//                 key={status}
+//                 onClick={() => setActiveFilter(status)}
+//                 text={status === "all" ? "Все пользователи" : status === "active" ? "Только активные" : "Только неактивные"}
+//                 variant="ghost"
+//                 dark={true}
+//                 isActive={activeFilter === status}
+//                 className="w-full justify-start"
+//                 icon={status !== "all" ? <span className={`w-2 h-2 rounded-full ${status === "active" ? "bg-green-500" : "bg-red-500"}`} /> : undefined}
+//               />
+//             ))}
+//           </div>
+//         </div>
+//       </div>,
+//     );
+//   }, [setSidebarContent, activeFilter, canPost]); // Добавьте activeFilter в зависимости
+
+//   // Хук автоматически управляет загрузкой и ошибками
+//   const {
+//     data: users, // Здесь TypeScript сейчас думает, что это 'any'
+//     isLoading,
+//     error,
+//   } = useQuery<UserInterface[]>({
+//     // <-- Укажите тип массива пользователей здесь
+//     queryKey: ["users"],
+//     queryFn: usersApi.getUsers,
+//     enabled: canView,
+//     retry: false,
+//     staleTime: 1000 * 60 * 5,
+//   });
+
+//   const filteredUsers = useMemo(() => {
+//     if (!users) return [];
+
+//     // 1. Фильтр по статусу
+//     let result = users;
+//     if (activeFilter === "active") result = result.filter((u) => u.is_active);
+//     if (activeFilter === "inactive") result = result.filter((u) => !u.is_active);
+
+//     // 2. Поиск
+//     if (searchQuery.trim()) {
+//       const q = searchQuery.toLowerCase();
+//       result = result.filter(
+//         (u) =>
+//           u.full_name?.toLowerCase().includes(q) || // Ищем по ФИО
+//           u.username?.toLowerCase().includes(q) || // Ищем по логину
+//           u.position?.toLowerCase().includes(q) || // Ищем по должности
+//           u.phone?.toLowerCase().includes(q), // Ищем по телефону
+//       );
+//     }
+
+//     return result;
+//   }, [users, activeFilter, searchQuery]);
+
+//   const columns: Column<UserInterface>[] = [
+//     { header: "ID", accessor: "id", sortable: true, excelWidth: 8, excelAlign: "center" },
+//     // { header: "ФИО", render: (user) => <div>{[user.last_name, user.first_name].filter(Boolean).join(" ")}</div>, sortable: true },
+//     { header: t("FullName"), accessor: "full_name", sortable: true, excelWidth: 30 },
+//     { header: t("Position"), accessor: "position", sortable: true, excelWidth: 15 },
+//     { header: t("Login"), accessor: "username", sortable: true, excelWidth: 15 },
+//     {
+//       header: t("Photo"),
+//       excelWidth: 6,
+//       excelImageUrl: (user) => user.photo_thumbnail || null,
+//       render: (user) => {
+//         return (
+//           <div className="flex justify-center">
+//             <Avatar src={user.photo_thumbnail} fallbackText={user.username} onClick={() => user.photo && setSelectedImage(user.photo)} />
+//           </div>
+//         );
+//       },
+//     },
+//     {
+//       header: t("Status"),
+//       excelWidth: 13,
+//       accessor: "is_active", // используем ключ для работы сортировки
+//       excelValue: (u) => (u.is_active ? t("Active") : t("Inactive")), // dlya excel
+//       sortable: true,
+//       sortValue: (user) => (user.is_active ? 1 : 0), // Активные (1) будут выше/ниже неактивных (0)
+//       render: (user) => (
+//         <div className="flex items-center justify-center gap-2 print:block">
+//           <span className={`w-2 h-2 rounded-full ${user.is_active ? "bg-green-500" : "bg-red-500"}`} />
+//           <span className="text-gray-700 text-xs">{user.is_active ? t("Active") : t("Inactive")}</span>
+//         </div>
+//       ),
+//     },
+//     {
+//       header: t("Roles"),
+//       excelWidth: 20,
+//       sortable: true,
+//       accessor: "roles", // Указываем ключ для триггера сортировки
+//       excelValue: (user) => user.roles?.map((r) => r.name).join(", ") || "—",
+//       sortValue: (user) =>
+//         user.roles
+//           ?.map((r) => r.name)
+//           .sort()
+//           .join(", ") || "", // Сортируем по строке имен ролей
+//       render: (user) => (user.roles && user.roles.length > 0 ? user.roles.map((role) => <Badge key={role.id} text={role.name} text_position="start" />) : <div>-</div>),
+//     },
+//     { header: t("Phone"), accessor: "phone", sortable: true, excelWidth: 18 },
+//     {
+//       header: t("Actions"),
+//       hideInPrint: true,
+//       render: (user) => (
+//         <div className="flex gap-2">
+//           <Button
+//             disabled={!canPut}
+//             variant="1c"
+//             icon={<span>✏️</span>}
+//             className="md:h-6 md:w-8 md:!p-0"
+//             onClick={(e) => {
+//               e.stopPropagation();
+//               setEditingUser(user);
+//               setUserModalOpen(true);
+//             }}
+//           />
+//           <Button
+//             disabled={!canDelete}
+//             variant="1c"
+//             icon={<span>🗑️</span>}
+//             className="md:h-6 md:w-8 md:!p-0"
+//             onClick={(e) => {
+//               e.stopPropagation();
+//               // Используем Number(), чтобы гарантировать передачу числа
+//               setDeleteTargetId(Number(user.id));
+//               setDeleteModal(true);
+//             }}
+//           />
+
+//           <Button
+//             disabled={!canPut}
+//             variant="1c"
+//             icon={<span>🛡️</span>}
+//             className="md:h-6 md:w-8 md:!p-0"
+//             onClick={(e) => {
+//               e.stopPropagation();
+//               setAssignModal({
+//                 isOpen: true,
+//                 userId: Number(user.id), // Приводим к типу number
+//                 roles: user.roles.map((r) => r.id),
+//               });
+//             }}
+//           />
+//         </div>
+//       ),
+//     },
+//   ];
+
+//   const userToDelete = users?.find((u) => u.id === deleteTargetId);
+
+//   return (
+//     <RBACGuard isLoading={isLoading} error={error} canView={canView} forbiddenText="У вас нет прав на просмотр пользователей">
+//       <div>
+//         <Table
+//           columns={columns}
+//           data={filteredUsers || []}
+//           tableId="users"
+//           // ПЕРЕДАЕМ поиск в таблицу
+//           searchQuery={searchQuery}
+//           onSearchChange={setSearchQuery}
+//           onRowDoubleClick={(user) => {
+//             // Твоя логика открытия модалки:
+//             setEditingUser(user);
+//             setUserModalOpen(true);
+//           }}
+//         />
+//       </div>
+
+//       <Modal isOpen={userModalOpen} onClose={() => setUserModalOpen(false)} title={editingUser ? "Редактирование" : "Создание"} closeOnOutsideClick={false}>
+//         <div className="space-y-4">
+//           <Input label="Логин" value={formData.username} onChange={(e) => setFormData({ ...formData, username: e.target.value })} />
+
+//           {/* Поле пароля */}
+//           <Input
+//             label={editingUser ? "Новый пароль (оставьте пустым, если не меняете)" : "Пароль"}
+//             type="password"
+//             value={formData.password}
+//             onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+//           />
+
+//           <Input label="Имя" value={formData.first_name} onChange={(e) => setFormData({ ...formData, first_name: e.target.value })} />
+//           <Input label="Фамилия" value={formData.last_name} onChange={(e) => setFormData({ ...formData, last_name: e.target.value })} />
+//           <Input label="Телефон" value={formData.phone} onChange={(e) => setFormData({ ...formData, phone: e.target.value })} />
+//           <Input label="Должность" value={formData.position} onChange={(e) => setFormData({ ...formData, position: e.target.value })} />
+
+//           <label className="flex items-center gap-2 font-medium text-gray-700">
+//             <input
+//               type="checkbox"
+//               checked={formData.is_active}
+//               onChange={(e) => setFormData({ ...formData, is_active: e.target.checked })}
+//               className="w-4 h-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+//             />
+//             Активный пользователь
+//           </label>
+
+//           <div className="flex justify-end gap-2">
+//             <Button
+//               text="Отмена"
+//               onClick={() => {
+//                 // setFormData({ username: "", first_name: "", last_name: "", phone: "", position: "", is_active: true, password: "" })
+//                 setUserModalOpen(false);
+//               }}
+//             />
+//             <Button text="Сохранить" onClick={() => userMutation.mutate(formData)} variant="danger" />
+//           </div>
+//         </div>
+//       </Modal>
+
+//       <ImagePreview src={selectedImage} onClose={() => setSelectedImage(null)} />
+
+//       <AssignRolesModal isOpen={assignModal.isOpen} userId={assignModal.userId} currentRoles={assignModal.roles} onClose={() => setAssignModal({ isOpen: false, userId: null, roles: [] })} />
+
+//       {/* delete user */}
+//       <Modal isOpen={deleteModal} onClose={() => setDeleteModal(false)} size="sm">
+//         <div className="mb-6">
+//           <p>Вы действительно хотите удалить пользователя:</p>
+//           {/* Выводим ФИО и логин */}
+//           <p className="font-bold text-gray-900 dark:text-gray-200 mt-2">
+//             {userToDelete?.last_name} {userToDelete?.first_name} ({userToDelete?.username})
+//           </p>
+//           <p className="text-red-500 mt-4">Это действие нельзя будет отменить.</p>
+//         </div>
+
+//         <div className="flex justify-end gap-2">
+//           <Button text="Отмена" onClick={() => setDeleteModal(false)} />
+//           <Button
+//             variant="danger"
+//             text="Удалить"
+//             onClick={() => {
+//               if (deleteTargetId) {
+//                 deleteUserMutation.mutate(deleteTargetId);
+//                 setDeleteModal(false);
+//               }
+//             }}
+//           />
+//         </div>
+//       </Modal>
+//     </RBACGuard>
+//   );
+// };
+
+// export default CompanyAdminUser;
+
+
+
+
+
+
+
+
+
+
+
+// import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
+// import { usersApi } from "../../../../../accounting/services/usersApi";
+// import { useSidebar } from "../../../../../../core/context/SidebarRightContext";
+// import { useEffect, useState, useMemo } from "react";
+// import { Button } from "../../../../../../components/ui/Button";
+// import { Plus, User as UserIcon } from "lucide-react";
+// import { Input } from "../../../../../../components/ui/Input";
+// import { Table, type Column } from "../../../../../../components/ui/Table/Table";
+// import { type User as UserInterface } from "../../../../../../core/types";
+// import { Modal } from "../../../../../../components/ui/Modal/Modal";
+// import { ImagePreview } from "../../../../../../components/ui/ImagePreview";
+// import { AssignRolesModal } from "./AssignRolesModal";
+// import { Avatar } from "../../../../../../components/ui/Avatar";
+// import { useNotify } from "../../../../../../core/context/NotificationContext";
+// import { RBACGuard } from "../../../../../../components/ui/RBACGuard";
+// import { Badge } from "../../../../../../components/ui/Badge";
+// import { usePageAccess } from "../../../../../../core/hooks/usePageAccess";
+// import { useTranslation } from "react-i18next";
+
+// const CompanyAdminUser = () => {
+//   const { t } = useTranslation();
+//   const { setSidebarContent } = useSidebar();
+//   const [userModalOpen, setUserModalOpen] = useState(false);
+//   const notify = useNotify();
+//   const [activeFilter, setActiveFilter] = useState<"all" | "active" | "inactive">("all");
+
+//   const { canView, canPost, canPut, canDelete } = usePageAccess("user");
+
+//   const [deleteModal, setDeleteModal] = useState(false);
+//   const [deleteTargetId, setDeleteTargetId] = useState<number | null>(null);
+//   const [searchQuery, setSearchQuery] = useState("");
+//   const [editingUser, setEditingUser] = useState<UserInterface | null>(null);
+//   const [selectedImage, setSelectedImage] = useState<string | null>(null);
+//   const [assignModal, setAssignModal] = useState<{ isOpen: boolean; userId: number | null; roles: number[] }>({
+//     isOpen: false,
+//     userId: null,
+//     roles: [],
+//   });
+
+//   const [formData, setFormData] = useState({ username: "", first_name: "", last_name: "", phone: "", position: "", is_active: true, password: "" });
+//   const queryClient = useQueryClient();
+
+//   const userMutation = useMutation({
+//     mutationFn: (data: any) => {
+//       const payload: any = {
+//         username: data.username,
+//         first_name: data.first_name,
+//         last_name: data.last_name,
+//         phone: data.phone,
+//         position: data.position,
+//         is_active: data.is_active,
+//       };
+//       if (data.password && data.password.trim() !== "") {
+//         payload.password = data.password;
+//       }
+//       const userId = editingUser?.id ? Number(editingUser.id) : null;
+//       return usersApi.saveUser(userId, payload);
+//     },
+//     onSuccess: () => {
+//       queryClient.invalidateQueries({ queryKey: ["users"] });
+//       setUserModalOpen(false);
+//       setFormData({ username: "", first_name: "", last_name: "", phone: "", position: "", is_active: true, password: "" });
+//       notify("success", `${t("Success")}: ${editingUser ? t("Edit") : t("Create")}`);
+//     },
+//     onError: (error: any) => {
+//       if (error._handled) return;
+//       const message = error.response?.data?.message || error.message || t("Error");
+//       notify("error", `${t("Error")}: ${message}`);
+//     },
+//   });
+
+//   useEffect(() => {
+//     if (editingUser) {
+//       setFormData({
+//         username: editingUser.username || "",
+//         first_name: editingUser.first_name || "",
+//         last_name: editingUser.last_name || "",
+//         phone: editingUser.phone || "",
+//         position: editingUser.position || "",
+//         is_active: editingUser.is_active ?? true,
+//         password: "",
+//       });
+//     } else {
+//       setFormData({ username: "", first_name: "", last_name: "", phone: "", position: "", is_active: true, password: "" });
+//     }
+//   }, [editingUser]);
+
+//   const deleteUserMutation = useMutation({
+//     mutationFn: (id: number) => usersApi.deleteUser(id),
+//     onSuccess: () => {
+//       queryClient.invalidateQueries({ queryKey: ["users"] });
+//       setDeleteModal(false);
+//       setDeleteTargetId(null);
+//       notify("success", t("UserDeleted"));
+//     },
+//     onError: () => notify("error", t("Error")),
+//   });
+
+//   useEffect(() => {
+//     setSidebarContent(
+//       <div className="space-y-4">
+//         <div>
+//           <h4 className="font-bold text-indigo-300 mb-2">{t("Actions")}</h4>
+//           <Button
+//             disabled={!canPost}
+//             text={t("AddUser")}
+//             onClick={() => {
+//               setEditingUser(null);
+//               setUserModalOpen(true);
+//             }}
+//             className="w-full"
+//             icon={
+//               <div className="flex items-center gap-1">
+//                 <UserIcon className="w-5 h-5" />
+//                 <Plus className="w-3 h-3" />
+//               </div>
+//             }
+//             dark={true}
+//           />
+//         </div>
+//         <div className="pt-4 border-t border-indigo-900/30">
+//           <h4 className="font-bold text-indigo-300 mb-2">{t("StatusFilter")}</h4>
+//           <div className="flex flex-col gap-1">
+//             {(["all", "active", "inactive"] as const).map((status) => (
+//               <Button
+//                 key={status}
+//                 onClick={() => setActiveFilter(status)}
+//                 text={status === "all" ? t("AllUsers") : status === "active" ? t("OnlyActive") : t("OnlyInactive")}
+//                 variant="ghost"
+//                 dark={true}
+//                 isActive={activeFilter === status}
+//                 className="w-full justify-start"
+//                 icon={status !== "all" ? <span className={`w-2 h-2 rounded-full ${status === "active" ? "bg-green-500" : "bg-red-500"}`} /> : undefined}
+//               />
+//             ))}
+//           </div>
+//         </div>
+//       </div>,
+//     );
+//   }, [setSidebarContent, activeFilter, canPost, t]);
+
+//   const {
+//     data: users,
+//     isLoading,
+//     error,
+//   } = useQuery<UserInterface[]>({
+//     queryKey: ["users"],
+//     queryFn: usersApi.getUsers,
+//     enabled: canView,
+//     retry: false,
+//     staleTime: 1000 * 60 * 5,
+//   });
+
+//   const filteredUsers = useMemo(() => {
+//     if (!users) return [];
+//     let result = users;
+//     if (activeFilter === "active") result = result.filter((u) => u.is_active);
+//     if (activeFilter === "inactive") result = result.filter((u) => !u.is_active);
+//     if (searchQuery.trim()) {
+//       const q = searchQuery.toLowerCase();
+//       result = result.filter((u) => u.full_name?.toLowerCase().includes(q) || u.username?.toLowerCase().includes(q) || u.position?.toLowerCase().includes(q) || u.phone?.toLowerCase().includes(q));
+//     }
+//     return result;
+//   }, [users, activeFilter, searchQuery]);
+
+//   const columns: Column<UserInterface>[] = [
+//     { header: t("Actions"), accessor: "id", sortable: true, excelWidth: 8, excelAlign: "center" },
+//     { header: t("FullName"), accessor: "full_name", sortable: true, excelWidth: 30 },
+//     { header: t("Position"), accessor: "position", sortable: true, excelWidth: 15 },
+//     { header: t("Login"), accessor: "username", sortable: true, excelWidth: 15 },
+//     {
+//       header: t("Photo"),
+//       excelWidth: 6,
+//       excelImageUrl: (user) => user.photo_thumbnail || null,
+//       render: (user) => (
+//         <div className="flex justify-center">
+//           <Avatar src={user.photo_thumbnail} fallbackText={user.username} onClick={() => user.photo && setSelectedImage(user.photo)} />
+//         </div>
+//       ),
+//     },
+//     {
+//       header: t("Status"),
+//       excelWidth: 13,
+//       accessor: "is_active",
+//       excelValue: (u) => (u.is_active ? t("Active") : t("Inactive")),
+//       sortable: true,
+//       sortValue: (u) => (u.is_active ? 1 : 0),
+//       render: (u) => (
+//         <div className="flex items-center justify-center gap-2 print:block">
+//           <span className={`w-2 h-2 rounded-full ${u.is_active ? "bg-green-500" : "bg-red-500"}`} />
+//           <span className="text-gray-700 text-xs">{u.is_active ? t("Active") : t("Inactive")}</span>
+//         </div>
+//       ),
+//     },
+//     {
+//       header: t("Roles"),
+//       excelWidth: 20,
+//       sortable: true,
+//       accessor: "roles",
+//       excelValue: (u) => u.roles?.map((r) => r.name).join(", ") || "—",
+//       sortValue: (u) =>
+//         u.roles
+//           ?.map((r) => r.name)
+//           .sort()
+//           .join(", ") || "",
+//       render: (u) => (u.roles && u.roles.length > 0 ? u.roles.map((r) => <Badge key={r.id} text={r.name} text_position="start" />) : <div>-</div>),
+//     },
+//     { header: t("Phone"), accessor: "phone", sortable: true, excelWidth: 18 },
+//     {
+//       header: t("Actions"),
+//       hideInPrint: true,
+//       render: (u) => (
+//         <div className="flex gap-2">
+//           <Button
+//             disabled={!canPut}
+//             variant="1c"
+//             icon={<span>✏️</span>}
+//             className="md:h-6 md:w-8 md:!p-0"
+//             onClick={(e) => {
+//               e.stopPropagation();
+//               setEditingUser(u);
+//               setUserModalOpen(true);
+//             }}
+//           />
+//           <Button
+//             disabled={!canDelete}
+//             variant="1c"
+//             icon={<span>🗑️</span>}
+//             className="md:h-6 md:w-8 md:!p-0"
+//             onClick={(e) => {
+//               e.stopPropagation();
+//               setDeleteTargetId(Number(u.id));
+//               setDeleteModal(true);
+//             }}
+//           />
+//           <Button
+//             disabled={!canPut}
+//             variant="1c"
+//             icon={<span>🛡️</span>}
+//             className="md:h-6 md:w-8 md:!p-0"
+//             onClick={(e) => {
+//               e.stopPropagation();
+//               setAssignModal({ isOpen: true, userId: Number(u.id), roles: u.roles.map((r) => r.id) });
+//             }}
+//           />
+//         </div>
+//       ),
+//     },
+//   ];
+
+//   const userToDelete = users?.find((u) => u.id === deleteTargetId);
+
+//   return (
+//     <RBACGuard isLoading={isLoading} error={error} canView={canView} forbiddenText={t("NoRights")}>
+//       <Table
+//         columns={columns}
+//         data={filteredUsers || []}
+//         tableId="users"
+//         searchQuery={searchQuery}
+//         onSearchChange={setSearchQuery}
+//         onRowDoubleClick={(u) => {
+//           setEditingUser(u);
+//           setUserModalOpen(true);
+//         }}
+//       />
+
+//       <Modal isOpen={userModalOpen} onClose={() => setUserModalOpen(false)} title={editingUser ? t("Edit") : t("Create")} closeOnOutsideClick={false}>
+//         <div className="space-y-4">
+//           <Input label={t("Username")} value={formData.username} onChange={(e) => setFormData({ ...formData, username: e.target.value })} />
+//           <Input
+//             label={editingUser ? t("NewPassword") : t("Password")}
+//             type="password"
+//             value={formData.password}
+//             onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+//           />
+//           <Input label={t("FirstName")} value={formData.first_name} onChange={(e) => setFormData({ ...formData, first_name: e.target.value })} />
+//           <Input label={t("LastName")} value={formData.last_name} onChange={(e) => setFormData({ ...formData, last_name: e.target.value })} />
+//           <Input label={t("Phone")} value={formData.phone} onChange={(e) => setFormData({ ...formData, phone: e.target.value })} />
+//           <Input label={t("Position")} value={formData.position} onChange={(e) => setFormData({ ...formData, position: e.target.value })} />
+//           <label className="flex items-center gap-2 font-medium text-gray-700">
+//             <input
+//               type="checkbox"
+//               checked={formData.is_active}
+//               onChange={(e) => setFormData({ ...formData, is_active: e.target.checked })}
+//               className="w-4 h-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+//             />
+//             {t("IsActive")}
+//           </label>
+//           <div className="flex justify-end gap-2">
+//             <Button text={t("Cancel")} onClick={() => setUserModalOpen(false)} />
+//             <Button text={t("Save")} onClick={() => userMutation.mutate(formData)} variant="danger" />
+//           </div>
+//         </div>
+//       </Modal>
+
+//       <ImagePreview src={selectedImage} onClose={() => setSelectedImage(null)} />
+//       <AssignRolesModal isOpen={assignModal.isOpen} userId={assignModal.userId} currentRoles={assignModal.roles} onClose={() => setAssignModal({ isOpen: false, userId: null, roles: [] })} />
+
+//       <Modal isOpen={deleteModal} onClose={() => setDeleteModal(false)} size="sm">
+//         <div className="mb-6">
+//           <p>{t("DeleteConfirm")}</p>
+//           <p className="font-bold text-gray-900 dark:text-gray-200 mt-2">
+//             {userToDelete?.last_name} {userToDelete?.first_name} ({userToDelete?.username})
+//           </p>
+//           <p className="text-red-500 mt-4">{t("Irreversible")}</p>
+//         </div>
+//         <div className="flex justify-end gap-2">
+//           <Button text={t("Cancel")} onClick={() => setDeleteModal(false)} />
+//           <Button
+//             variant="danger"
+//             text={t("Delete")}
+//             onClick={() => {
+//               if (deleteTargetId) deleteUserMutation.mutate(deleteTargetId);
+//             }}
+//           />
+//         </div>
+//       </Modal>
+//     </RBACGuard>
+//   );
+// };
+
+// export default CompanyAdminUser;
+
+
+
+// import { useState, useEffect } from "react"; // 1. Добавь useEffect
+// import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+// import { rolesApi, usersApi } from "../../../../../accounting/services/usersApi";
+// import { Modal } from "../../../../../../components/ui/Modal/Modal";
+// import { Button } from "../../../../../../components/ui/Button";
+// import { useNotify } from "../../../../../../core/context/NotificationContext";
+
+// export const AssignRolesModal = ({ userId, isOpen, onClose, currentRoles }: any) => {
+//   // 2. Инициализируем пустым массивом
+//   const [selectedRoles, setSelectedRoles] = useState<number[]>([]);
+//   const queryClient = useQueryClient();
+//   const notify = useNotify();
+
+//   // 3. Добавляем эффект для сброса/обновления состояния при открытии модалки
+//   useEffect(() => {
+//     if (isOpen) {
+//       setSelectedRoles(currentRoles || []);
+//     }
+//   }, [isOpen, currentRoles]);
+
+//   const { data: allRoles } = useQuery({
+//     queryKey: ["roles"],
+//     queryFn: rolesApi.getRoles,
+//     staleTime: 1000 * 60 * 5
+//   });
+
+//   // const assignMutation = useMutation({
+//   //   mutationFn: (roles: number[]) => usersApi.assignRole(userId, roles),
+//   //   onSuccess: () => {
+//   //     queryClient.invalidateQueries({ queryKey: ["users"] });
+//   //     notify("success", "Role assigned successfully" );
+//   //     onClose();
+//   //   },
+//   // });
+
+//   const assignMutation = useMutation({
+//     mutationFn: (roles: number[]) => usersApi.assignRole(userId, roles),
+//     onSuccess: () => {
+//       queryClient.invalidateQueries({ queryKey: ["users"] });
+//       notify("success", "Role assigned successfully");
+//       onClose();
+//     },
+//     onError: (error: any) => {
+
+//       if (error._handled) return;
+//       notify("error", "Ошибка при назначении ролей");
+//     },
+//   });
+
+//   return (
+//     <Modal isOpen={isOpen} onClose={onClose} title="Назначение ролей">
+//       <div className="space-y-4">
+//         {allRoles?.map((role: any) => (
+//           <label key={role.id} className="flex items-center gap-2 p-2 border rounded hover:bg-slate-50 cursor-pointer">
+//             <input
+//               type="checkbox"
+//               // Теперь selectedRoles будет актуален
+//               checked={selectedRoles.includes(role.id)}
+//               onChange={() => setSelectedRoles((prev) => (prev.includes(role.id) ? prev.filter((r) => r !== role.id) : [...prev, role.id]))}
+//             />
+//             {role.name}
+//           </label>
+//         ))}
+//         <div className="flex justify-end gap-2 mt-4">
+//           <Button text="Отмена" onClick={onClose} />
+//           <Button text="Сохранить" onClick={() => assignMutation.mutate(selectedRoles)} variant="danger" />
+//         </div>
+//       </div>
+//     </Modal>
+//   );
+// };
+
+
+
+// import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+// import { rolesApi } from "../../../../../accounting/services/usersApi";
+// import { useSidebar } from "../../../../../../core/context/SidebarRightContext";
+// import { useEffect, useState, useMemo } from "react";
+// import { Button } from "../../../../../../components/ui/Button";
+// import { Plus, ShieldCheck } from "lucide-react";
+// import { Table, type Column } from "../../../../../../components/ui/Table/Table";
+// import { Modal } from "../../../../../../components/ui/Modal/Modal";
+// import { Input } from "../../../../../../components/ui/Input";
+// import { api } from "../../../../../../core/api/axiosInstance";
+// import { useTranslation } from "react-i18next";
+// import { useNotify } from "../../../../../../core/context/NotificationContext";
+// import { Badge } from "../../../../../../components/ui/Badge";
+// import { RBACGuard } from "../../../../../../components/ui/RBACGuard";
+// import { usePageAccess } from "../../../../../../core/hooks/usePageAccess";
+
+// interface Role {
+//   id: number;
+//   name: string;
+// }
+
+// const Roles = () => {
+//   const { setSidebarContent } = useSidebar();
+//   const [isModalOpen, setIsModalOpen] = useState(false);
+//   const [editingRole, setEditingRole] = useState<Role | null>(null);
+//   const { t } = useTranslation();
+//   const [deleteModal, setDeleteModal] = useState(false);
+//   const notify = useNotify();
+//   // const { hasPermission } = useAccess();
+//   // const canViewPage = hasPermission("role", "GET");
+//   const { canView, canPost, canPut, canDelete } = usePageAccess("role");
+
+//   const [roleName, setRoleName] = useState("");
+//   const [selectedPerms, setSelectedPerms] = useState<number[]>([]);
+//   const queryClient = useQueryClient();
+//   const [searchQuery, setSearchQuery] = useState("");
+
+//   const { data: matrix, isLoading: matrixIsLoading } = useQuery({
+//     queryKey: ["permissionsMatrix"],
+//     queryFn: rolesApi.getPermissionsMatrix,
+//     enabled: isModalOpen,
+//   });
+
+//   useEffect(() => {
+//     setSidebarContent(
+//       <div className="space-y-2">
+//         <h4 className="font-bold text-indigo-300">{t("action")}</h4>
+//         <Button
+//           disabled={!canPost}
+//           text="Создать роль"
+//           // onClick={() => setIsModalOpen(true)}
+//           onClick={() => {
+//             setEditingRole(null);
+//             setIsModalOpen(true);
+//           }}
+//           className="w-full"
+//           icon={
+//             <div className="flex items-center gap-1">
+//               <ShieldCheck className="w-5 h-5" />
+//               <Plus className="w-3 h-3" />
+//             </div>
+//           }
+//           dark={true}
+//         />
+//       </div>,
+//     );
+//     return () => setSidebarContent(null);
+//   }, [setSidebarContent, canPost]);
+
+//   const deleteRoleMutation = useMutation({
+//     mutationFn: (id: number) => {
+//       if (!canDelete) throw new Error("Нет прав на удаление");
+//       return rolesApi.deleteRoles(id);
+//     },
+//     onSuccess: () => {
+//       queryClient.invalidateQueries({ queryKey: ["roles"] });
+//       setDeleteModal(false);
+//       setEditingRole(null);
+//       setRoleName("");
+//       setSelectedPerms([]);
+//       notify("success", `Success deleted role ${editingRole?.name}`);
+//     },
+//     onError: (error: any) => {
+//       if (error._handled) return;
+//       notify("error", "Ошибка при удалении роли");
+//     },
+//   });
+
+//   useEffect(() => {
+//     if (editingRole) {
+//       setRoleName(editingRole.name);
+//       // Делаем запрос к конкретной роли
+//       api
+//         .get(`/users/roles/${editingRole.id}/`)
+//         .then((res) => {
+//           setSelectedPerms(res.data.current_permissions);
+//         })
+//         .catch((error: any) => {
+//           if (!error._handled) notify("error", "Ошибка при загрузке прав роли");
+//         });
+//     } else {
+//       setRoleName("");
+//       setSelectedPerms([]);
+//     }
+//   }, [editingRole]);
+
+//   const {
+//     data: roles,
+//     isLoading,
+//     error,
+//   } = useQuery({
+//     queryKey: ["roles"],
+//     queryFn: rolesApi.getRoles,
+//     enabled: canView,
+//     retry: false,
+//     staleTime: 1000 * 60 * 5,
+//   });
+
+//   const togglePerm = (id: number) => {
+//     setSelectedPerms((prev) => (prev.includes(id) ? prev.filter((p) => p !== id) : [...prev, id]));
+//   };
+
+//   const saveRoleMutation = useMutation({
+//     mutationFn: (data: { name: string; permissions: number[] }) => {
+//       if (editingRole) {
+//         if (!canPut) throw new Error("Нет прав на обновление");
+//         return rolesApi.saveRole(editingRole.id, data);
+//       }
+//       if (!canPost) throw new Error("Нет прав на создание");
+//       return rolesApi.saveRole(null, data);
+//     },
+//     onSuccess: () => {
+//       setIsModalOpen(false);
+//       setEditingRole(null);
+//       setRoleName("");
+//       setSelectedPerms([]);
+//       notify("success", `${editingRole ? "Success editing role!" : "Success create role!"}`);
+//       queryClient.invalidateQueries({ queryKey: ["roles"] }); // Обновить список ролей
+//     },
+//     onError: (error: any) => {
+//       if (error._handled) return;
+//       notify("error", "Ошибка при сохранении роли");
+//     },
+//   });
+
+//   const columns: Column<Role>[] = [
+//     { header: "ID", accessor: "id", sortable: true, excelWidth: 8, excelAlign: "center" },
+//     // { header: "Название роли", accessor: "name", sortable: true },
+//     { header: t("RoleName"), sortable: true, excelWidth: 20, excelValue: (role) => role.name, render: (role) => <Badge text={role.name} text_position="start" /> },
+//     {
+//       header: t("Action"),
+//       render: (role) => (
+//         <div className="flex gap-2">
+//           <Button
+//             disabled={!canPut}
+//             variant="1c"
+//             icon={<span>✏️</span>}
+//             className="md:h-6 md:w-8 md:!p-0"
+//             onClick={() => {
+//               setEditingRole(role); // Запоминаем роль
+//               setIsModalOpen(true); // Открываем модалку
+//             }}
+//           />
+//           <Button
+//             disabled={!canDelete}
+//             variant="1c"
+//             icon={<span>🗑️</span>}
+//             className="md:h-6 md:w-8 md:!p-0"
+//             onClick={() => {
+//               setEditingRole(role);
+//               setDeleteModal(true);
+//             }}
+//           />
+//         </div>
+//       ),
+//     },
+//   ];
+
+//   const filteredRoles = useMemo(() => {
+//     if (!roles) return [];
+//     if (!searchQuery.trim()) return roles;
+//     const q = searchQuery.toLowerCase();
+//     return roles.filter((r: Role) => r.name?.toLowerCase().includes(q));
+//   }, [roles, searchQuery]);
+
+//   // Выбрать/отменить все права для конкретного ресурса
+//   const toggleResource = (actions: any[], select: boolean) => {
+//     const actionIds = actions.map((p) => p.id);
+//     setSelectedPerms(
+//       (prev) =>
+//         select
+//           ? Array.from(new Set([...prev, ...actionIds])) // Добавить
+//           : prev.filter((id) => !actionIds.includes(id)), // Удалить
+//     );
+//   };
+
+//   // Выбрать/отменить вообще все права
+//   const toggleAll = (matrix: any, select: boolean) => {
+//     if (!select) {
+//       setSelectedPerms([]);
+//       return;
+//     }
+//     const allIds = Object.values(matrix)
+//       .flat()
+//       .map((p: any) => p.id);
+//     setSelectedPerms(allIds);
+//   };
+
+//   return (
+//     <RBACGuard isLoading={isLoading} error={error} canView={canView} forbiddenText="У вас нет прав на просмотр Ролей">
+//       <Table
+//         columns={columns}
+//         data={filteredRoles}
+//         tableId="roles"
+//         searchQuery={searchQuery}
+//         onSearchChange={setSearchQuery}
+//         onRowDoubleClick={(user) => {
+//           // Твоя логика открытия модалки:
+//           setEditingRole(user);
+//           setIsModalOpen(true);
+//         }}
+//       />
+
+//       <Modal
+//         isOpen={isModalOpen}
+//         onClose={() => {
+//           setIsModalOpen(false);
+//           setEditingRole(null);
+//         }}
+//         title={editingRole ? "Редактирование роли" : "Создание новой роли"}
+//         size="xl"
+//         // closeOnOutsideClick={false}
+//       >
+//         <div className="space-y-6">
+//           <Input label="Название роли" value={roleName} onChange={(e) => setRoleName(e.target.value)} />
+
+//           {/* Кнопки общего управления */}
+//           <div className="flex gap-4 mb-2">
+//             <Button text="Выбрать все" onClick={() => toggleAll(matrix || {}, true)} />
+//             <Button text="Сбросить все" onClick={() => toggleAll(matrix || {}, false)} />
+//           </div>
+
+//           <div className="space-y-4 max-h-[50vh] overflow-y-auto pr-2">
+//             {matrixIsLoading ? (
+//               <p>Загрузка прав...</p>
+//             ) : (
+//               Object.entries(matrix || {}).map(([resource, actions]: [string, any]) => {
+//                 const isResourceSelected = actions.every((p: any) => selectedPerms.includes(p.id));
+
+//                 return (
+//                   <div key={resource} className="border-b border-slate-200 dark:border-slate-700 pb-3">
+//                     <div className="flex items-center gap-3 mb-2">
+//                       <Button text={isResourceSelected ? "Снять всё" : "Выбрать всё"} onClick={() => toggleResource(actions, !isResourceSelected)} size="sm" />
+
+//                       <h4 className="font-bold capitalize text-indigo-400">
+//                         {t(resource)} <span className="text-sm font-normal">({resource})</span>
+//                       </h4>
+//                     </div>
+//                     <div className="flex flex-wrap gap-4">
+//                       {actions.map((perm: any) => (
+//                         <label key={perm.id} className="flex items-center gap-2 cursor-pointer">
+//                           <input type="checkbox" checked={selectedPerms.includes(perm.id)} onChange={() => togglePerm(perm.id)} />
+//                           <span>{t(perm.action)}</span>
+//                         </label>
+//                       ))}
+//                     </div>
+//                   </div>
+//                 );
+//               })
+//             )}
+//           </div>
+
+//           <div className="flex justify-end gap-2">
+//             <Button text="Отмена" onClick={() => setIsModalOpen(false)} />
+//             <Button text="Сохранить" onClick={() => saveRoleMutation.mutate({ name: roleName, permissions: selectedPerms })} />
+//           </div>
+//         </div>
+//       </Modal>
+
+//       <Modal
+//         isOpen={deleteModal}
+//         onClose={() => {
+//           setDeleteModal(false);
+//           setEditingRole(null);
+//         }}
+//         title={`Удаление роли ${editingRole?.name}`}
+//         size="lg"
+//       >
+//         <div className="flex justify-end gap-2">
+//           <Button text="Отмена" onClick={() => setDeleteModal(false)} />
+//           <Button
+//             text="Удалить"
+//             onClick={() => {
+//               if (editingRole?.id) {
+//                 deleteRoleMutation.mutate(editingRole.id);
+//               }
+//             }}
+//           />
+//         </div>
+//       </Modal>
+//     </RBACGuard>
+//   );
+// };
+
+// export default Roles;
+
+
+
+
+
+// import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
+// import { branchApi, companyApi } from "../../../../../../accounting/services/usersApi";
+// import { useSidebar } from "../../../../../../../core/context/SidebarRightContext";
+// import { useEffect, useState, useMemo } from "react";
+// import { Button } from "../../../../../../../components/ui/Button";
+// import { Plus } from "lucide-react";
+// import { Input } from "../../../../../../../components/ui/Input";
+// import { Table, type Column } from "../../../../../../../components/ui/Table/Table";
+// import { type Branch as BranchInterface, type CompanyProfile as CompanyInterface } from "../../../../../../../core/types";
+// import { Modal } from "../../../../../../../components/ui/Modal/Modal";
+// import { useNotify } from "../../../../../../../core/context/NotificationContext";
+// import { Avatar } from "../../../../../../../components/ui/Avatar";
+// import { ImagePreview } from "../../../../../../../components/ui/ImagePreview";
+// import { Badge } from "../../../../../../../components/ui/Badge";
+// import { RBACGuard } from "../../../../../../../components/ui/RBACGuard";
+// import { usePageAccess } from "../../../../../../../core/hooks/usePageAccess";
+
+// const Branches = () => {
+//   const { setSidebarContent } = useSidebar();
+//   const notify = useNotify();
+//   const queryClient = useQueryClient();
+
+//   const { canView, canPost, canPut, canDelete } = usePageAccess("branch");
+
+//   const [modalOpen, setModalOpen] = useState(false);
+//   const [deleteModal, setDeleteModal] = useState(false);
+//   const [deleteTargetId, setDeleteTargetId] = useState<number | null>(null);
+//   const [editingBranch, setEditingBranch] = useState<BranchInterface | null>(null);
+//   const [searchQuery, setSearchQuery] = useState("");
+//   const [activeFilter, setActiveFilter] = useState<"all" | "active" | "inactive">("all");
+//   const [selectedImage, setSelectedImage] = useState<string | null>(null);
+//   const [clearedFiles, setClearedFiles] = useState<string[]>([]);
+
+//   const { data: company } = useQuery<CompanyInterface[]>({
+//     queryKey: ["company-profile"],
+//     queryFn: companyApi.getCompany,
+//     staleTime: 1000 * 60 * 60,
+//   });
+
+//   const companyId = company?.[0]?.id;
+
+//   const emptyForm = {
+//     name: "",
+//     code: "",
+//     is_head_office: false,
+//     is_active: true,
+//     address: "",
+//     city: "",
+//     phone: "",
+//     email: "",
+//     website: "",
+//     manager_name: "",
+//     manager_position: "",
+//     logo: null as File | null,
+//     signature_image: null as File | null,
+//   };
+
+//   const [formData, setFormData] = useState(emptyForm);
+
+//   const {
+//     data: branches,
+//     isLoading,
+//     error,
+//   } = useQuery<BranchInterface[]>({
+//     queryKey: ["branches"],
+//     queryFn: branchApi.getBranches,
+//     enabled: canView,
+//     retry: false,
+//     staleTime: 1000 * 60 * 5,
+//   });
+
+//   const handleClearFile = (field: string) => {
+//     setFormData((prev: any) => ({ ...prev, [field]: null }));
+//     setClearedFiles((prev) => [...new Set([...prev, field])]);
+//   };
+
+//   useEffect(() => {
+//     if (editingBranch) {
+//       setClearedFiles([]);
+//       setFormData({
+//         name: editingBranch.name || "",
+//         code: editingBranch.code || "",
+//         is_head_office: editingBranch.is_head_office ?? false,
+//         is_active: editingBranch.is_active ?? true,
+//         address: editingBranch.address || "",
+//         city: editingBranch.city || "",
+//         phone: editingBranch.phone || "",
+//         email: editingBranch.email || "",
+//         website: editingBranch.website || "",
+//         manager_name: editingBranch.manager_name || "",
+//         manager_position: editingBranch.manager_position || "",
+//         logo: null,
+//         signature_image: null,
+//       });
+//     } else {
+//       setClearedFiles([]);
+//       setFormData(emptyForm);
+//     }
+//   }, [editingBranch]);
+
+//   const mutation = useMutation({
+//     // Теперь mutationFn принимает объект формы, а превращает его в FormData внутри
+//     mutationFn: (data: typeof emptyForm) => {
+//       if (!companyId) {
+//         throw new Error("Компания не загружена");
+//       }
+//       const formData = new FormData();
+
+//       // Автоматическое заполнение FormData
+//       Object.entries(data).forEach(([key, value]) => {
+//         // Если это файл и он выбран
+//         if ((key === "logo" || key === "signature_image") && value instanceof File) {
+//           formData.append(key, value);
+//         }
+
+//         // Остальные поля
+//         else if (value !== null && value !== undefined) {
+//           formData.append(key, String(value));
+//         }
+//       });
+
+//       clearedFiles.forEach((field) => formData.append(field, ""));
+
+//       // Добавляем ID компании
+//       if (companyId) formData.append("company_profile", String(companyId));
+
+//       // Вызываем API метод, который уже ожидает FormData
+//       return branchApi.saveBranch(editingBranch?.id || null, formData);
+//     },
+
+//     onSuccess: () => {
+//       queryClient.invalidateQueries({ queryKey: ["branches"] });
+//       setModalOpen(false);
+//       notify("success", `Филиал ${editingBranch ? "обновлён" : "создан"}`);
+//     },
+//     onError: (err: any) => {
+//       if (err._handled) return;
+//       notify("error", err.message || "Произошла ошибка при сохранении");
+//       // notify("error", "Ошибка при сохранении: " + (error.response?.data?.message || error.message));
+//     },
+//   });
+
+//   const deleteMutation = useMutation({
+//     mutationFn: (id: number) => {
+//       if (!canDelete) throw new Error("Нет прав на удаление");
+//       return branchApi.deleteBranch(id);
+//     },
+//     onSuccess: () => {
+//       queryClient.invalidateQueries({ queryKey: ["branches"] });
+//       setDeleteTargetId(null);
+//       notify("success", "Филиал удалён");
+//     },
+//     onError: (error: any) => {
+//       if (error._handled) return;
+//       notify("error", "Ошибка при удалении филиала");
+//     },
+//   });
+
+//   useEffect(() => {
+//     setSidebarContent(
+//       <div className="space-y-4">
+//         <div>
+//           <h4 className="font-bold text-indigo-300 mb-2">Действия</h4>
+//           <Button
+//             text="Добавить филиал"
+//             disabled={!canPost}
+//             onClick={() => {
+//               setEditingBranch(null);
+//               setModalOpen(true);
+//             }}
+//             className="w-full"
+//             icon={<Plus className="w-4 h-4" />}
+//             dark={true}
+//           />
+//         </div>
+
+//         {/* Фильтр статуса */}
+//         <div className="pt-4 border-t border-indigo-900/30">
+//           <h4 className="font-bold text-indigo-300 mb-2">Фильтр статуса</h4>
+//           <div className="flex flex-col gap-1">
+//             {(["all", "active", "inactive"] as const).map((status) => (
+//               <Button
+//                 key={status}
+//                 onClick={() => setActiveFilter(status)}
+//                 text={status === "all" ? "Все филиалы" : status === "active" ? "Только активные" : "Только неактивные"}
+//                 variant="ghost"
+//                 dark={true}
+//                 isActive={activeFilter === status}
+//                 className="w-full justify-start"
+//                 icon={status !== "all" ? <span className={`w-2 h-2 rounded-full ${status === "active" ? "bg-green-500" : "bg-red-500"}`} /> : undefined}
+//               />
+//             ))}
+//           </div>
+//         </div>
+//       </div>,
+//     );
+//   }, [setSidebarContent, activeFilter, canPost]);
+
+//   const filtered = useMemo(() => {
+//     if (!branches) return [];
+//     let result = branches;
+
+//     if (activeFilter === "active") result = result.filter((b) => b.is_active);
+//     if (activeFilter === "inactive") result = result.filter((b) => !b.is_active);
+
+//     if (searchQuery.trim()) {
+//       const q = searchQuery.toLowerCase();
+//       result = result.filter((b) => b.name?.toLowerCase().includes(q) || b.city?.toLowerCase().includes(q) || b.manager_name?.toLowerCase().includes(q));
+//     }
+//     return result;
+//   }, [branches, searchQuery, activeFilter]);
+
+//   const columns: Column<BranchInterface>[] = [
+//     { header: "ID", accessor: "id", sortable: true, excelAlign: "center", excelWidth: 5 },
+//     { header: "Название", accessor: "name", sortable: true, excelWidth: 25 },
+//     { header: "Код", accessor: "code", sortable: true, excelWidth: 25 },
+//     {
+//       header: "Головной",
+//       accessor: "is_head_office",
+//       sortable: true,
+//       excelWidth: 8,
+//       excelValue: (b) => (b.is_head_office ? "Да" : "Нет"),
+//       //   render: (b) => <span className={`text-xs px-2 py-1 rounded-full ${b.is_head_office ? "bg-green-100 text-green-800" : "bg-gray-100 text-gray-500"}`}>{b.is_head_office ? "Да" : "Нет"}</span>,
+//       render: (b) => <Badge text={b.is_head_office ? "Да" : "Нет"} />,
+//     },
+//     { header: "Город", accessor: "city", sortable: true, excelWidth: 18 },
+//     { header: "Адрес", accessor: "address", sortable: true, excelWidth: 18 },
+//     { header: "Телефон", accessor: "phone", sortable: true },
+//     { header: "Менеджер", accessor: "manager_name", sortable: true, excelWidth: 12 },
+//     {
+//       header: "Лого",
+//       excelWidth: 6,
+//       excelImageUrl: (b) => b.logo || null,
+//       render: (b) => <Avatar src={b.logo} fallbackText={b.name[0]} onClick={() => b.logo && setSelectedImage(b.logo)} />,
+//     },
+//     {
+//       header: "Подпись",
+//       excelWidth: 6,
+//       excelImageUrl: (b) => b.signature_image || null,
+//       render: (b) => <Avatar src={b.signature_image} fallbackText="П" onClick={() => b.signature_image && setSelectedImage(b.signature_image)} />,
+//     },
+//     {
+//       header: "Статус",
+//       accessor: "is_active",
+//       sortable: true,
+//       excelWidth: 13,
+//       sortValue: (b) => (b.is_active ? 1 : 0),
+//       excelValue: (b) => (b.is_active ? "Активен" : "Неактивен"),
+//       render: (b) => {
+//         return (
+//           <div className="flex items-center justify-center gap-2">
+//             <span className={`w-2 h-2 rounded-full ${b.is_active ? "bg-green-500" : "bg-red-500"}`} />
+//             <span className="text-xs">{b.is_active ? "Активен" : "Неактивен"}</span>
+//           </div>
+//         );
+//       },
+//     },
+//     {
+//       header: "Действия",
+//       render: (b) => (
+//         <div className="flex gap-2">
+//           <Button
+//             disabled={!canPut}
+//             variant="1c"
+//             icon={<span>✏️</span>}
+//             className="md:h-6 md:w-8 md:!p-0"
+//             onClick={(e) => {
+//               e.stopPropagation();
+//               setEditingBranch(b);
+//               setModalOpen(true);
+//             }}
+//           />
+//           <Button
+//             disabled={!canDelete}
+//             variant="1c"
+//             icon={<span>🗑️</span>}
+//             className="md:h-6 md:w-8 md:!p-0"
+//             onClick={(e) => {
+//               e.stopPropagation();
+//               setDeleteTargetId(b.id);
+//               setDeleteModal(true);
+//             }}
+//           />
+//         </div>
+//       ),
+//     },
+//   ];
+
+//   const branchToDelete = branches?.find((b) => b.id === deleteTargetId);
+
+//   return (
+//     <RBACGuard isLoading={isLoading} error={error} canView={canView} forbiddenText="У вас нет прав на просмотра данных о филиале компании">
+//       <Table
+//         columns={columns}
+//         data={filtered}
+//         tableId="branches"
+//         searchQuery={searchQuery}
+//         onSearchChange={setSearchQuery}
+//         onRowDoubleClick={(b) => {
+//           setEditingBranch(b);
+//           setModalOpen(true);
+//         }}
+//       />
+
+//       {/* {filtered.length === 0 && <div className="text-center py-12 text-gray-400">Ничего не найдено</div>} */}
+
+//       <Modal isOpen={modalOpen} onClose={() => setModalOpen(false)} title={editingBranch ? "Редактирование филиала" : "Новый филиал"} closeOnOutsideClick={false} size="lg">
+//         <div className="space-y-3 p-1">
+//           <Input label="Название" value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} />
+//           <Input label="Код" value={formData.code} onChange={(e) => setFormData({ ...formData, code: e.target.value })} />
+//           <Input label="Город" value={formData.city} onChange={(e) => setFormData({ ...formData, city: e.target.value })} />
+//           <Input label="Адрес" value={formData.address} onChange={(e) => setFormData({ ...formData, address: e.target.value })} />
+//           <Input label="Телефон" value={formData.phone} onChange={(e) => setFormData({ ...formData, phone: e.target.value })} />
+//           <Input label="Email" value={formData.email} onChange={(e) => setFormData({ ...formData, email: e.target.value })} />
+//           <Input label="Сайт" value={formData.website} onChange={(e) => setFormData({ ...formData, website: e.target.value })} />
+//           <Input label="Менеджер" value={formData.manager_name} onChange={(e) => setFormData({ ...formData, manager_name: e.target.value })} />
+//           <Input label="Должность менеджера" value={formData.manager_position} onChange={(e) => setFormData({ ...formData, manager_position: e.target.value })} />
+
+//           {/* Файлы */}
+//           <div className="grid grid-cols-2 gap-4">
+//             {(["logo", "signature_image"] as const).map((field) => {
+//               const existingUrl = editingBranch?.[field === "logo" ? "logo_thumbnail" : "signature_image_thumbnail"];
+//               const newFile = formData[field];
+//               const previewUrl = newFile ? URL.createObjectURL(newFile as File) : clearedFiles.includes(field) ? null : existingUrl || null;
+
+//               return (
+//                 <div key={field} className="border border-gray-300 dark:border-indigo-900/50 p-3 rounded-lg bg-white dark:bg-slate-900">
+//                   <label className="block mb-2 text-xs font-bold text-gray-600 dark:text-indigo-400">{field === "logo" ? "Логотип" : "Подпись"}</label>
+
+//                   {previewUrl && (
+//                     <div className="relative inline-block mb-2">
+//                       <Avatar src={previewUrl} fallbackText={field[0].toUpperCase()} onClick={() => setSelectedImage(previewUrl)} />
+//                       <button
+//                         className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-red-500 text-white text-[10px] flex items-center justify-center hover:bg-red-600"
+//                         onClick={(e) => {
+//                           e.preventDefault();
+//                           handleClearFile(field);
+//                         }}
+//                       >
+//                         ×
+//                       </button>
+//                     </div>
+//                   )}
+
+//                   <input
+//                     type="file"
+//                     className="text-[10px] w-full mt-2 text-gray-500 dark:text-indigo-300 file:mr-2 file:py-1 file:px-2 file:rounded-md file:border-0 file:text-[10px] file:font-semibold file:bg-indigo-50 dark:file:bg-indigo-950 file:text-indigo-700 dark:file:text-indigo-300 hover:file:bg-indigo-100 dark:hover:file:bg-indigo-900 cursor-pointer"
+//                     onChange={(e) => {
+//                       const file = e.target.files?.[0] || null;
+//                       setFormData({ ...formData, [field]: file });
+//                       // Убираем из clearedFiles если выбрали новый файл
+//                       setClearedFiles((prev) => prev.filter((f) => f !== field));
+//                     }}
+//                   />
+//                 </div>
+//               );
+//             })}
+//           </div>
+
+//           <label className="flex items-center gap-2 font-medium text-gray-700">
+//             <input
+//               type="checkbox"
+//               checked={formData.is_head_office}
+//               onChange={(e) => setFormData({ ...formData, is_head_office: e.target.checked })}
+//               className="w-4 h-4 rounded border-gray-300 text-indigo-600"
+//             />
+//             Головной офис
+//           </label>
+
+//           <label className="flex items-center gap-2 font-medium text-gray-700">
+//             <input
+//               type="checkbox"
+//               checked={formData.is_active}
+//               onChange={(e) => setFormData({ ...formData, is_active: e.target.checked })}
+//               className="w-4 h-4 rounded border-gray-300 text-indigo-600"
+//             />
+//             Активен
+//           </label>
+//           <div className="flex justify-end gap-2 pt-2">
+//             <Button text="Отмена" onClick={() => setModalOpen(false)} />
+//             {/* <Button text={mutation.isPending ? "Сохранение..." : "Сохранить"} variant="danger" disabled={mutation.isPending} onClick={() => mutation.mutate(formData)} /> */}
+//             <Button
+//               text="Сохранить"
+//               onClick={() => {
+//                 if ((editingBranch && !canPut) || (!editingBranch && !canPost)) {
+//                   notify("error", "Недостаточно прав");
+//                   return;
+//                 }
+//                 mutation.mutate(formData);
+//               }}
+//               disabled={mutation.isPending}
+//             />
+//           </div>
+//         </div>
+//       </Modal>
+
+//       <Modal isOpen={deleteModal} onClose={() => setDeleteModal(false)} size="sm">
+//         <div className="mb-6">
+//           <p>Вы действительно хотите удалить филиал:</p>
+//           <p className="font-bold text-gray-900 dark:text-gray-200 mt-2">
+//             {branchToDelete?.name} {branchToDelete?.city ? `(${branchToDelete.city})` : ""}
+//           </p>
+//           <p className="text-red-500 mt-4">Это действие нельзя будет отменить.</p>
+//         </div>
+//         <div className="flex justify-end gap-2">
+//           <Button text="Отмена" onClick={() => setDeleteModal(false)} />
+//           <Button
+//             variant="danger"
+//             text="Удалить"
+//             onClick={() => {
+//               if (deleteTargetId) {
+//                 deleteMutation.mutate(deleteTargetId);
+//                 setDeleteModal(false);
+//               }
+//             }}
+//           />
+//         </div>
+//       </Modal>
+//       <ImagePreview src={selectedImage} onClose={() => setSelectedImage(null)} />
+//     </RBACGuard>
+//   );
+// };
+
+// export default Branches;
+
+
+
+
+// import { useState, useEffect, useMemo } from "react";
+// import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
+// import { useSidebar } from "../../../../core/context/SidebarRightContext";
+// import { directoryApi } from "../../services/usersApi";
+// import { useNotify } from "../../../../core/context/NotificationContext";
+// import { getIconByName, DIRECTORY_ICONS } from "../../../../core/utils/icons";
+// import { Table, type Column } from "../../../../components/ui/Table/Table";
+// import { Button } from "../../../../components/ui/Button";
+// import { Input } from "../../../../components/ui/Input";
+// import { TextArea } from "../../../../components/ui/TextArea";
+// import { IconPicker } from "../../../../components/ui/Icon/IconPicker";
+// import { ColorPicker } from "../../../../components/ui/Icon/ColorPicker";
+// import { ConfirmModal } from "../../../../components/ui/Modal/ConfirmModal";
+// import { Modal } from "../../../../components/ui/Modal/Modal";
+// import { Plus } from "lucide-react";
+// import { slugify } from "../../../../core/utils/slugify";
+// import { RBACGuard } from "../../../../components/ui/RBACGuard";
+// import { usePageAccess } from "../../../../core/hooks/usePageAccess";
+
+// interface DirectoryFormData {
+//   name: string;
+//   slug: string;
+//   icon: string;
+//   color: string;
+//   description: string;
+//   is_active: boolean;
+// }
+
+// const emptyForm: DirectoryFormData = {
+//   name: "",
+//   slug: "",
+//   icon: "Warehouse",
+//   color: "#3b82f6",
+//   description: "",
+//   is_active: true,
+// };
+
+// const CreateField = () => {
+//   const { setSidebarContent } = useSidebar();
+//   const queryClient = useQueryClient();
+//   const notify = useNotify();
+//   // const { hasPermission } = useAccess();
+
+//   const [selectedDirId, setSelectedDirId] = useState<number | null>(null);
+
+//   const { canView, canPost, canPut, canDelete } = usePageAccess("directoryfield");
+
+//   const [activeFilter, setActiveFilter] = useState<"all" | "active" | "inactive">("all");
+//   const [searchQuery, setSearchQuery] = useState("");
+
+//   // Форма создания/редактирования
+//   const [formModalOpen, setFormModalOpen] = useState(false);
+//   const [editingDir, setEditingDir] = useState<any | null>(null);
+//   const [formData, setFormData] = useState<DirectoryFormData>(emptyForm);
+//   const [nameSlugEdited, setNameSlugEdited] = useState(false);
+
+//   // Подтверждения
+//   const [confirmModal, setConfirmModal] = useState(false); // create/edit confirm
+//   const [deleteModal, setDeleteModal] = useState(false);
+//   const [deleteTargetId, setDeleteTargetId] = useState<number | null>(null);
+
+//   // const canViewDirectory = hasPermission("directory", "GET");
+
+//   const {
+//     data: directories,
+//     isLoading,
+//     error,
+//   } = useQuery({
+//     queryKey: ["directories"],
+//     queryFn: directoryApi.getDirectory,
+//     enabled: canView,
+//     retry: false,
+//     staleTime: 1000 * 60 * 5,
+//   });
+
+//   // Заполнение формы при редактировании
+//   useEffect(() => {
+//     if (editingDir) {
+//       setFormData({
+//         name: editingDir.name || "",
+//         slug: editingDir.slug || "",
+//         icon: editingDir.icon || "Warehouse",
+//         color: editingDir.color || "#3b82f6",
+//         description: editingDir.description || "",
+//         is_active: editingDir.is_active ?? true,
+//       });
+//       setNameSlugEdited(true);
+//     } else {
+//       setFormData(emptyForm);
+//       setNameSlugEdited(false);
+//     }
+//   }, [editingDir]);
+
+//   // Создание/обновление справочника
+//   const saveMutation = useMutation({
+//     mutationFn: (data: DirectoryFormData) => {
+//       if (!canPost || !canPut || !data) throw new Error("У вас нет прав на редактирование");
+//       return directoryApi.saveDirectory(editingDir?.id || null, data);
+//     },
+//     onSuccess: () => {
+//       queryClient.invalidateQueries({ queryKey: ["directories"] });
+//       notify("success", `Справочник ${editingDir ? "обновлён" : "создан"}`);
+//       setFormModalOpen(false);
+//       setEditingDir(null);
+//       setFormData(emptyForm);
+//     },
+//     onError: (err: any) => {
+//       if (err._handled) return;
+//       notify("error", err.message || "Произошла ошибка при сохранении");
+//     },
+//   });
+
+//   // Удаление справочника
+//   const deleteMutation = useMutation({
+//     mutationFn: (id: number) => directoryApi.deleteDirectory(id),
+//     onSuccess: () => {
+//       queryClient.invalidateQueries({ queryKey: ["directories"] });
+//       setDeleteTargetId(null);
+//       notify("success", "Справочник удалён");
+//     },
+//     onError: (err: any) => {
+//       if (err._handled) return;
+//       notify("error", "Ошибка при удалении справочника");
+//     },
+//   });
+
+//   // Фильтрация по статусу + поиск
+//   const filteredDirectories = useMemo(() => {
+//     if (!directories) return [];
+
+//     let result = directories;
+
+//     if (activeFilter === "active") result = result.filter((d: any) => d.is_active);
+//     if (activeFilter === "inactive") result = result.filter((d: any) => !d.is_active);
+
+//     if (searchQuery.trim()) {
+//       const q = searchQuery.toLowerCase();
+//       result = result.filter((d: any) => d.name?.toLowerCase().includes(q) || d.slug?.toLowerCase().includes(q) || d.description?.toLowerCase().includes(q));
+//     }
+
+//     return result;
+//   }, [directories, activeFilter, searchQuery]);
+
+//   useEffect(() => {
+//     setSidebarContent(
+//       <div className="space-y-4">
+//         <div>
+//           <h4 className="font-bold text-indigo-300 mb-2">Действия</h4>
+//           <Button
+//             disabled={!canPost}
+//             text="Создать справочник"
+//             className="w-full"
+//             dark={true}
+//             icon={<Plus className="w-4 h-4" />}
+//             onClick={() => {
+//               setEditingDir(null);
+//               setFormModalOpen(true);
+//             }}
+//           />
+//         </div>
+
+//         <div className="pt-4 border-t border-indigo-900/30">
+//           <h4 className="font-bold text-indigo-300 mb-2">Фильтр статуса</h4>
+//           <div className="flex flex-col gap-1">
+//             {(["all", "active", "inactive"] as const).map((status) => (
+//               <Button
+//                 key={status}
+//                 onClick={() => setActiveFilter(status)}
+//                 text={status === "all" ? "Все справочники" : status === "active" ? "Только активные" : "Только неактивные"}
+//                 variant="ghost"
+//                 dark={true}
+//                 isActive={activeFilter === status}
+//                 className="w-full justify-start"
+//                 icon={status !== "all" ? <span className={`w-2 h-2 rounded-full ${status === "active" ? "bg-green-500" : "bg-red-500"}`} /> : undefined}
+//               />
+//             ))}
+//           </div>
+//         </div>
+//       </div>,
+//     );
+//   }, [setSidebarContent, activeFilter, canPost]);
+
+//   const columns: Column<any>[] = [
+//     {
+//       header: "ID",
+//       excelWidth: 5,
+//       accessor: "id",
+//       excelAlign: "center",
+//       sortable: true,
+//     },
+//     {
+//       header: "svg",
+//       width: "15px",
+//       excelWidth: 4,
+//       excelIcon: (item) => ({ iconName: item.icon, color: item.color }),
+//       render: (item) => {
+//         const IconComponent = getIconByName(item.icon);
+//         return (
+//           <div className="flex items-center gap-2">
+//             <IconComponent size={20} style={{ color: item.color }} />
+//           </div>
+//         );
+//       },
+//     },
+//     {
+//       header: "Название",
+//       excelWidth: 30,
+//       accessor: "name",
+//       sortable: true,
+//     },
+//     {
+//       header: "Описание",
+//       excelWidth: 20,
+//       accessor: "description",
+//       sortable: true,
+//     },
+//     {
+//       header: "Статус",
+//       excelWidth: 5,
+//       excelAlign: "center",
+//       accessor: "is_active",
+//       excelValue: (i) => (i.is_active ? "+" : ""),
+//       sortable: true,
+//       sortValue: (item) => (item.is_active ? 1 : 0),
+//       render: (item) => (
+//         <div className="flex items-center justify-center gap-2 print:block">
+//           <span className={`w-2 h-2 rounded-full ${item.is_active ? "bg-green-500" : "bg-red-500"}`} />
+//           <span className="text-gray-700 text-xs">{item.is_active ? "Активен" : "Неактивен"}</span>
+//         </div>
+//       ),
+//     },
+//     {
+//       header: "Slug",
+//       excelWidth: 20,
+//       accessor: "slug",
+//       sortable: true,
+//     },
+//     {
+//       header: "Действия",
+//       hideInPrint: true,
+//       render: (item) => (
+//         <div className="flex gap-2">
+//           <Button
+//             disabled={!canPut}
+//             variant="1c"
+//             icon={<span>✏️</span>}
+//             className="md:h-6 md:w-8 md:!p-0"
+//             onClick={(e) => {
+//               e.stopPropagation();
+//               setEditingDir(item);
+//               setFormModalOpen(true);
+//             }}
+//           />
+//           <Button
+//             disabled={!canDelete}
+//             variant="1c"
+//             icon={<span>🗑️</span>}
+//             className="md:h-6 md:w-8 md:!p-0"
+//             onClick={(e) => {
+//               e.stopPropagation();
+//               setDeleteTargetId(Number(item.id));
+//               setDeleteModal(true);
+//             }}
+//           />
+//         </div>
+//       ),
+//     },
+//   ];
+
+//   const dirToDelete = directories?.find((d: any) => d.id === deleteTargetId);
+
+//   // Внутри CompanyAdminUser
+//   //   if (isLoading) return <Loader containerClass="mx-auto mt-20" />;
+
+//   return (
+//     <RBACGuard isLoading={isLoading} error={error} canView={canView} forbiddenText="У вас нет прав на просмотр справочников">
+//       <Table
+//         columns={columns}
+//         data={filteredDirectories || []}
+//         tableId="directories_list"
+//         searchQuery={searchQuery}
+//         onSearchChange={setSearchQuery}
+//         onRowClick={(item) => setSelectedDirId(item.id)}
+//         onRowDoubleClick={(user) => {
+//           setEditingDir(user);
+//           setFormModalOpen(true);
+//         }}
+//       />
+
+//       {selectedDirId && <div className="mt-6">{/* Здесь логика полей для выбранного справочника */}</div>}
+
+//       {/* Модалка формы создания/редактирования */}
+//       <Modal isOpen={formModalOpen} onClose={() => setFormModalOpen(false)} title={editingDir ? "Редактирование справочника" : "Создание справочника"} closeOnOutsideClick={false}>
+//         <div className="space-y-4">
+//           <Input
+//             label="Название"
+//             value={formData.name}
+//             onChange={(e) => {
+//               const value = e.target.value;
+//               setFormData((prev) => ({
+//                 ...prev,
+//                 name: value,
+//                 slug: nameSlugEdited ? prev.slug : slugify(value),
+//               }));
+//             }}
+//           />
+
+//           <Input
+//             label="Slug"
+//             value={formData.slug}
+//             onChange={(e) => {
+//               setFormData((prev) => ({ ...prev, slug: e.target.value }));
+//               setNameSlugEdited(true);
+//             }}
+//           />
+
+//           <TextArea
+//             label="Описание"
+//             rows={3}
+//             value={formData.description}
+//             onChange={(e) => setFormData((prev) => ({ ...prev, description: e.target.value }))}
+//             placeholder="Введите описание справочника..."
+//           />
+
+//           <ColorPicker selectedColor={formData.color} onSelect={(color) => setFormData((prev) => ({ ...prev, color }))} />
+
+//           <IconPicker label="Иконка справочника" options={DIRECTORY_ICONS} selectedIcon={formData.icon} onSelect={(icon) => setFormData((prev) => ({ ...prev, icon }))} />
+
+//           <label className="flex items-center gap-2 font-medium text-gray-700">
+//             <input
+//               type="checkbox"
+//               checked={formData.is_active}
+//               onChange={(e) => setFormData((prev) => ({ ...prev, is_active: e.target.checked }))}
+//               className="w-4 h-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+//             />
+//             Активный справочник
+//           </label>
+
+//           <div className="flex justify-end gap-2">
+//             <Button text="Отмена" onClick={() => setFormModalOpen(false)} />
+//             <Button text={editingDir ? "Сохранить" : "Создать"} onClick={() => setConfirmModal(true)} />
+//           </div>
+//         </div>
+//       </Modal>
+
+//       {/* Подтверждение создания/редактирования */}
+//       <ConfirmModal
+//         isOpen={confirmModal}
+//         type={editingDir ? "warning" : "create"}
+//         title={editingDir ? "Изменение справочника" : "Создание справочника"}
+//         message={editingDir ? `Сохранить изменения справочника "${formData.name}"?` : `Создать справочник "${formData.name}"?`}
+//         confirmText={editingDir ? "Сохранить" : "Создать"}
+//         onClose={() => setConfirmModal(false)}
+//         onConfirm={() => {
+//           saveMutation.mutate(formData);
+//           setConfirmModal(false);
+//         }}
+//       />
+
+//       {/* Подтверждение удаления */}
+//       <ConfirmModal
+//         isOpen={deleteModal}
+//         type="delete"
+//         title="Удаление справочника"
+//         message={`Удалить справочник "${dirToDelete?.name}"?`}
+//         onClose={() => setDeleteModal(false)}
+//         onConfirm={() => {
+//           if (deleteTargetId) {
+//             deleteMutation.mutate(deleteTargetId);
+//             setDeleteModal(false);
+//           }
+//         }}
+//       />
+//     </RBACGuard>
+//   );
+// };
+
+// export default CreateField;
+
+
+
+
+
+
+
+
+
+
+
+
+

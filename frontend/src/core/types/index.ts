@@ -98,6 +98,7 @@ export interface Account {
   children?: Account[];
   account_type?: string; 
   account_type_display?: string;
+  is_active: boolean;
 }
 
 

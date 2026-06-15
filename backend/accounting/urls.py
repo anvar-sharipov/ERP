@@ -4,7 +4,7 @@ from rest_framework.routers import DefaultRouter
 from .views.company_views import CompanyProfileViewSet, BranchViewSet
 from .views.product_views import ProductListView # Убедись, что импорт правильный
 from .views.account_views import AccountViewSet
-from .views.directory_views import DirectoryViewSet
+from .views.directory_views import DirectoryViewSet, DirectoryFieldViewSet
 
 app_name = 'accounting'
 
@@ -15,6 +15,7 @@ router.register(r'branches', BranchViewSet, basename='branches')
 router.register(r'accounts', AccountViewSet, basename='accounts')
 
 router.register(r'directories', DirectoryViewSet)
+router.register(r'directory-fields', DirectoryFieldViewSet, basename='directory-fields')
 
 urlpatterns = [
     # Путь для списка продуктов

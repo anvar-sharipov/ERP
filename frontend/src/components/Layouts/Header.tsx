@@ -14,12 +14,11 @@ import { Button } from "../ui/Button";
 import { Input } from "../ui/Input";
 import { useUser } from "../../core/context/UserContext";
 
-
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { updateProfile } from "../../features/accounting/services/usersApi";
 import { useNotify } from "../../core/context/NotificationContext";
 import { playAside2Sound } from "../../core/utils/sound";
-
+import { useCompany } from "../../core/context/CompanyContext";
 
 // Добавьте это над компонентом Header
 interface ProfileFormData {
@@ -32,6 +31,8 @@ interface ProfileFormData {
 
 const Header: React.FC = () => {
   const { user: currentUser } = useUser();
+  const { company: currentCompany } = useCompany();
+
   
   const navigate = useNavigate();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -49,15 +50,6 @@ const Header: React.FC = () => {
 
   const queryClient = useQueryClient();
   const notify = useNotify();
-
-  
-
-  // const {
-  //   data: users,
-  // } = useQuery({
-  //   queryKey: ["users"],
-  //   queryFn: usersApi.getUsers, // <-- Обязательно добавьте эту строку
-  // });
 
   const mutation = useMutation({
     mutationFn: (data: FormData) => updateProfile(data),
@@ -91,8 +83,6 @@ const Header: React.FC = () => {
     mutation.mutate(data);
   };
 
-  
-
   // Заполняем форму при открытии модалки данными текущего пользователя
   const openEditModal = () => {
     if (currentUser) {
@@ -118,9 +108,21 @@ const Header: React.FC = () => {
 
   return (
     <header className="relative h-16 border-b border-slate-500 bg-slate-800 dark:bg-slate-900 px-6 flex items-center justify-between print:hidden">
-      {/* Логотип (всегда виден) */}
-      <div className="flex items-center gap-4">
-        <span className="font-bold text-xl text-yellow-500 tracking-tight">Uchet.SaaS</span>
+      {/* Логотип и название компании */}
+      <div className="flex items-center gap-3">
+        {currentCompany?.logo ? (
+          <img src={currentCompany.logo} alt={currentCompany.name} className="h-10 w-10 object-contain rounded" />
+        ) : currentCompany?.logo2 ? (
+          <img src={currentCompany.logo2} alt={currentCompany.name} className="h-10 w-10 object-contain rounded" />
+        ) : (
+          // Заглушка, если логотипа нет
+          <div className="h-10 w-10 bg-slate-700 rounded flex items-center justify-center text-yellow-500 font-bold">{currentCompany?.name?.charAt(0) || "H"}</div>
+        )}
+
+        <div className="flex flex-col">
+          <span className="font-bold text-lg text-white leading-tight">{currentCompany?.name || "Hasap.Pro"}</span>
+          {currentCompany?.name && <span className="text-[10px] text-yellow-500 uppercase tracking-wider">Hasap.Pro</span>}
+        </div>
       </div>
 
       {/* Кнопка гамбургера (видна только на мобильных) */}
@@ -169,7 +171,9 @@ const Header: React.FC = () => {
                 <div className="absolute right-0 top-14 w-48 bg-slate-900 border border-slate-700 rounded-lg shadow-xl z-20 overflow-hidden">
                   <div className="px-4 py-2 border-b border-slate-800">
                     <p className="font-bold text-white truncate">{currentUser?.full_name.trim() || currentUser?.username}</p>
-                    <p className="text-indigo-400">{currentUser?.position || "Пользователь"} ({currentUser?.username})</p>
+                    <p className="text-indigo-400">
+                      {currentUser?.position || "Пользователь"} ({currentUser?.username})
+                    </p>
                   </div>
                   <button onClick={openEditModal} className="w-full text-left px-4 py-2 text-gray-300 hover:bg-slate-800">
                     ✏️ Редактировать

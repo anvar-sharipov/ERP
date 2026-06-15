@@ -1,3 +1,4 @@
+// frontend/src/core/router/routes.ts
 export const ROUTES = {
   AUTH: {
     LOGIN: '/login',
@@ -8,6 +9,7 @@ export const ROUTES = {
     COMPANIES: '/companies',
     ACCOUNTING: '/accounting',
     DIRECTORY: '/directory',
+    DIRECTORY_FIELDS: '/directory/:id/fields',
   },
   COMPANY_ADMIN: {
     USERS: '/admin/users',

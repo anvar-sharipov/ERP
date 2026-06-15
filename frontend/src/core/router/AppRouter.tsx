@@ -16,16 +16,12 @@ import CompanyAdminUser from "../../features/users/components/pages/admin/Roles/
 import Roles from "../../features/users/components/pages/admin/Roles/Roles";
 import CompanyAdmin from "../../features/users/components/pages/admin/Roles/Company/Company";
 import Branchs from "../../features/users/components/pages/admin/Roles/Branchs/Branchs";
-import EntryJournal from "../../features/accounting/pages/Accounting/EntryJournal";
-import ReportsPage from "../../features/accounting/pages/Accounting/ReportsPage";
-import AnalyticsPage from "../../features/accounting/pages/Accounting/AnalyticsPage";
 import AccountPage from "../../features/accounting/pages/Accounting/AccountPage";
 import Directory from "../../features/accounting/pages/Directory/Directory";
-import DirectiryPage from "../../features/accounting/pages/Directory/DirectiryPage";
 
-import CreateDirectoryPage from "../../features/accounting/pages/Directory/CreateDirectory";
-import CreateField from "../../features/accounting/pages/Directory/CreateField";
+import CreateField from "../../features/accounting/pages/Directory/Directory/CreateField";
 import { PermissionRoute } from "./PermissionRouteProps";
+import DirectoryFieldsPage from "../../features/accounting/pages/Directory/Directory/DirectoryFieldsPage";
 
 
 const AppRouter: React.FC = () => {
@@ -69,20 +65,17 @@ const AppRouter: React.FC = () => {
           {/* ГРУППА БУХГАЛТЕРИИ */}
           <Route element={<PermissionRoute resource="transaction" action="GET" />}>
             <Route path={ROUTES.APP.ACCOUNTING} element={<Accounting />}>
-              <Route index element={<Navigate to="journal" replace />} />
-              <Route path="journal" element={<EntryJournal />} />
-              <Route path="reports" element={<ReportsPage />} />
-              <Route path="analytics" element={<AnalyticsPage />} />
+              <Route index element={<Navigate to="accounts" replace />} />
               <Route path="accounts" element={<AccountPage />} />
             </Route>
 
             <Route path={ROUTES.APP.DIRECTORY} element={<Directory />}>
-              <Route index element={<Navigate to="directory-page" replace />} />
-              <Route path="directory-page" element={<DirectiryPage />} />
-              <Route path="create-directory-page" element={<CreateDirectoryPage />} />
+              <Route index element={<Navigate to="create-fields-for-directory" replace />} />
+              {/* <Route path="create-directory-page" element={<CreateDirectoryPage />} /> */}
               <Route path="create-fields-for-directory" element={<CreateField />} />
             </Route>
           </Route>
+          <Route path={ROUTES.APP.DIRECTORY_FIELDS} element={<DirectoryFieldsPage />} />
 
           {/* <Route path={ROUTES.APP.ACCOUNTING} element={<Accounting />}>
             <Route index element={<Navigate to="journal" replace />} />

@@ -1,19 +1,6 @@
 // frontend/src/features/services/usersApi.ts
 import { api } from "../../../core/api/axiosInstance";
 
-// export const usersApi = {
-//   // Получить список пользователей
-//   getUsers: async () => {
-//     const res = await api.get("/users/list/");  
-//     return res.data;
-//   },
-
-//   // Назначить роль (понадобится позже)
-//   assignRole: async (userId: number, roleIds: number[]) => {
-//     const res = await api.post(`/users/${userId}/assign-role/`, { roles: roleIds });
-//     return res.data;
-//   }
-// };
 
 export const usersApi = {
   getUsers: async () => {
@@ -164,6 +151,26 @@ export const directoryApi = {
 
   deleteDirectory: async (id: number) => {
     return api.delete(`/accounting/directories/${id}/`);
+  },
+};
+
+
+
+export const directoryFieldApi = {
+  getFields: async (directoryId: number) => {
+    const res = await api.get(`/accounting/directory-fields/?directory=${directoryId}`);
+    return res.data;
+  },
+
+  saveField: async (id: number | null, data: any) => {
+    if (id) {
+      return api.put(`/accounting/directory-fields/${id}/`, data);
+    }
+    return api.post("/accounting/directory-fields/", data);
+  },
+
+  deleteField: async (id: number) => {
+    return api.delete(`/accounting/directory-fields/${id}/`);
   },
 };
 

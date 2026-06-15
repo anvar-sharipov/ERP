@@ -7,7 +7,7 @@ class AccountChildSerializer(serializers.ModelSerializer):
     """Лёгкий сериализатор для дочерних счетов (без рекурсии)"""
     class Meta:
         model = Account
-        fields = ['id', 'code', 'name', 'is_group']
+        fields = ['id', 'code', 'name', 'is_group', 'is_active']
 
 
 class AccountSerializer(serializers.ModelSerializer):
@@ -19,7 +19,7 @@ class AccountSerializer(serializers.ModelSerializer):
     class Meta:
         model = Account
         fields = [
-            'id', 'code', 'name', 'is_group',
+            'id', 'code', 'name', 'is_group', 'is_active',
             'parent', 'parent_code', 'children', 'account_type_display'
         ]
 
@@ -32,7 +32,7 @@ class AccountWriteSerializer(serializers.ModelSerializer):
     """Сериализатор для создания/редактирования"""
     class Meta:
         model = Account
-        fields = ['id', 'code', 'name', 'is_group', 'parent', 'account_type']
+        fields = ['id', 'code', 'name', 'is_group', 'parent', 'account_type', 'is_active']
 
     def validate_code(self, value):
         # Уникальность кода при создании и редактировании

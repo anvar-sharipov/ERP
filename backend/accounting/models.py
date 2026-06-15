@@ -389,6 +389,8 @@ class Account(models.Model):
         default=AccountType.ACTIVE_PASSIVE,
         verbose_name="Вид счета"
     )
+    
+    is_active = models.BooleanField(default=True, verbose_name="Активен")
 
     class Meta:
         ordering = ['code']

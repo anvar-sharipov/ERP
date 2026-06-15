@@ -149,7 +149,87 @@
     "SaveSuccess": "Роль успешно сохранена",
     "ErrorLoading": "Ошибка при загрузке прав роли",
     "ErrorDeleting": "Ошибка при удалении роли",
-    "NoViewRights": "У вас нет прав на просмотр Ролей"
+    "NoViewRights": "У вас нет прав на просмотр Ролей",
+
+    "AccountsPlan": "План счетов",
+
+    "NoCreateRights": "Нет прав на создание",
+    "AccountUpdated": "Счёт обновлён",
+    "AccountCreated": "Счёт создан",
+    "SaveError": "Ошибка сохранения",
+    "DeleteError": "Ошибка удаления",
+    "AccountDeleted": "Счёт удалён",
+    "ID": "ID",
+    "Account": "Счет",
+    "Parent": "Родитель",
+    "Type": "Вид",
+    "GroupType": "Тип",
+    "Group": "Группа",
+    "AccountLabel": "Счёт",
+    "ActionsSidebar": "Действия",
+    "AddAccount": "Добавить счёт",
+    "AccountTypeSidebar": "Тип счёта",
+    "All": "Все",
+    "OnlyGroups": "Только группы",
+    "OnlyAccounts": "Только счета",
+    "EditAccount": "Редактировать: ",
+    "NewAccount": "Новый счёт",
+    "AccountCode": "Код счёта",
+    "AccountName": "Наименование",
+    "ParentAccount": "Родительский счёт",
+    "RootAccount": "— Корневой счёт —",
+    "IsGroup": "Это группа (нельзя делать проводки)",
+    "AccountKind": "Вид счёта",
+    "Passive": "Пассивный",
+    "ActivePassive": "Активно-Пассивный",
+    "DeleteAccountQuestion": "Удалить счёт?",
+    "DeleteConfirmation": "Вы хотите удалить счёт:",
+    "DeleteWarning": "Нельзя удалить счёт с субсчетами или проводками.",
+    "Deleting": "Удаление...",
+
+    "CreateDirectory": "Создать справочник",
+    "AllDirectories": "Все справочники",
+    "Description": "Описание",
+    "Slug": "Slug",
+    "ActionsColumn": "Действия",
+    "EditDirectory": "Редактирование справочника",
+    "NewDirectory": "Создание справочника",
+    "NameLabel": "Название",
+    "SlugLabel": "Slug",
+    "DescriptionLabel": "Описание",
+    "DescriptionPlaceholder": "Введите описание справочника...",
+    "IconLabel": "Иконка справочника",
+    "EditConfirmationTitle": "Изменение справочника",
+    "CreateConfirmationTitle": "Создание справочника",
+    "SaveMessage": "Сохранить изменения справочника \"{{name}}\"?",
+    "CreateMessage": "Создать справочник \"{{name}}\"?",
+    "DeleteDirectory": "Удаление справочника",
+    "DeleteMessage": "Удалить справочник \"{{name}}\"?",
+    "SuccessSaved": "Справочник {{action}}",
+    "Saved": "обновлён",
+    "Created": "создан",
+    "DeleteSuccess": "Справочник удалён",
+    "NoEditRights": "У вас нет прав на редактирование",
+
+    "AllAccounts": "Все счета",
+
+    "ConfirmEditTitle": "Подтверждение редактирования",
+    "ConfirmEditMessage": "Вы хотите сохранить изменения?",
+
+    "ConfirmCreateTitle": "Подтверждение создания",
+    "ConfirmCreateMessage": "Вы хотите подтвердить создание?",
+
+    "Confirmation": "Подтверждение",
+    "Continue": "Продолжить",
+    "Confirm": "Подтвердить",
+    "PleaseWait": "Подождите...",
+    "Color": "Цвет",
+    "DirectoryFields": "Поля справочника",
+    "EditRoles": "Редактирование ролей"
+
+   
+
+
 
 
     
