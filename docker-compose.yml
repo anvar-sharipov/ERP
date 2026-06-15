@@ -1,0 +1,104 @@
+services:
+  # 1. База данных PostgreSQL
+  db:
+    image: postgres:15-alpine
+    restart: always
+    environment:
+      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # 2. Брокер сообщений Redis
+  redis:
+    image: redis:7-alpine
+    restart: always
+
+  # 3. Бэкенд Django (запуск через Daphne) build: ./backend
+  backend:
+    build: 
+      context: .           # Было ./backend, поставьте . (точка - это корень)
+      dockerfile: backend/Dockerfile
+    restart: always
+    # Команда запуска: собирает статику и стартует сервер daphne
+    # command: >
+    #   sh -c "python manage.py migrate_schemas --shared --noinput &&
+    #          python init_tenant.py &&
+    #          python manage.py sync_permissions &&
+    #          python manage.py collectstatic --noinput &&
+    #          daphne -b 0.0.0.0 -p 8000 config.asgi:application"
+    # command: ["sh", "/app/entrypoint.sh"]
+    command: >
+      sh -c "python manage.py migrate_schemas --shared --noinput &&
+            python init_tenant.py &&
+            python manage.py sync_permissions &&
+            python manage.py collectstatic --noinput &&
+            exec daphne -b 0.0.0.0 -p 8000 config.asgi:application"
+    volumes:
+      - ./backend:/app
+      - django_static:/app/static
+      - django_media:/app/media
+    # environment:
+    #   - SECRET_KEY=${DJANGO_SECRET_KEY}
+    #   - DEBUG=${DJANGO_DEBUG}
+    #   - PROJECT_DOMAIN=${PROJECT_DOMAIN}
+    #   - DB_HOST=db
+    #   - DB_NAME=erp_db
+    #   - DB_USER=postgres
+    #   - DB_PASSWORD=novedu112garagoz
+
+    environment:
+      - DJANGO_SECRET_KEY=${DJANGO_SECRET_KEY}
+      - DEBUG=${DJANGO_DEBUG}
+      - PROJECT_DOMAIN=${PROJECT_DOMAIN}
+      - DB_HOST=${DB_HOST}
+      - DB_NAME=${DB_NAME}
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
+      # Прокидываем креды админа tenant внутрь контейнера:
+      - DJANGO_SUPERUSER_USERNAME=${DJANGO_SUPERUSER_USERNAME}
+      - DJANGO_SUPERUSER_EMAIL=${DJANGO_SUPERUSER_EMAIL}
+      - DJANGO_SUPERUSER_PASSWORD=${DJANGO_SUPERUSER_PASSWORD} 
+      - COMPANY_SCHEME=${COMPANY_SCHEME}
+      # global admin
+      - DJANGO_SAAS_SUPERUSER_PASSWORD=${DJANGO_SAAS_SUPERUSER_PASSWORD}
+      - DJANGO_SAAS_SUPERUSER_LOGIN=${DJANGO_SAAS_SUPERUSER_LOGIN} 
+      - DJANGO_SAAS_SUPERUSER_EMAIL=${DJANGO_SAAS_SUPERUSER_EMAIL}
+      - REDIS_URL=${REDIS_URL}
+    depends_on:
+      redis:
+        condition: service_started
+      # Теперь бэкенд будет ждать, пока база не пройдет healthcheck
+      db:
+        condition: service_healthy
+
+  # 4. Фронтенд + Маршрутизатор Nginx
+  nginx:
+    build: ./frontend
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      # Прокидываем конфиг Nginx
+      - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      # Прокидываем сгенерированные нами SSL сертификаты
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+      # Делимся объемами статики и медиа из контейнера Django с Nginx
+      - django_static:/app/backend_static:ro
+      - django_media:/app/backend_media:ro
+    depends_on:
+      - backend
+
+volumes:
+  postgres_data:
+  django_static:
+  django_media:

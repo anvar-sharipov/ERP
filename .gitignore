@@ -1,0 +1,66 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Django
+*.log
+local_settings.py
+db.sqlite3
+db.sqlite3-journal
+backend/media/
+backend/static/
+
+# Virtual environment
+venv/
+env/
+.venv/
+
+# Environment variables (КРИТИЧНО - никогда не коммитить!)
+.env
+.env.prod
+.env.local
+*.env
+
+# Node / Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/.env
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Docker
+*.override.yml
+
+# Certificates (не коммитим реальные сертификаты)
+nginx/ssl/*.crt
+nginx/ssl/*.key
+
+# Migrations (оставляем - нужны для деплоя)
+# !backend/**/migrations/
+
+# Pytest / Coverage
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Logs
+*.log
+logs/

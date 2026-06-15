@@ -1,0 +1,386 @@
+﻿├── backend
+│   ├── accounting
+│   │   ├── migrations
+│   │   │   ├── __pycache__
+│   │   │   │   ├── 0001_initial.cpython-311.pyc
+│   │   │   │   ├── 0002_counterparty_product_warehouse.cpython-311.pyc
+│   │   │   │   ├── 0003_companyprofile.cpython-311.pyc
+│   │   │   │   ├── 0004_branch.cpython-311.pyc
+│   │   │   │   ├── 0005_companyprofile_logo2_alter_companyprofile_logo_and_more.cpython-311.pyc
+│   │   │   │   ├── 0006_alter_companyprofile_address_and_more.cpython-311.pyc
+│   │   │   │   ├── 0007_branch_city_branch_code_branch_email_and_more.cpython-311.pyc
+│   │   │   │   ├── 0008_branch_is_active.cpython-311.pyc
+│   │   │   │   ├── 0009_directory_subcontotype_directory_directoryrecord_and_more.cpython-311.pyc
+│   │   │   │   ├── 0010_account_account_type.cpython-311.pyc
+│   │   │   │   ├── 0011_directory_created_at_directory_description_and_more.cpython-311.pyc
+│   │   │   │   ├── 0012_directory_color.cpython-311.pyc
+│   │   │   │   └── __init__.cpython-311.pyc
+│   │   │   ├── 0001_initial.py
+│   │   │   ├── 0002_counterparty_product_warehouse.py
+│   │   │   ├── 0003_companyprofile.py
+│   │   │   ├── 0004_branch.py
+│   │   │   ├── 0005_companyprofile_logo2_alter_companyprofile_logo_and_more.py
+│   │   │   ├── 0006_alter_companyprofile_address_and_more.py
+│   │   │   ├── 0007_branch_city_branch_code_branch_email_and_more.py
+│   │   │   ├── 0008_branch_is_active.py
+│   │   │   ├── 0009_directory_subcontotype_directory_directoryrecord_and_more.py
+│   │   │   ├── 0010_account_account_type.py
+│   │   │   ├── 0011_directory_created_at_directory_description_and_more.py
+│   │   │   ├── 0012_directory_color.py
+│   │   │   └── __init__.py
+│   │   ├── serializers
+│   │   │   ├── __pycache__
+│   │   │   │   ├── account_serializers.cpython-311.pyc
+│   │   │   │   ├── company_serializers.cpython-311.pyc
+│   │   │   │   └── directory_serializers.cpython-311.pyc
+│   │   │   ├── account_serializers.py
+│   │   │   ├── company_serializers.py
+│   │   │   ├── directory_serializers.py
+│   │   │   └── transaction_serializers.py
+│   │   ├── tests
+│   │   │   ├── __pycache__
+│   │   │   │   ├── base.cpython-311.pyc
+│   │   │   │   ├── test_rbac_all.cpython-311.pyc
+│   │   │   │   ├── test_rbac_branches.cpython-311.pyc
+│   │   │   │   ├── test_users_permissions.cpython-311.pyc
+│   │   │   │   └── __init__.cpython-311.pyc
+│   │   │   ├── base.py
+│   │   │   ├── test_rbac_all.py
+│   │   │   ├── test_rbac_branches.py
+│   │   │   ├── test_users_permissions.py
+│   │   │   └── __init__.py
+│   │   ├── views
+│   │   │   ├── __pycache__
+│   │   │   │   ├── account_views.cpython-311.pyc
+│   │   │   │   ├── company_views.cpython-311.pyc
+│   │   │   │   ├── directory_views.cpython-311.pyc
+│   │   │   │   ├── product_views.cpython-311.pyc
+│   │   │   │   └── __init__.cpython-311.pyc
+│   │   │   ├── account_views.py
+│   │   │   ├── company_views.py
+│   │   │   ├── directory_views.py
+│   │   │   ├── product_views.py
+│   │   │   └── __init__.py
+│   │   ├── __pycache__
+│   │   │   ├── admin.cpython-310.pyc
+│   │   │   ├── admin.cpython-311.pyc
+│   │   │   ├── apps.cpython-310.pyc
+│   │   │   ├── apps.cpython-311.pyc
+│   │   │   ├── models.cpython-310.pyc
+│   │   │   ├── models.cpython-311.pyc
+│   │   │   ├── urls.cpython-311.pyc
+│   │   │   ├── views.cpython-311.pyc
+│   │   │   ├── __init__.cpython-310.pyc
+│   │   │   └── __init__.cpython-311.pyc
+│   │   ├── admin.py
+│   │   ├── apps.py
+│   │   ├── models.py
+│   │   ├── tests.py
+│   │   ├── urls.py
+│   │   ├── views.py
+│   │   └── __init__.py
+│   ├── companies
+│   │   ├── migrations
+│   │   │   ├── __pycache__
+│   │   │   │   ├── 0001_initial.cpython-311.pyc
+│   │   │   │   ├── 0002_company_is_active.cpython-311.pyc
+│   │   │   │   └── __init__.cpython-311.pyc
+│   │   │   ├── 0001_initial.py
+│   │   │   ├── 0002_company_is_active.py
+│   │   │   └── __init__.py
+│   │   ├── serializers
+│   │   │   ├── __pycache__
+│   │   │   │   └── CompanySerializer.cpython-311.pyc
+│   │   │   └── CompanySerializer.py
+│   │   ├── __pycache__
+│   │   │   ├── admin.cpython-310.pyc
+│   │   │   ├── admin.cpython-311.pyc
+│   │   │   ├── apps.cpython-310.pyc
+│   │   │   ├── apps.cpython-311.pyc
+│   │   │   ├── middleware.cpython-310.pyc
+│   │   │   ├── middleware.cpython-311.pyc
+│   │   │   ├── models.cpython-310.pyc
+│   │   │   ├── models.cpython-311.pyc
+│   │   │   ├── urls.cpython-311.pyc
+│   │   │   ├── views.cpython-311.pyc
+│   │   │   ├── __init__.cpython-310.pyc
+│   │   │   └── __init__.cpython-311.pyc
+│   │   ├── admin.py
+│   │   ├── apps.py
+│   │   ├── middleware.py
+│   │   ├── models.py
+│   │   ├── tests.py
+│   │   ├── urls.py
+│   │   ├── views.py
+│   │   └── __init__.py
+│   ├── config
+│   │   ├── __pycache__
+│   │   │   ├── asgi.cpython-310.pyc
+│   │   │   ├── asgi.cpython-311.pyc
+│   │   │   ├── settings.cpython-310.pyc
+│   │   │   ├── settings.cpython-311.pyc
+│   │   │   ├── urls.cpython-311.pyc
+│   │   │   ├── urls_public.cpython-311.pyc
+│   │   │   ├── __init__.cpython-310.pyc
+│   │   │   └── __init__.cpython-311.pyc
+│   │   ├── asgi.py
+│   │   ├── settings.py
+│   │   ├── urls.py
+│   │   ├── urls_public.py
+│   │   ├── wsgi.py
+│   │   └── __init__.py
+│   ├── media
+│   ├── static
+│   ├── users
+│   │   ├── management
+│   │   │   └── commands
+│   │   │       ├── __pycache__
+│   │   │       │   └── sync_permissions.cpython-311.pyc
+│   │   │       └── sync_permissions.py
+│   │   ├── migrations
+│   │   │   ├── __pycache__
+│   │   │   │   ├── 0001_initial.cpython-311.pyc
+│   │   │   │   ├── 0002_role_user_is_deleted_permission_rolepermission_and_more.cpython-311.pyc
+│   │   │   │   ├── 0003_alter_user_photo.cpython-311.pyc
+│   │   │   │   ├── 0004_user_position.cpython-311.pyc
+│   │   │   │   ├── 0005_alter_user_photo.cpython-311.pyc
+│   │   │   │   ├── 0006_remove_user_is_deleted.cpython-311.pyc
+│   │   │   │   └── __init__.cpython-311.pyc
+│   │   │   ├── 0001_initial.py
+│   │   │   ├── 0002_role_user_is_deleted_permission_rolepermission_and_more.py
+│   │   │   ├── 0003_alter_user_photo.py
+│   │   │   ├── 0004_user_position.py
+│   │   │   ├── 0005_alter_user_photo.py
+│   │   │   ├── 0006_remove_user_is_deleted.py
+│   │   │   └── __init__.py
+│   │   ├── serializers
+│   │   │   ├── __pycache__
+│   │   │   │   └── user_serializer.cpython-311.pyc
+│   │   │   └── user_serializer.py
+│   │   ├── views
+│   │   │   ├── __pycache__
+│   │   │   │   ├── permission_views.cpython-311.pyc
+│   │   │   │   ├── RBAC_views.cpython-311.pyc
+│   │   │   │   ├── role_views.cpython-311.pyc
+│   │   │   │   ├── token_views.cpython-311.pyc
+│   │   │   │   ├── user_views.cpython-311.pyc
+│   │   │   │   └── __init__.cpython-311.pyc
+│   │   │   ├── permission_views.py
+│   │   │   ├── RBAC_views.py
+│   │   │   ├── token_views.py
+│   │   │   ├── user_views.py
+│   │   │   └── __init__.py
+│   │   ├── __pycache__
+│   │   │   ├── admin.cpython-310.pyc
+│   │   │   ├── admin.cpython-311.pyc
+│   │   │   ├── apps.cpython-310.pyc
+│   │   │   ├── apps.cpython-311.pyc
+│   │   │   ├── models.cpython-310.pyc
+│   │   │   ├── models.cpython-311.pyc
+│   │   │   ├── permissions.cpython-311.pyc
+│   │   │   ├── rbac_events.cpython-310.pyc
+│   │   │   ├── rbac_events.cpython-311.pyc
+│   │   │   ├── serializers.cpython-311.pyc
+│   │   │   ├── signals.cpython-311.pyc
+│   │   │   ├── urls.cpython-311.pyc
+│   │   │   ├── views.cpython-311.pyc
+│   │   │   ├── __init__.cpython-310.pyc
+│   │   │   └── __init__.cpython-311.pyc
+│   │   ├── admin.py
+│   │   ├── apps.py
+│   │   ├── models.py
+│   │   ├── permissions.py
+│   │   ├── rbac_events.py
+│   │   ├── signals.py
+│   │   ├── tests.py
+│   │   ├── urls.py
+│   │   ├── views.py
+│   │   └── __init__.py
+│   ├── utils
+│   │   ├── ws
+│   │   │   ├── __pycache__
+│   │   │   │   ├── consumers.cpython-310.pyc
+│   │   │   │   ├── consumers.cpython-311.pyc
+│   │   │   │   ├── jwt_auth_middleware.cpython-311.pyc
+│   │   │   │   ├── rbac_consumer.cpython-310.pyc
+│   │   │   │   ├── rbac_consumer.cpython-311.pyc
+│   │   │   │   ├── routing.cpython-310.pyc
+│   │   │   │   └── routing.cpython-311.pyc
+│   │   │   ├── consumers.py
+│   │   │   ├── jwt_auth_middleware.py
+│   │   │   ├── rbac_consumer.py
+│   │   │   └── routing.py
+│   │   ├── __pycache__
+│   │   │   ├── validators.cpython-310.pyc
+│   │   │   └── validators.cpython-311.pyc
+│   │   ├── storage.py
+│   │   └── validators.py
+│   ├── .dockerignore
+│   ├── Dockerfile
+│   ├── init_tenant.py
+│   └── manage.py
+├── frontend
+│   ├── node_modules
+│   ├── public
+│   ├── src
+│   │   ├── assets
+│   │   ├── components
+│   │   │   ├── Icons
+│   │   │   │   └── LeftBarIcons.tsx
+│   │   │   ├── Layouts
+│   │   │   │   ├── AdminHeader.tsx
+│   │   │   │   ├── AdminSidebarLeft.tsx
+│   │   │   │   ├── AppLayout.tsx
+│   │   │   │   ├── AuthLayout.tsx
+│   │   │   │   ├── Header.tsx
+│   │   │   │   ├── SidebarLeft.tsx
+│   │   │   │   └── SidebarRight.tsx
+│   │   │   └── ui
+│   │   │       ├── ErrorMessage
+│   │   │       │   └── ErrorMsg.tsx
+│   │   │       ├── Icon
+│   │   │       │   ├── ColorPicker.tsx
+│   │   │       │   ├── iconFileName.ts
+│   │   │       │   └── IconPicker.tsx
+│   │   │       ├── Modal
+│   │   │       │   ├── ConfirmModal.tsx
+│   │   │       │   └── Modal.tsx
+│   │   │       ├── Table
+│   │   │       │   └── Table.tsx
+│   │   │       ├── Avatar.tsx
+│   │   │       ├── Badge.tsx
+│   │   │       ├── Button.tsx
+│   │   │       ├── CompanyHeaderInfo.tsx
+│   │   │       ├── EmptyState.tsx
+│   │   │       ├── ErrMsg.tsx
+│   │   │       ├── Forbidden403Text.tsx
+│   │   │       ├── ImagePreview.tsx
+│   │   │       ├── Input.tsx
+│   │   │       ├── LanguageSwitcher.tsx
+│   │   │       ├── Loader.tsx
+│   │   │       ├── RBACGuard.tsx
+│   │   │       ├── TablePrintHeader.tsx
+│   │   │       ├── TextArea.tsx
+│   │   │       └── ThemeToggle.tsx
+│   │   ├── core
+│   │   │   ├── api
+│   │   │   │   ├── axiosInstance.ts
+│   │   │   │   └── endpoints.ts
+│   │   │   ├── context
+│   │   │   │   ├── CompanyContext.tsx
+│   │   │   │   ├── NotificationContext.tsx
+│   │   │   │   ├── SidebarRightContext.tsx
+│   │   │   │   └── UserContext.tsx
+│   │   │   ├── hooks
+│   │   │   │   ├── useAccess.ts
+│   │   │   │   ├── usePageAccess.ts
+│   │   │   │   └── useRBACSocket.ts
+│   │   │   ├── router
+│   │   │   │   ├── AdminRoute.tsx
+│   │   │   │   ├── AppRouter.tsx
+│   │   │   │   ├── GlobalAdminRoute.tsx
+│   │   │   │   ├── PermissionRouteProps.tsx
+│   │   │   │   ├── ProtectedRoute.tsx
+│   │   │   │   └── routes.ts
+│   │   │   ├── store
+│   │   │   │   └── index.ts
+│   │   │   ├── types
+│   │   │   │   └── index.ts
+│   │   │   └── utils
+│   │   │       ├── directoryIcons.ts
+│   │   │       ├── excelHelpers.ts
+│   │   │       ├── icons.ts
+│   │   │       ├── media.ts
+│   │   │       ├── slugify.ts
+│   │   │       ├── sound.ts
+│   │   │       └── tenant.ts
+│   │   ├── features
+│   │   │   ├── accounting
+│   │   │   │   ├── components
+│   │   │   │   ├── hooks
+│   │   │   │   ├── pages
+│   │   │   │   │   ├── Accounting
+│   │   │   │   │   │   ├── Accounting.tsx
+│   │   │   │   │   │   ├── AccountingLayout.tsx
+│   │   │   │   │   │   ├── AccountPage.tsx
+│   │   │   │   │   │   ├── AnalyticsPage.tsx
+│   │   │   │   │   │   ├── EntryJournal.tsx
+│   │   │   │   │   │   └── ReportsPage.tsx
+│   │   │   │   │   ├── Directory
+│   │   │   │   │   │   ├── CreateDirectory.tsx
+│   │   │   │   │   │   ├── CreateField.tsx
+│   │   │   │   │   │   ├── DirectiryPage.tsx
+│   │   │   │   │   │   ├── Directory.tsx
+│   │   │   │   │   │   └── FieldRenderer.tsx
+│   │   │   │   │   ├── Accounting.tsx
+│   │   │   │   │   └── Dashboard.tsx
+│   │   │   │   └── services
+│   │   │   │       └── usersApi.ts
+│   │   │   ├── admin
+│   │   │   │   └── components
+│   │   │   │       ├── AdminPanel.tsx
+│   │   │   │       └── CreateCompany.tsx
+│   │   │   ├── auth
+│   │   │   │   ├── components
+│   │   │   │   │   ├── Login.tsx
+│   │   │   │   │   └── Register.tsx
+│   │   │   │   ├── hooks
+│   │   │   │   ├── services
+│   │   │   │   │   └── authApi.ts
+│   │   │   │   └── index.ts
+│   │   │   ├── companies
+│   │   │   │   ├── components
+│   │   │   │   └── pages
+│   │   │   └── users
+│   │   │       └── components
+│   │   │           └── pages
+│   │   │               └── admin
+│   │   │                   ├── Roles
+│   │   │                   │   ├── Branchs
+│   │   │                   │   │   └── Branchs.tsx
+│   │   │                   │   ├── Company
+│   │   │                   │   │   └── Company.tsx
+│   │   │                   │   ├── AssignRolesModal.tsx
+│   │   │                   │   ├── CompanyAdminUser.tsx
+│   │   │                   │   └── Roles.tsx
+│   │   │                   ├── Users
+│   │   │                   └── AdminPanel.tsx
+│   │   ├── locales
+│   │   │   ├── en
+│   │   │   │   └── translation.json
+│   │   │   ├── ru
+│   │   │   │   └── translation.json
+│   │   │   └── tk
+│   │   │       └── translation.json
+│   │   ├── App.tsx
+│   │   ├── i18n.ts
+│   │   ├── index.css
+│   │   └── main.tsx
+│   ├── .dockerignore
+│   ├── .env
+│   ├── .gitignore
+│   ├── Dockerfile
+│   ├── eslint.config.js
+│   ├── index.html
+│   ├── package-lock.json
+│   ├── package.json
+│   ├── postcss.config.js
+│   ├── README.md
+│   ├── tailwind.config.js
+│   ├── tsconfig.app.json
+│   ├── tsconfig.json
+│   ├── tsconfig.node.json
+│   └── vite.config.ts
+├── nginx
+│   ├── ssl
+│   │   ├── nginx.crt
+│   │   └── nginx.key
+│   └── nginx.conf
+├── venv
+├── .dockerignore
+├── .env
+├── code.txt
+├── docker-compose.yml
+├── entrypoint.sh
+├── requirements.txt
+└── structure.txt

@@ -1,0 +1,29 @@
+function Show-Tree($path, $indent = "") {
+    $items = Get-ChildItem $path
+    for ($i = 0; $i -lt $items.Count; $i++) {
+        $item = $items[$i]
+        $isLast = ($i -eq $items.Count - 1)
+
+        $connector = $(if ($isLast) { "└── " } else { "├── " })
+        $nextIndent = $(if ($isLast) { "    " } else { "│   " })
+
+        Write-Output "$indent$connector$($item.Name)"
+
+        if ($item.PSIsContainer) {
+            Show-Tree $item.FullName ($indent + $nextIndent)
+        }
+    }
+}
+
+Show-Tree "." | Out-File -Encoding utf8 structure.txt
+
+
+
+
+
+
+ic("Запрос пришел, начинаю обработку")
+import time
+from icecream import ic
+time.sleep(5)
+ic("Данные готовы")

@@ -1,0 +1,104 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* @layer base {
+  body {
+    @apply bg-white text-gray-900 transition-colors duration-200;
+    @apply dark:bg-slate-950 dark:text-gray-100;
+  }
+} */
+
+
+/* @media print {
+  * {
+    -webkit-print-color-adjust: exact !important;  Для Chrome/Safari 
+    print-color-adjust: exact !important;         Стандарт 
+  }
+
+   Принудительно задаем белый фон для логотипа 
+  img[alt="logo"] {
+    background-color: #ffffff !important;
+  }
+} */
+ 
+/* @media print {
+  Разрешаем таблицам растягиваться на все страницы при печати
+  .overflow-auto, .overflow-hidden {
+    overflow: visible !important;
+  }
+  
+  main, .flex-1 {
+    height: auto !important;
+  }
+} */
+
+@media print {
+  /* 1. Сбрасываем все фоны для всех элементов, кроме нужных */
+  * {
+    background-color: transparent !important;
+    color: black !important;
+  }
+
+  /* 2. Принудительно задаем белый фон только для рабочего контейнера */
+  main, .bg-white, .dark\:bg-slate-900 {
+    background-color: white !important;
+  }
+
+  /* 3. Очищаем Firefox от темных тем */
+  html, body {
+    background-color: white !important;
+  }
+
+  /* 4. Исправляем проблему с "черным квадратом" из-за overflow */
+  .overflow-hidden, .overflow-auto {
+    overflow: visible !important;
+    height: auto !important;
+  }
+
+  /* Разрешаем таблицам растягиваться на все страницы при печати */
+  .overflow-auto, .overflow-hidden {
+    overflow: visible !important;
+  }
+  
+  main, .flex-1 {
+    height: auto !important;
+  }
+}
+
+@layer base {
+
+  body {
+    /* Автоматический цвет текста и фона для ВСЕГО приложения */
+    @apply bg-white text-gray-900 transition-colors duration-200;
+    @apply dark:bg-slate-950 dark:text-gray-100;
+  }
+  
+  /* Стили для всех браузеров (Webkit: Chrome, Safari, Edge) */
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent; /* Убираем стандартный серый фон */
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: #475569; /* Цвет ползунка (slate-600) */
+    border-radius: 5px;
+    border: 2px solid transparent;
+    background-clip: content-box; /* Создает отступ вокруг ползунка */
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: #64748b; /* Цвет при наведении (slate-500) */
+    background-clip: content-box;
+  }
+
+  /* Дополнительно: темная тема для Firefox */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: #475569 transparent;
+  }
+}
