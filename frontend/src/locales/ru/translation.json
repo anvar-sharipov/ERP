@@ -228,7 +228,11 @@
     "EditRoles": "Редактирование ролей",
 
     "Search": "Поиск",
-    "ExportToExcel": "Экспорт в Excel"
+    "ExportToExcel": "Экспорт в Excel",
+    "HierarchyFilter": "Иерархический фильтр",
+
+    "Press": "Нажмите",
+    "ToSidebar": "На боковую панель"
     
     
 

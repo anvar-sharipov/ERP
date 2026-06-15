@@ -9,6 +9,7 @@ import ExcelJS from "exceljs";
 import { addExcelHeader } from "../../../core/utils/excelHelpers";
 import { iconFileName } from "../Icon/iconFileName";
 import { useTranslation } from "react-i18next";
+import { focusManager } from "../../../core/utils/focusManager";
 
 export interface Column<T> {
   header: string;
@@ -78,6 +79,21 @@ export const Table = <T extends { id: string | number }>({ columns, data, onRowC
   const { t } = useTranslation();
   const isFirstRender = useRef(true);
   const containerRef = useRef<HTMLDivElement>(null);
+  // const [_activeRegion, setActiveRegion] = useState(focusManager.getRegion());
+
+  // useEffect(() => {
+  //   return focusManager.subscribe(setActiveRegion);
+  // }, []);
+  useEffect(() => {
+    // Подписываемся на изменения
+    const unsubscribe = focusManager.subscribe((_newRegion) => {
+      // Если переменная не нужна, добавляем подчеркивание
+    });
+
+    return () => {
+      unsubscribe();
+    };
+  }, []);
 
   const [hiddenInView, toggleView] = usePersistedSet(
     tableId ? `table:${tableId}:hiddenView` : "",
@@ -169,6 +185,7 @@ export const Table = <T extends { id: string | number }>({ columns, data, onRowC
 
   // в handleCellClick добавить:
   const handleCellClick = (item: T, colIndex: number, column: Column<T>) => {
+    focusManager.setRegion("table");
     playClickSound();
     userSelectedCell.current = true; // <-- добавить
     setSelectedRow(item.id);
@@ -205,6 +222,7 @@ export const Table = <T extends { id: string | number }>({ columns, data, onRowC
   // beg po yacheyla klawiaturoy
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
+      if (focusManager.getRegion() !== "table") return;
       // 1. ПРОВЕРКА: Если есть хотя бы одна открытая модалка — игнорируем нажатия
       const isModalOpen = document.querySelector(".fixed.inset-0.z-50");
       if (isModalOpen) return;
@@ -212,7 +230,14 @@ export const Table = <T extends { id: string | number }>({ columns, data, onRowC
 
       const { rowId, colIndex } = selectedCell;
       const visibleCols = columns.map((_, i) => i).filter((i) => !hiddenInView.has(i));
+      // const rowIndex = sortedData.findIndex((item) => item.id === rowId);
       const rowIndex = sortedData.findIndex((item) => item.id === rowId);
+      if (rowIndex === -1) {
+        // Если мы потеряли строку (например, отфильтровали её поиском),
+        // сбросьте выделение, чтобы не было ошибки
+        setSelectedCell(null);
+        return;
+      }
       const visibleColIndex = visibleCols.indexOf(colIndex);
 
       let nextRowIndex = rowIndex;
@@ -221,6 +246,8 @@ export const Table = <T extends { id: string | number }>({ columns, data, onRowC
       if (e.key === "ArrowDown") {
         e.preventDefault();
         nextRowIndex = Math.min(rowIndex + 1, sortedData.length - 1);
+        // focusManager.setRegion("table");
+        searchInputRef.current?.blur();
       }
 
       // ИЗМЕНЕНИЕ ЗДЕСЬ:
@@ -550,6 +577,29 @@ export const Table = <T extends { id: string | number }>({ columns, data, onRowC
     return () => window.removeEventListener("keydown", handleGlobalKeyDown);
   }, [handleExcelExport]);
 
+  useEffect(() => {
+    const handleGlobalKeys = (e: KeyboardEvent) => {
+      if (e.key === "F6") {
+        e.preventDefault();
+        // 1. Очищаем все текущие выделения в таблице
+        setSelectedCell(null);
+        setSelectedRow(null);
+
+        // 2. Убираем фокус с элементов таблицы
+        (document.activeElement as HTMLElement)?.blur();
+
+        // 3. Устанавливаем регион
+        focusManager.setRegion("sidebar");
+
+        // 4. Диспатчим событие, чтобы Sidebar подхватил фокус (см. ниже)
+        window.dispatchEvent(new CustomEvent("focus-sidebar"));
+      }
+    };
+
+    window.addEventListener("keydown", handleGlobalKeys);
+    return () => window.removeEventListener("keydown", handleGlobalKeys);
+  }, []);
+
   return (
     <div className="flex flex-col gap-2">
       {/* Тулбар с поиском и настройками */}
@@ -572,6 +622,7 @@ export const Table = <T extends { id: string | number }>({ columns, data, onRowC
         )}
 
         <div className="ml-auto relative flex gap-2">
+  
           {/* excel */}
           <button
             onClick={handleExcelExport}
@@ -620,7 +671,7 @@ export const Table = <T extends { id: string | number }>({ columns, data, onRowC
       {data.length > 0 ? (
         <div className="overflow-auto border border-gray-300 dark:border-gray-700 shadow-xl" ref={containerRef}>
           {/* Таблица */}
-          <table className="w-full text-left border-collapse min-w-max">
+          <table className="w-full text-left border-collapse min-w-max" onFocus={() => focusManager.setRegion("table")}>
             <thead className="border-b border-gray-300 dark:border-gray-700">
               <tr>
                 <th className="px-2 py-2 bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 font-medium text-gray-500 w-10">№</th>

@@ -230,7 +230,7 @@ const AccountPage = () => {
           <Button text={t("AddAccount")} onClick={openCreate} className="w-full" icon={<Plus size={16} />} dark={true} disabled={!canPost} />
         </div>
         <div className="pt-4 border-t border-indigo-900/30">
-          <h4 className="font-bold text-indigo-300 mb-2">{t("AccountTypeSidebar")}</h4>
+          <h4 className="font-bold text-indigo-300 mb-2">{t("HierarchyFilter")}</h4>
           <div className="flex flex-col gap-1">
             {(["all", "group", "account"] as const).map((f) => (
               <Button
@@ -238,7 +238,7 @@ const AccountPage = () => {
                 text={f === "all" ? t("All") : f === "group" ? t("OnlyGroups") : t("OnlyAccounts")}
                 variant="ghost"
                 dark={true}
-                isActive={filterGroup === f}
+                isActive={filterGroup === f} // Теперь React увидит обновление
                 className="w-full justify-start"
                 icon={f === "group" ? <Folder size={14} /> : undefined}
                 onClick={() => setFilterGroup(f)}
@@ -246,6 +246,7 @@ const AccountPage = () => {
             ))}
           </div>
         </div>
+
         <div className="pt-4 border-t border-indigo-900/30">
           <h4 className="font-bold text-indigo-300 mb-2">{t("StatusFilter")}</h4>
           <div className="flex flex-col gap-1">
@@ -256,7 +257,7 @@ const AccountPage = () => {
                 text={status === "all" ? t("AllAccounts") : status === "active" ? t("OnlyActive") : t("OnlyInactive")}
                 variant="ghost"
                 dark={true}
-                isActive={activeFilter === status}
+                isActive={activeFilter === status} // Теперь React увидит обновление
                 className="w-full justify-start"
                 icon={status !== "all" ? <span className={`w-2 h-2 rounded-full ${status === "active" ? "bg-green-500" : "bg-red-500"}`} /> : undefined}
               />
@@ -265,7 +266,7 @@ const AccountPage = () => {
         </div>
       </div>,
     );
-  }, [setSidebarContent, filterGroup, canPost, t]);
+  }, [setSidebarContent, filterGroup, activeFilter, canPost, t]);
 
   // const filteredAccounts = useMemo(() => {
   //   let result = accounts;

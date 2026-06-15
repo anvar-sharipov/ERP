@@ -10,6 +10,7 @@ import { useCompany } from "../../core/context/CompanyContext";
 import { useUser } from "../../core/context/UserContext";
 import { CompanyHeaderInfo } from "../ui/CompanyHeaderInfo";
 import { useTranslation } from "react-i18next";
+import { focusManager } from "../../core/utils/focusManager";
 
 const fullWidthPages: string[] = [];
 
@@ -19,11 +20,35 @@ export const AppLayout: React.FC = () => {
   const { company: currentCompany } = useCompany();
   const { user: currentUser } = useUser();
   const location = useLocation();
-  const {t} = useTranslation();
+  const { t } = useTranslation();
 
   // console.log("currentUser", currentUser);
-  
-  
+  // const navItemsRef = useRef<(HTMLAnchorElement | null)[]>([]);
+
+  useEffect(() => {
+    const handleGlobalJump = (e: KeyboardEvent) => {
+      if (e.key === "F6") {
+        e.preventDefault();
+        focusManager.setRegion("sidebar");
+
+        // Даем время на рендер, если секция поменялась
+        setTimeout(() => {
+          // Пытаемся сфокусировать либо кнопку Назад, либо первый элемент списка
+          const sidebar = document.querySelector("aside");
+          const firstFocusable = sidebar?.querySelector('[tabindex="0"]') as HTMLElement;
+          firstFocusable?.focus();
+        }, 50);
+      }
+
+      if (e.key === "Escape") {
+        // Возвращаем фокус в таблицу, например, на последнюю активную ячейку
+        // или просто снимаем фокус с сайдбара
+        (document.activeElement as HTMLElement)?.blur();
+      }
+    };
+    window.addEventListener("keydown", handleGlobalJump);
+    return () => window.removeEventListener("keydown", handleGlobalJump);
+  }, []);
 
   const [isLeftOpen, setIsLeftOpen] = useState<boolean>(() => {
     const saved = localStorage.getItem("sidebar_left_open");
@@ -61,7 +86,7 @@ export const AppLayout: React.FC = () => {
       {/* 2. РАБОЧАЯ ОБЛАСТЬ */}
       <div className="flex flex-1 min-h-0 overflow-hidden relative">
         {/* ЛЕВЫЙ САЙДБАР */}
-        {isSubdomain ? <SidebarLeft isOpen={isLeftOpen} setIsOpen={setIsLeftOpen} /> : <AdminSidebarLeft />}
+        {isSubdomain ? <SidebarLeft isOpen={isLeftOpen} setIsOpen={setIsLeftOpen}/> : <AdminSidebarLeft />}
 
         {/* OVERLAY: затемнение контента при открытом сайдбаре на мобильных */}
         {(isLeftOpen || isRightOpen) && (
@@ -88,10 +113,14 @@ export const AppLayout: React.FC = () => {
             <div className="hidden print:flex print:items-center print:justify-between print:mb-4 print:pb-2 print:border-b print:border-gray-300">
               <CompanyHeaderInfo logoUrl={currentCompany?.logo ?? currentCompany?.logo2} name={currentCompany?.name} />
               <div className="text-right text-xs text-gray-500">
-                <div>{t("Printed")}: {currentUser?.full_name}</div>
-                <div>{t("Date")}: {new Date().toLocaleString("ru-RU")}</div>
+                <div>
+                  {t("Printed")}: {currentUser?.full_name}
+                </div>
+                <div>
+                  {t("Date")}: {new Date().toLocaleString("ru-RU")}
+                </div>
               </div>
-            </div>          
+            </div>
             <Outlet />
           </div>
         </main>

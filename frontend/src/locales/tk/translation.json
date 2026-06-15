@@ -223,7 +223,11 @@
     "DirectoryFields": "Soraýyşnama meýdanlary",
     "EditRoles": "Rollary redaktirlemek",
     "ExportToExcel": "Excel-e eksport etmek",
-    "Search": "Gözleg"
+    "Search": "Gözleg",
+    "HierarchyFilter": "Iýerarhiki süzgüç",
+
+    "Press": "Basyň",
+    "ToSidebar": "Gapdal paneline geçmek"
     
 
 
