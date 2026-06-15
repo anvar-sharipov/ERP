@@ -80,6 +80,25 @@ services:
       db:
         condition: service_healthy
 
+  # Генерация SSL сертификата (запускается один раз)
+  ssl-gen:
+    image: alpine/openssl
+    volumes:
+      - ./nginx/ssl:/ssl
+    command: >
+      sh -c "
+        if [ ! -f /ssl/nginx.crt ]; then
+          echo 'Generating SSL certificate...'
+          openssl req -x509 -nodes -days 365 -newkey rsa:2048
+            -keyout /ssl/nginx.key
+            -out /ssl/nginx.crt
+            -subj '/CN=${PROJECT_DOMAIN}'
+          echo 'SSL certificate generated!'
+        else
+          echo 'SSL certificate already exists, skipping...'
+        fi
+      "
+
   # 4. Фронтенд + Маршрутизатор Nginx
   nginx:
     build: ./frontend
@@ -97,6 +116,7 @@ services:
       - django_media:/app/backend_media:ro
     depends_on:
       - backend
+      - ssl-gen
 
 volumes:
   postgres_data:
