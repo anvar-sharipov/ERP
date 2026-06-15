@@ -225,7 +225,13 @@
     "PleaseWait": "Подождите...",
     "Color": "Цвет",
     "DirectoryFields": "Поля справочника",
-    "EditRoles": "Редактирование ролей"
+    "EditRoles": "Редактирование ролей",
+
+    "Search": "Поиск",
+    "ExportToExcel": "Экспорт в Excel"
+    
+    
+
 
    
 

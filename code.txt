@@ -1,4 +1,35 @@
 function Show-Tree($path, $indent = "") {
+    # Массив папок, содержимое которых нужно игнорировать
+    $excludeContainers = @("venv", "node_modules", "media", "public", "__pycache__")
+
+    $items = Get-ChildItem $path
+    for ($i = 0; $i -lt $items.Count; $i++) {
+        $item = $items[$i]
+        $isLast = ($i -eq $items.Count - 1)
+
+        $connector = $(if ($isLast) { "└── " } else { "├── " })
+        $nextIndent = $(if ($isLast) { "    " } else { "│   " })
+
+        # Выводим текущий элемент (файл или саму папку)
+        Write-Output "$indent$connector$($item.Name)"
+
+        # Если это папка, проверяем, нет ли её в списке исключений
+        if ($item.PSIsContainer) {
+            if ($excludeContainers -notcontains $item.Name) {
+                # Если папки нет в исключениях, рекурсивно идем глубже
+                Show-Tree $item.FullName ($indent + $nextIndent)
+            }
+        }
+    }
+}
+
+# Запуск и сохранение в файл в кодировке UTF8
+Show-Tree "." | Out-File -Encoding utf8 structure.txt
+
+
+
+
+function Show-Tree($path, $indent = "") {
     $items = Get-ChildItem $path
     for ($i = 0; $i -lt $items.Count; $i++) {
         $item = $items[$i]

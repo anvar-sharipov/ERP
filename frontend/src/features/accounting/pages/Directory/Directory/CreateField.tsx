@@ -46,7 +46,10 @@ const CreateField = () => {
   const queryClient = useQueryClient();
   const notify = useNotify();
 
-  const { canView, canPost, canPut, canDelete } = usePageAccess("directoryfield");
+  
+
+  const { canPost: canPostDirectoryField , canPut: canPutDirectoryField } = usePageAccess("directoryfield");
+  const { canView, canPost, canPut, canDelete } = usePageAccess("directory");
 
   const [activeFilter, setActiveFilter] = useState<"all" | "active" | "inactive">("all");
   const [searchQuery, setSearchQuery] = useState("");
@@ -209,6 +212,7 @@ const CreateField = () => {
       render: (item) => (
         <div className="flex gap-2">
           <Button
+          disabled={!canPostDirectoryField || !canPutDirectoryField}
             variant="1c"
             icon={<Settings size={14} />}
             className="md:h-6 md:w-8 md:!p-0"

@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef, useEffect } from "react";
+import React, { useState, useMemo, useRef, useEffect, useCallback } from "react";
 import { playClickSound } from "../../../core/utils/sound";
 import { Eye, EyeOff, Printer, Settings2, ChevronDown, Search } from "lucide-react";
 import { Input } from "../Input";
@@ -77,35 +77,36 @@ export const Table = <T extends { id: string | number }>({ columns, data, onRowC
   const dropdownRef = useRef<HTMLDivElement>(null);
   const { t } = useTranslation();
   const isFirstRender = useRef(true);
+  const containerRef = useRef<HTMLDivElement>(null);
 
   const [hiddenInView, toggleView] = usePersistedSet(
     tableId ? `table:${tableId}:hiddenView` : "",
     columns.map((c, i) => (c.hideInView ? i : -1)).filter((i) => i !== -1),
   );
 
-  useEffect(() => {
-    // Если это самый первый рендер, НЕ трогаем фокус (даем сработать фокусу на поиске)
-    if (isFirstRender.current) {
-      isFirstRender.current = false;
-      // Но всё равно восстанавливаем selectedRow для подсветки, если нужно
-      if (selectedRowId != null) setSelectedRow(selectedRowId);
-      return;
-    }
+  // useEffect(() => {
+  //   // Если это самый первый рендер, НЕ трогаем фокус (даем сработать фокусу на поиске)
+  //   if (isFirstRender.current) {
+  //     isFirstRender.current = false;
+  //     // Но всё равно восстанавливаем selectedRow для подсветки, если нужно
+  //     if (selectedRowId != null) setSelectedRow(selectedRowId);
+  //     return;
+  //   }
 
-    // Если это не первый рендер и пришел ID — фокусируем ячейку
-    if (selectedRowId != null) {
-      setSelectedRow(selectedRowId);
-      const visibleCols = columns.map((_, i) => i).filter((i) => !hiddenInView.has(i));
-      if (visibleCols.length > 0) {
-        setSelectedCell({
-          rowId: selectedRowId,
-          colIndex: visibleCols[0],
-        });
-        // Если ячейка сфокусирована, убираем фокус с поиска (если он там был)
-        searchInputRef.current?.blur();
-      }
-    }
-  }, [selectedRowId, columns, hiddenInView]);
+  //   // Если это не первый рендер и пришел ID — фокусируем ячейку
+  //   if (selectedRowId != null) {
+  //     setSelectedRow(selectedRowId);
+  //     const visibleCols = columns.map((_, i) => i).filter((i) => !hiddenInView.has(i));
+  //     if (visibleCols.length > 0) {
+  //       setSelectedCell({
+  //         rowId: selectedRowId,
+  //         colIndex: visibleCols[0],
+  //       });
+  //       // Если ячейка сфокусирована, убираем фокус с поиска (если он там был)
+  //       searchInputRef.current?.blur();
+  //     }
+  //   }
+  // }, [selectedRowId, columns, hiddenInView]);
 
   // useEffect(() => {
   //   if (selectedRowId != null) {
@@ -156,13 +157,50 @@ export const Table = <T extends { id: string | number }>({ columns, data, onRowC
     }));
   };
 
+  // const handleCellClick = (item: T, colIndex: number, column: Column<T>) => {
+  //   playClickSound();
+  //   setSelectedRow(item.id);
+  //   setSelectedCell({ rowId: item.id, colIndex });
+  //   if (onRowClick) onRowClick(item);
+  //   if (column.onCellClick) column.onCellClick(item);
+  // };
+
+  const userSelectedCell = useRef(false);
+
+  // в handleCellClick добавить:
   const handleCellClick = (item: T, colIndex: number, column: Column<T>) => {
     playClickSound();
+    userSelectedCell.current = true; // <-- добавить
     setSelectedRow(item.id);
     setSelectedCell({ rowId: item.id, colIndex });
     if (onRowClick) onRowClick(item);
     if (column.onCellClick) column.onCellClick(item);
   };
+
+  // в useEffect исправить:
+  useEffect(() => {
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
+      if (selectedRowId != null) setSelectedRow(selectedRowId);
+      return;
+    }
+
+    if (selectedRowId != null) {
+      if (userSelectedCell.current) {
+        // Пользователь сам кликнул — не перезаписываем ячейку
+        userSelectedCell.current = false;
+        setSelectedRow(selectedRowId);
+        return;
+      }
+      // Только для back-навигации — ставим первую ячейку
+      setSelectedRow(selectedRowId);
+      const visibleCols = columns.map((_, i) => i).filter((i) => !hiddenInView.has(i));
+      if (visibleCols.length > 0) {
+        setSelectedCell({ rowId: selectedRowId, colIndex: visibleCols[0] });
+        searchInputRef.current?.blur();
+      }
+    }
+  }, [selectedRowId, columns, hiddenInView]);
 
   // beg po yacheyla klawiaturoy
   useEffect(() => {
@@ -220,6 +258,17 @@ export const Table = <T extends { id: string | number }>({ columns, data, onRowC
           playClickSound();
           setSelectedRow(nextItem.id);
           setSelectedCell({ rowId: nextItem.id, colIndex: nextCol });
+
+          requestAnimationFrame(() => {
+            const cellElement = containerRef.current?.querySelector(`tr[data-row-id="${nextItem.id}"] td:nth-child(${nextCol + 2})`);
+            if (cellElement) {
+              cellElement.scrollIntoView({
+                behavior: "smooth",
+                block: "nearest",
+                inline: "nearest",
+              });
+            }
+          });
         }
       }
     };
@@ -266,7 +315,7 @@ export const Table = <T extends { id: string | number }>({ columns, data, onRowC
 
   // excel
   // Внутри компонента Table
-  const handleExcelExport = async () => {
+  const handleExcelExport = useCallback(async () => {
     const workbook = new ExcelJS.Workbook();
     const worksheet = workbook.addWorksheet("Данные");
 
@@ -473,7 +522,33 @@ export const Table = <T extends { id: string | number }>({ columns, data, onRowC
     a.download = `${tableId || "export"}_${new Date().toLocaleDateString("ru-RU")}.xlsx`;
     a.click();
     window.URL.revokeObjectURL(url);
-  };
+  }, [columns, sortedData, hiddenInPrint, currentCompany, currentUser, t, tableId]);
+
+  // hot key for input search and excel download button
+  useEffect(() => {
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      // 1. Проверяем Ctrl+E (Экспорт) - ОН ДОЛЖЕН РАБОТАТЬ ВСЕГДА
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "e") {
+        e.preventDefault();
+        e.stopPropagation();
+        handleExcelExport();
+        return;
+      }
+
+      // 2. Для остальных клавиш (например, Ctrl+F) проверяем, не в инпуте ли мы
+      const target = e.target as HTMLElement;
+      if (target.tagName === "INPUT" || target.tagName === "TEXTAREA") return;
+
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "/") {
+        e.preventDefault();
+        e.stopPropagation();
+        searchInputRef.current?.focus();
+      }
+    };
+
+    window.addEventListener("keydown", handleGlobalKeyDown);
+    return () => window.removeEventListener("keydown", handleGlobalKeyDown);
+  }, [handleExcelExport]);
 
   return (
     <div className="flex flex-col gap-2">
@@ -485,6 +560,7 @@ export const Table = <T extends { id: string | number }>({ columns, data, onRowC
             <Input
               type="text"
               ref={searchInputRef}
+              title={`${t("Search")} (Ctrl + /)`}
               value={searchQuery}
               onKeyDown={handleSearchKeyDown}
               onChange={(e) => onSearchChange(e.target.value)}
@@ -499,7 +575,7 @@ export const Table = <T extends { id: string | number }>({ columns, data, onRowC
           {/* excel */}
           <button
             onClick={handleExcelExport}
-            title="Скачать Excel"
+            title={`${t("ExportToExcel")} (Ctrl + E)`}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded border border-green-300 dark:border-green-700 bg-white dark:bg-gray-800 text-green-600 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/20 transition shadow-sm"
           >
             <span className="text-sm">📊</span>
@@ -542,7 +618,7 @@ export const Table = <T extends { id: string | number }>({ columns, data, onRowC
       </div>
 
       {data.length > 0 ? (
-        <div className="overflow-auto border border-gray-300 dark:border-gray-700 shadow-xl">
+        <div className="overflow-auto border border-gray-300 dark:border-gray-700 shadow-xl" ref={containerRef}>
           {/* Таблица */}
           <table className="w-full text-left border-collapse min-w-max">
             <thead className="border-b border-gray-300 dark:border-gray-700">
