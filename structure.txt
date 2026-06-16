@@ -15,12 +15,14 @@
 │   │   │   ├── 0011_directory_created_at_directory_description_and_more.py
 │   │   │   ├── 0012_directory_color.py
 │   │   │   ├── 0013_account_is_active.py
+│   │   │   ├── 0014_brand_productcategory_tag_unit_warehousestock_and_more.py
 │   │   │   └── __init__.py
 │   │   ├── serializers
 │   │   │   ├── __pycache__
 │   │   │   ├── account_serializers.py
 │   │   │   ├── company_serializers.py
 │   │   │   ├── directory_serializers.py
+│   │   │   ├── product_serializers.py
 │   │   │   └── transaction_serializers.py
 │   │   ├── tests
 │   │   │   ├── __pycache__
@@ -139,6 +141,8 @@
 │   │   │   │   ├── SidebarLeft.tsx
 │   │   │   │   └── SidebarRight.tsx
 │   │   │   └── ui
+│   │   │       ├── Category
+│   │   │       │   └── CategoryTreeSelect.tsx
 │   │   │       ├── ErrorMessage
 │   │   │       │   └── ErrorMsg.tsx
 │   │   │       ├── Icon
@@ -210,6 +214,8 @@
 │   │   │   │   │   │   ├── Accounting.tsx
 │   │   │   │   │   │   ├── AccountingLayout.tsx
 │   │   │   │   │   │   └── AccountPage.tsx
+│   │   │   │   │   ├── Counterparties
+│   │   │   │   │   │   └── CounterpartiesPage.tsx
 │   │   │   │   │   ├── Directory
 │   │   │   │   │   │   ├── Directory
 │   │   │   │   │   │   │   ├── CreateField.tsx
@@ -218,6 +224,17 @@
 │   │   │   │   │   │   ├── CreateDirectory.tsx
 │   │   │   │   │   │   ├── Directory.tsx
 │   │   │   │   │   │   └── FieldRenderer.tsx
+│   │   │   │   │   ├── Products
+│   │   │   │   │   │   ├── BrandsPage.tsx
+│   │   │   │   │   │   ├── CategoriesPage.tsx
+│   │   │   │   │   │   ├── Products.tsx
+│   │   │   │   │   │   ├── ProductsListPage.tsx
+│   │   │   │   │   │   ├── TagsPage.tsx
+│   │   │   │   │   │   └── UnitsPage.tsx
+│   │   │   │   │   ├── Warehouses
+│   │   │   │   │   │   ├── Warehouses.tsx
+│   │   │   │   │   │   ├── WarehousesListPage.tsx
+│   │   │   │   │   │   └── WarehouseStocksPage.tsx
 │   │   │   │   │   ├── Accounting.tsx
 │   │   │   │   │   └── Dashboard.tsx
 │   │   │   │   └── services
@@ -225,6 +242,7 @@
 │   │   │   │       ├── branchApi.ts
 │   │   │   │       ├── companyApi.ts
 │   │   │   │       ├── directoryApi.ts
+│   │   │   │       ├── productApi.ts
 │   │   │   │       └── rolesApi.ts
 │   │   │   ├── admin
 │   │   │   │   └── components

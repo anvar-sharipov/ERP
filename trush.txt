@@ -3440,6 +3440,7 @@ export default CreateField;
 
 
 
+
 # # backend/accounting/urls.py
 # from django.urls import path, include  # Импортируем include
 # from rest_framework.routers import DefaultRouter
@@ -3469,6 +3470,403 @@ export default CreateField;
 # ]
 
 
+
+
+
+
+
+
+
+// // frontend/src/features/accounting/pages/Products/CategoriesPage.tsx
+// import { useState, useEffect, useMemo } from "react";
+// import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+// import { productCategoryApi } from "../../services/productApi";
+// import { useNotify } from "../../../../core/context/NotificationContext";
+// import { usePageAccess } from "../../../../core/hooks/usePageAccess";
+// import { useSidebar } from "../../../../core/context/SidebarRightContext";
+// import { Table, type Column } from "../../../../components/ui/Table/Table";
+// import { Button } from "../../../../components/ui/Button";
+// import { Input } from "../../../../components/ui/Input";
+// import { Modal } from "../../../../components/ui/Modal/Modal";
+// import { ConfirmModal } from "../../../../components/ui/Modal/ConfirmModal";
+// import { RBACGuard } from "../../../../components/ui/RBACGuard";
+// import { StatusBadge } from "../../../../components/ui/StatusBadge";
+// import { Plus } from "lucide-react";
+// import { useTranslation } from "react-i18next";
+// import { slugify } from "../../../../core/utils/slugify";
+
+// interface CategoryForm {
+//   name: string;
+//   slug: string;
+//   parent: number | null;
+//   is_active: boolean;
+// }
+
+// const EMPTY: CategoryForm = { name: "", slug: "", parent: null, is_active: true };
+
+// // ── хелперы дерева ────────────────────────────────────────────────────────────
+
+// // плоский список с уровнем вложенности, отсортированный по дереву
+// const buildFlatTree = (items: any[], parentId: number | null = null, level = 0): { item: any; level: number }[] =>
+//   items.filter((c) => (c.parent ?? null) === parentId).flatMap((c) => [{ item: c, level }, ...buildFlatTree(items, c.id, level + 1)]);
+
+// // все id потомков включая сам узел
+// const getDescendantIds = (id: number, items: any[]): number[] => {
+//   const children = items.filter((c) => c.parent === id);
+//   return [id, ...children.flatMap((c) => getDescendantIds(c.id, items))];
+// };
+
+// // breadcrumb: "Техника > Телефоны > iPhone 17"
+// const getBreadcrumb = (item: any, items: any[]): string => {
+//   const parts: string[] = [item.name];
+//   let current = item;
+//   while (current.parent) {
+//     const parent = items.find((c) => c.id === current.parent);
+//     if (!parent) break;
+//     parts.unshift(parent.name);
+//     current = parent;
+//   }
+//   return parts.join(" > ");
+// };
+
+// // ── компонент ─────────────────────────────────────────────────────────────────
+
+// const CategoriesPage = () => {
+//   const { t } = useTranslation();
+//   const notify = useNotify();
+//   const queryClient = useQueryClient();
+//   const { setSidebarContent } = useSidebar();
+//   const { canView, canPost, canPut, canDelete } = usePageAccess("productcategory");
+
+//   const [formOpen, setFormOpen] = useState(false);
+//   const [editing, setEditing] = useState<any | null>(null);
+//   const [form, setForm] = useState<CategoryForm>(EMPTY);
+//   const [slugEdited, setSlugEdited] = useState(false);
+//   const [deleteModal, setDeleteModal] = useState(false);
+//   const [deleteId, setDeleteId] = useState<number | null>(null);
+//   const [searchQuery, setSearchQuery] = useState("");
+//   const [activeFilter, setActiveFilter] = useState<"all" | "active" | "inactive">("all");
+//   const [parentFilter, setParentFilter] = useState<"all" | number>("all");
+
+//   const {
+//     data: categories = [],
+//     isLoading,
+//     error,
+//   } = useQuery({
+//     queryKey: ["product-categories"],
+//     queryFn: productCategoryApi.getAll,
+//     enabled: canView,
+//     retry: false,
+//   });
+
+//   useEffect(() => {
+//     if (editing) {
+//       setForm({
+//         name: editing.name,
+//         slug: editing.slug,
+//         parent: editing.parent ?? null,
+//         is_active: editing.is_active,
+//       });
+//       setSlugEdited(true);
+//     } else {
+//       setForm(EMPTY);
+//       setSlugEdited(false);
+//     }
+//   }, [editing]);
+
+//   const saveMutation = useMutation({
+//     mutationFn: (data: CategoryForm) => productCategoryApi.save(editing?.id ?? null, data),
+//     onSuccess: () => {
+//       queryClient.invalidateQueries({ queryKey: ["product-categories"] });
+//       notify("success", editing ? t("SuccessUpdated") : t("SuccessCreated"));
+//       setFormOpen(false);
+//       setEditing(null);
+//     },
+//     onError: (err: any) => {
+//       if (err._handled) return;
+//       notify("error", err.response?.data?.detail || t("ErrorSaving"));
+//     },
+//   });
+
+//   const deleteMutation = useMutation({
+//     mutationFn: (id: number) => productCategoryApi.delete(id),
+//     onSuccess: () => {
+//       queryClient.invalidateQueries({ queryKey: ["product-categories"] });
+//       notify("success", t("SuccessDeleted"));
+//       setDeleteId(null);
+//     },
+//     onError: (err: any) => {
+//       if (err._handled) return;
+//       notify("error", t("ErrorDeleting"));
+//     },
+//   });
+
+//   // плоское дерево для сайдбара
+//   const flatTree = useMemo(() => buildFlatTree(categories as any[]), [categories]);
+
+//   useEffect(() => {
+//     setSidebarContent(
+//       <div className="space-y-4">
+//         <div>
+//           <h4 className="font-bold text-indigo-300 mb-2">{t("Actions")}</h4>
+//           <Button
+//             disabled={!canPost}
+//             text={t("AddCategory")}
+//             className="w-full"
+//             dark={true}
+//             icon={<Plus className="w-4 h-4" />}
+//             onClick={() => {
+//               setEditing(null);
+//               setFormOpen(true);
+//             }}
+//           />
+//         </div>
+
+//         <div className="pt-4 border-t border-indigo-900/30">
+//           <h4 className="font-bold text-indigo-300 mb-2">{t("StatusFilter")}</h4>
+//           <div className="flex flex-col gap-1">
+//             {(["all", "active", "inactive"] as const).map((status) => (
+//               <Button
+//                 key={status}
+//                 variant="ghost"
+//                 dark={true}
+//                 isActive={activeFilter === status}
+//                 className="w-full justify-start"
+//                 text={status === "all" ? t("AllCategories") : status === "active" ? t("OnlyActive") : t("OnlyInactive")}
+//                 icon={status !== "all" ? <span className={`w-2 h-2 rounded-full ${status === "active" ? "bg-green-500" : "bg-red-500"}`} /> : undefined}
+//                 onClick={() => setActiveFilter(status)}
+//               />
+//             ))}
+//           </div>
+//         </div>
+
+//         {flatTree.length > 0 && (
+//           <div className="pt-4 border-t border-indigo-900/30">
+//             <h4 className="font-bold text-indigo-300 mb-2">{t("Nesting")}</h4>
+//             <div className="flex flex-col gap-0.5">
+//               <Button text={t("AllCategories")} variant="ghost" dark={true} isActive={parentFilter === "all"} className="w-full justify-start" onClick={() => setParentFilter("all")} />
+//               {flatTree.map(({ item, level }) => (
+//                 <button
+//                   key={item.id}
+//                   onClick={() => setParentFilter(item.id)}
+//                   className={`w-full text-left text-sm py-1.5 pr-2 rounded transition-colors ${parentFilter === item.id ? "bg-indigo-700 text-white" : "text-indigo-200 hover:bg-indigo-900/30"}`}
+//                   style={{ paddingLeft: `${level * 12 + 8}px` }}
+//                 >
+//                   {level > 0 && <span className="text-indigo-400 mr-1">{"└"}</span>}
+//                   {item.name}
+//                 </button>
+//               ))}
+//             </div>
+//           </div>
+//         )}
+
+//       </div>,
+//     );
+//   }, [setSidebarContent, canPost, activeFilter, parentFilter, flatTree, t]);
+
+//   // фильтрация с рекурсивными потомками
+//   const filtered = useMemo(() => {
+//     let result = categories as any[];
+//     if (activeFilter === "active") result = result.filter((c) => c.is_active);
+//     if (activeFilter === "inactive") result = result.filter((c) => !c.is_active);
+//     if (parentFilter !== "all") {
+//       const ids = getDescendantIds(parentFilter, categories as any[]);
+//       result = result.filter((c) => ids.includes(c.id));
+//     }
+//     if (searchQuery.trim()) {
+//       const q = searchQuery.toLowerCase();
+//       result = result.filter((c) => c.name?.toLowerCase().includes(q) || c.slug?.toLowerCase().includes(q));
+//     }
+//     return result;
+//   }, [categories, activeFilter, parentFilter, searchQuery]);
+
+//   const columns: Column<any>[] = [
+//     { header: t("ID"), accessor: "id", sortable: true, excelWidth: 5 },
+//     {
+//       header: t("Name"),
+//       sortable: true,
+//       excelWidth: 20,
+//       sortValue: (item) => item.name,
+//       excelValue: (item) => item.name,
+//       render: (item) => <span className="font-medium">{item.name}</span>,
+//     },
+//     {
+//       // breadcrumb колонка
+//       header: t("Nesting"),
+//       sortable: true,
+//       excelWidth: 35,
+//       sortValue: (item) => getBreadcrumb(item, categories as any[]),
+//       excelValue: (item) => getBreadcrumb(item, categories as any[]),
+//       render: (item) => {
+//         const parts = getBreadcrumb(item, categories as any[]).split(" > ");
+//         if (parts.length === 1) return <span className="text-gray-400 text-xs">— {t("Root")} —</span>;
+//         return (
+//           <span className="text-xs text-gray-500 dark:text-gray-400">
+//             {parts.slice(0, -1).map((part, i) => (
+//               <span key={i}>
+//                 <span className="text-gray-400">{part}</span>
+//                 <span className="mx-1 text-gray-300 dark:text-gray-600">›</span>
+//               </span>
+//             ))}
+//             <span className="text-gray-700 dark:text-gray-200 font-medium">{parts[parts.length - 1]}</span>
+//           </span>
+//         );
+//       },
+//     },
+//     { header: t("Slug"), accessor: "slug", sortable: true, excelWidth: 20 },
+//     {
+//       header: t("Status"),
+//       accessor: "is_active",
+//       sortable: true,
+//       excelWidth: 8,
+//       sortValue: (item) => (item.is_active ? 1 : 0),
+//       excelValue: (item) => (item.is_active ? "+" : ""),
+//       render: (item) => <StatusBadge isActive={item.is_active} activeLabel={t("Active")} inactiveLabel={t("Inactive")} />,
+//     },
+//     {
+//       header: t("Actions"),
+//       hideInPrint: true,
+//       render: (item) => (
+//         <div className="flex gap-2">
+//           <Button
+//             title={t("Edit")}
+//             disabled={!canPut}
+//             variant="1c"
+//             icon={<span>✏️</span>}
+//             className="md:h-6 md:w-8 md:!p-0"
+//             onClick={(e) => {
+//               e.stopPropagation();
+//               setEditing(item);
+//               setFormOpen(true);
+//             }}
+//           />
+//           <Button
+//             title={t("Delete")}
+//             disabled={!canDelete}
+//             variant="1c"
+//             icon={<span>🗑️</span>}
+//             className="md:h-6 md:w-8 md:!p-0"
+//             onClick={(e) => {
+//               e.stopPropagation();
+//               setDeleteId(item.id);
+//               setDeleteModal(true);
+//             }}
+//           />
+//         </div>
+//       ),
+//     },
+//   ];
+
+//   const toDelete = (categories as any[]).find((c) => c.id === deleteId);
+//   // в форме исключаем саму редактируемую и всех её потомков (нельзя сделать себя своим родителем)
+//   const parentOptions = useMemo(() => {
+//     if (!editing) return categories as any[];
+//     const descendantIds = getDescendantIds(editing.id, categories as any[]);
+//     return (categories as any[]).filter((c) => !descendantIds.includes(c.id));
+//   }, [categories, editing]);
+
+//   return (
+//     <RBACGuard isLoading={isLoading} error={error} canView={canView} forbiddenText={t("ForbiddenText")}>
+//       <Table
+//         columns={columns}
+//         data={filtered}
+//         tableId="categories_list"
+//         searchQuery={searchQuery}
+//         onSearchChange={setSearchQuery}
+//         onRowDoubleClick={(item) => {
+//           setEditing(item);
+//           setFormOpen(true);
+//         }}
+//       />
+
+//       <Modal isOpen={formOpen} onClose={() => setFormOpen(false)} title={editing ? t("Edit") : t("Add")} closeOnOutsideClick={false}>
+//         <div className="space-y-4">
+//           <Input
+//             label={t("Name")}
+//             value={form.name}
+//             onChange={(e) => {
+//               const value = e.target.value;
+//               setForm((p) => ({ ...p, name: value, slug: slugEdited ? p.slug : slugify(value) }));
+//             }}
+//           />
+//           <Input
+//             label={t("Slug")}
+//             value={form.slug}
+//             onChange={(e) => {
+//               setForm((p) => ({ ...p, slug: e.target.value }));
+//               setSlugEdited(true);
+//             }}
+//           />
+//           <div>
+//             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t("Parent")}</label>
+//             <select
+//               value={form.parent ?? ""}
+//               onChange={(e) => setForm((p) => ({ ...p, parent: e.target.value ? Number(e.target.value) : null }))}
+//               className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+//             >
+//               <option value="">— {t("NoParent")} —</option>
+//               {buildFlatTree(parentOptions).map(({ item, level }) => (
+//                 <option key={item.id} value={item.id}>
+//                   {"　".repeat(level)}
+//                   {level > 0 ? "└ " : ""}
+//                   {item.name}
+//                 </option>
+//               ))}
+//             </select>
+//           </div>
+//           <label className="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300 cursor-pointer">
+//             <input
+//               type="checkbox"
+//               checked={form.is_active}
+//               onChange={(e) => setForm((p) => ({ ...p, is_active: e.target.checked }))}
+//               className="w-4 h-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+//             />
+//             {t("IsActive")}
+//           </label>
+//           <div className="flex justify-end gap-2 pt-2">
+//             <Button text={t("Cancel")} onClick={() => setFormOpen(false)} />
+//             <Button text={saveMutation.isPending ? t("Saving") : editing ? t("Save") : t("Create")} onClick={() => saveMutation.mutate(form)} />
+//           </div>
+//         </div>
+//       </Modal>
+
+//       <ConfirmModal
+//         isOpen={deleteModal}
+//         type="delete"
+//         title={t("DeleteTitle")}
+//         message={t("DeleteMessage", { name: toDelete?.name })}
+//         onClose={() => setDeleteModal(false)}
+//         onConfirm={() => {
+//           if (deleteId) {
+//             deleteMutation.mutate(deleteId);
+//             setDeleteModal(false);
+//           }
+//         }}
+//       />
+//     </RBACGuard>
+//   );
+// };
+
+// export default CategoriesPage;
+
+
+          {/* <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t("Parent")}</label>
+            <select
+              value={form.parent ?? ""}
+              onChange={(e) => setForm((p) => ({ ...p, parent: e.target.value ? Number(e.target.value) : null }))}
+              className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            >
+              <option value="">— {t("NoParent")} —</option>
+              {buildFlatTree(parentOptions).map(({ item, level }) => (
+                <option key={item.id} value={item.id}>
+                  {"　".repeat(level)}
+                  {level > 0 ? "└ " : ""}
+                  {item.name}
+                </option>
+              ))}
+            </select>
+          </div> */}
 
 
 

@@ -23,7 +23,16 @@ import CreateField from "../../features/accounting/pages/Directory/Directory/Cre
 import { PermissionRoute } from "./PermissionRouteProps";
 import DirectoryFieldsPage from "../../features/accounting/pages/Directory/Directory/DirectoryFieldsPage";
 import DirectoryRecordsPage from "../../features/accounting/pages/Directory/Directory/DirectoryRecordsPage";
-
+import Products from "../../features/accounting/pages/Products/Products";
+import ProductsListPage from "../../features/accounting/pages/Products/ProductsListPage";
+import CategoriesPage from "../../features/accounting/pages/Products/CategoriesPage";
+import BrandsPage from "../../features/accounting/pages/Products/BrandsPage";
+import TagsPage from "../../features/accounting/pages/Products/TagsPage";
+import UnitsPage from "../../features/accounting/pages/Products/UnitsPage";
+import Warehouses from "../../features/accounting/pages/Warehouses/Warehouses";
+import WarehousesListPage from "../../features/accounting/pages/Warehouses/WarehousesListPage";
+import WarehouseStocksPage from "../../features/accounting/pages/Warehouses/WarehouseStocksPage";
+import CounterpartiesPage from "../../features/accounting/pages/Counterparties/CounterpartiesPage";
 
 const AppRouter: React.FC = () => {
   return (
@@ -87,6 +96,25 @@ const AppRouter: React.FC = () => {
             <Route path="accounts" element={<AccountPage />} />
           </Route> */}
 
+          <Route path={ROUTES.APP.PRODUCTS} element={<Products />}>
+            <Route index element={<Navigate to="list" replace />} />
+            <Route path="list" element={<ProductsListPage />} />
+            <Route path="categories" element={<CategoriesPage />} />
+            <Route path="brands" element={<BrandsPage />} />
+            <Route path="tags" element={<TagsPage />} />
+            <Route path="units" element={<UnitsPage />} />
+          </Route>
+
+          <Route path={ROUTES.APP.COUNTERPARTIES} element={<CounterpartiesPage />} />
+
+          <Route path={ROUTES.APP.WAREHOUSES} element={<Warehouses />}>
+            <Route index element={<Navigate to="list" replace />} />
+            <Route path="list" element={<WarehousesListPage />} />
+            <Route path="stocks" element={<WarehouseStocksPage />} />
+          </Route>
+
+
+          
         </Route>
       </Route>
 

@@ -126,7 +126,7 @@
     "NewPassword": "Täze parol (üýtgetmeýän bolsaňyz boş goýuň)",
     "FirstName": "Ady",
     "LastName": "Familiýasy",
-    "IsActive": "Aktiw ulanyjy",
+    "IsActive": "Aktiw",
     "DeleteConfirm": "Hakykatdan hem şu ulanyjyny pozmak isleýärsiňizmi:",
     "UserDeleted": "Ulanyjy üstünlikli pozuldy",
     "Success": "Üstünlikli",
@@ -228,8 +228,24 @@
 
     "Press": "Basyň",
     "ToSidebar": "Gapdal paneline geçmek",
-    
-    "DirectoryRecords": "Soraýyşnama ýazgylary"
+
+    "DirectoryRecords": "Soraýyşnama ýazgylary",
+    "Products": "Harytlar",
+    "Counterparties": "Kontragentler",
+    "Warehouses": "Ammarlar",
+
+    "Categories": "Kategoriýalar",
+    "Brands": "Brendler",
+    "Tags": "Tegler",
+    "Units": "Ölçeg birlikleri",
+
+    "NothingFound": "Hiç zat tapylmady",
+    "TryChangingFilters": "Gözleg parametrlerini ýa-da süzgüçleri üýtgedip görüň.",
+    "AddCategory": "Kategoriýa goşmak",
+    "Nesting": "Içerki ýerleşiş",
+    "AllCategories": "Ähli kategoriýalar",
+    "Root": "Esasy",
+    "NoParent": "Ene-ata ýok"
     
 
 

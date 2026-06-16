@@ -2,11 +2,13 @@
 import React, { useEffect, useRef } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import { ROUTES } from "../../core/router/routes";
-import { ADMIN_ICON, COMPANY_ICON, USERS_ICON, BRANCH_ICON, ACCOUNT_ICON, DIRECTORY_ICON } from "../Icons/LeftBarIcons";
+import { ADMIN_ICON, COMPANY_ICON, USERS_ICON, BRANCH_ICON, ACCOUNT_ICON, DIRECTORY_ICON, COUNTERPARTY_ICON, WAREHOUSE_ICON, PRODUCT_ICON } from "../Icons/LeftBarIcons";
 import { playClick2Sound, playAside2Sound } from "../../core/utils/sound";
 import { useAccess } from "../../core/hooks/useAccess";
 import { useTranslation } from "react-i18next";
 import { focusManager } from "../../core/utils/focusManager";
+
+
 
 interface SidebarLeftProps {
   isOpen: boolean;
@@ -20,6 +22,9 @@ const NAV_ITEMS = {
     { name: "Desktop", path: ROUTES.APP.DASHBOARD, icon: "📊" },
     { name: "Accounting", path: ROUTES.APP.ACCOUNTING, icon: ACCOUNT_ICON, permission: ["transaction", "GET"] },
     { name: "Directoryes", path: ROUTES.APP.DIRECTORY, icon: DIRECTORY_ICON, permission: ["directory", "GET"] },
+    { name: "Products", path: ROUTES.APP.PRODUCTS, icon: PRODUCT_ICON, permission: ["product", "GET"] },
+    { name: "Counterparties", path: ROUTES.APP.COUNTERPARTIES, icon: COUNTERPARTY_ICON, permission: ["counterparty", "GET"] },
+    { name: "Warehouses", path: ROUTES.APP.WAREHOUSES, icon: WAREHOUSE_ICON, permission: ["warehouse", "GET"] },
   ],
   admin: [
     { name: "Users", path: ROUTES.COMPANY_ADMIN.USERS, icon: USERS_ICON },
