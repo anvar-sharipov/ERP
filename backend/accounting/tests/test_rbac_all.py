@@ -1,7 +1,8 @@
 # backend/accounting/tests/test_rbac_all.py
 from accounting.tests.base import BaseRBACTest
 from django_tenants.utils import tenant_context
-from accounting.models import CompanyProfile
+from accounting.models import CompanyProfile, Unit, Product
+
 
 
 # ----------------------------------------------------------------
@@ -55,36 +56,59 @@ class TestBranchRBAC(BaseRBACTest):
             "company_profile": profile.id,
         }, format='json')
         return response.data.get('id') if response.status_code == 201 else None
-
-
+    
+    
+    
 # ----------------------------------------------------------------
-# Counterparty
+# Простые справочники
 # ----------------------------------------------------------------
-# class TestCounterpartyRBAC(BaseRBACTest):
-#     resource_name = "counterparty"
-#     list_url = "/api/accounting/counterparties/"
-#     detail_url = "/api/accounting/counterparties/{id}/"
-#     create_payload = {"name": "Test Counterparty"}
-#     update_payload = {"name": "Updated Counterparty"}
+class TestUnitRBAC(BaseRBACTest):
+    resource_name = "unit"
+    list_url = "/api/accounting/units/"
+    detail_url = "/api/accounting/units/{id}/"
+    create_payload = {"name": "Килограмм", "short_name": "кг"}
+    update_payload = {"name": "Грамм", "short_name": "гр"}
 
-
-# ----------------------------------------------------------------
-# Warehouse
-# ----------------------------------------------------------------
-# class TestWarehouseRBAC(BaseRBACTest):
-#     resource_name = "warehouse"
-#     list_url = "/api/accounting/warehouses/"
-#     detail_url = "/api/accounting/warehouses/{id}/"
-#     create_payload = {"name": "Test Warehouse"}
-#     update_payload = {"name": "Updated Warehouse"}
-
+class TestBrandRBAC(BaseRBACTest):
+    resource_name = "brand"
+    list_url = "/api/accounting/brands/"
+    detail_url = "/api/accounting/brands/{id}/"
+    create_payload = {"name": "Test Brand", "slug": "test-brand"}
+    update_payload = {"name": "Updated Brand"}
 
 # ----------------------------------------------------------------
-# Product
+# Сложные модели (с внешними ключами)
 # ----------------------------------------------------------------
-# class TestProductRBAC(BaseRBACTest):
-#     resource_name = "product"
-#     list_url = "/api/accounting/products/"
-#     detail_url = "/api/accounting/products/{id}/"
-#     create_payload = {"name": "Test Product"}
-#     update_payload = {"name": "Updated Product"}
+class TestProductRBAC(BaseRBACTest):
+    resource_name = "product"
+    list_url = "/api/accounting/products/"
+    detail_url = "/api/accounting/products/{id}/"
+    
+    def create_target_object(self):
+        with tenant_context(self.company):
+            unit = Unit.objects.create(name="шт", short_name="шт")
+            product = Product.objects.create(name="Test Prod", unit=unit)
+            return product.id
+            
+    def get_create_payload(self):
+        with tenant_context(self.company):
+            unit = Unit.objects.create(name="шт", short_name="шт")
+        return {"name": "New Product", "unit": unit.id, "price_retail": 100}
+
+    update_payload = {"name": "Updated Product Name"}
+
+class TestWarehouseRBAC(BaseRBACTest):
+    resource_name = "warehouse"
+    list_url = "/api/accounting/warehouses/"
+    detail_url = "/api/accounting/warehouses/{id}/"
+    create_payload = {"name": "Main Warehouse", "is_main": True}
+    update_payload = {"name": "Secondary Warehouse"}
+
+class TestCounterpartyRBAC(BaseRBACTest):
+    resource_name = "counterparty"
+    list_url = "/api/accounting/counterparties/"
+    detail_url = "/api/accounting/counterparties/{id}/"
+    create_payload = {"name": "ООО Ромашка", "type": "client"}
+    update_payload = {"name": "ООО Лютик"}
+
+

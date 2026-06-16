@@ -1,10 +1,9 @@
 # # backend/accounting/views/directory_views.py
 # backend/accounting/views/directory_views.py
 from rest_framework import viewsets
-from rest_framework.permissions import IsAuthenticated
-from ..models import Directory, DirectoryField
-from ..serializers.directory_serializers import DirectorySerializer, DirectoryFieldSerializer
-from users.permissions import HasPermission
+from ..models import Directory, DirectoryField, DirectoryRecord
+from ..serializers.directory_serializers import DirectorySerializer, DirectoryFieldSerializer, DirectoryRecordSerializer
+from users.permissions import _rbac
 
 
 class DirectoryViewSet(viewsets.ModelViewSet):
@@ -12,15 +11,7 @@ class DirectoryViewSet(viewsets.ModelViewSet):
     serializer_class = DirectorySerializer
 
     def get_permissions(self):
-        if self.action in ['list', 'retrieve']:
-            return [IsAuthenticated(), HasPermission('directory', 'GET')()]
-        elif self.action == 'create':
-            return [IsAuthenticated(), HasPermission('directory', 'POST')()]
-        elif self.action in ['update', 'partial_update']:
-            return [IsAuthenticated(), HasPermission('directory', 'PUT')()]
-        elif self.action == 'destroy':
-            return [IsAuthenticated(), HasPermission('directory', 'DELETE')()]
-        return [IsAuthenticated()]
+        return _rbac(self.action, "directory")
 
 
 class DirectoryFieldViewSet(viewsets.ModelViewSet):
@@ -34,14 +25,21 @@ class DirectoryFieldViewSet(viewsets.ModelViewSet):
         return qs
 
     def get_permissions(self):
-        if self.action in ['list', 'retrieve']:
-            return [IsAuthenticated(), HasPermission('directoryfield', 'GET')()]
-        elif self.action == 'create':
-            return [IsAuthenticated(), HasPermission('directoryfield', 'POST')()]
-        elif self.action in ['update', 'partial_update']:
-            return [IsAuthenticated(), HasPermission('directoryfield', 'PUT')()]
-        elif self.action == 'destroy':
-            return [IsAuthenticated(), HasPermission('directoryfield', 'DELETE')()]
-        return [IsAuthenticated()]
+        return _rbac(self.action, "directoryfield")
+
     
-    
+class DirectoryRecordViewSet(viewsets.ModelViewSet):
+    serializer_class = DirectoryRecordSerializer
+
+    def get_queryset(self):
+        qs = DirectoryRecord.objects.order_by("-created_at")
+        directory_id = self.request.query_params.get("directory")
+        if directory_id:
+            qs = qs.filter(directory_id=directory_id)
+        return qs
+
+    def get_permissions(self):
+        return _rbac(self.action, "directoryrecord")
+
+
+

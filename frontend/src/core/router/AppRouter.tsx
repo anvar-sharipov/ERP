@@ -22,6 +22,7 @@ import Directory from "../../features/accounting/pages/Directory/Directory";
 import CreateField from "../../features/accounting/pages/Directory/Directory/CreateField";
 import { PermissionRoute } from "./PermissionRouteProps";
 import DirectoryFieldsPage from "../../features/accounting/pages/Directory/Directory/DirectoryFieldsPage";
+import DirectoryRecordsPage from "../../features/accounting/pages/Directory/Directory/DirectoryRecordsPage";
 
 
 const AppRouter: React.FC = () => {
@@ -76,6 +77,7 @@ const AppRouter: React.FC = () => {
             </Route>
           </Route>
           <Route path={ROUTES.APP.DIRECTORY_FIELDS} element={<DirectoryFieldsPage />} />
+          <Route path={ROUTES.APP.DIRECTORY_RECORDS} element={<DirectoryRecordsPage />} />
 
           {/* <Route path={ROUTES.APP.ACCOUNTING} element={<Accounting />}>
             <Route index element={<Navigate to="journal" replace />} />

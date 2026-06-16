@@ -27,3 +27,24 @@ class DirectoryFieldSerializer(serializers.ModelSerializer):
         if not validated_data.get('slug'):
             validated_data['slug'] = slugify(validated_data['name'], allow_unicode=False).replace('-', '_')
         return super().create(validated_data)
+
+
+class DirectoryRecordSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = DirectoryRecord
+        fields = ["id", "directory", "name", "data", "is_active", "created_at"]
+
+    def validate(self, attrs):
+        directory = attrs.get("directory") or self.instance.directory
+        fields = DirectoryField.objects.filter(directory=directory)
+        data = attrs.get("data", {})
+
+        errors = {}
+        for field in fields:
+            value = data.get(field.slug)
+            if field.is_required and (value is None or value == ""):
+                errors[field.slug] = f"Поле '{field.name}' обязательно"
+
+        if errors:
+            raise serializers.ValidationError({"data": errors})
+        return attrs

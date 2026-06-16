@@ -15,20 +15,6 @@ import os
 
 
 
-
-class Counterparty(models.Model):
-    name = models.CharField(max_length=255, verbose_name="Название контрагента")
-    def __str__(self): return self.name
-
-class Warehouse(models.Model):
-    name = models.CharField(max_length=100, verbose_name="Название склада")
-    def __str__(self): return self.name
-
-class Product(models.Model):
-    name = models.CharField(max_length=255, verbose_name="Название товара")
-    def __str__(self): return self.name
-    
-
 # =====================================================================
 # УНИВЕРСАЛЬНЫЙ ГЕНЕРАТОР ПУТЕЙ
 # =====================================================================
@@ -538,171 +524,164 @@ class Transaction(models.Model):
 # 3. Базовые моделки с базовыми полями
 # =====================================================================
 
-# class ProductCategory(models.Model):
-#     name = models.CharField(max_length=255)
-#     slug = models.SlugField(unique=True)
-#     parent = models.ForeignKey('self', null=True, blank=True, on_delete=models.SET_NULL, related_name='children')
-#     is_active = models.BooleanField(default=True)
+class ProductCategory(models.Model):
+    name = models.CharField(max_length=255)
+    slug = models.SlugField(unique=True)
+    parent = models.ForeignKey('self', null=True, blank=True, on_delete=models.SET_NULL, related_name='children')
+    is_active = models.BooleanField(default=True)
 
-#     class Meta:
-#         verbose_name = "Категория товара"
-#         verbose_name_plural = "Категории товаров"
+    class Meta:
+        verbose_name = "Категория товара"
+        verbose_name_plural = "Категории товаров"
 
-#     def __str__(self):
-#         return self.name
-
-
-# class Brand(models.Model):
-#     name = models.CharField(max_length=255, unique=True)
-#     slug = models.SlugField(unique=True)
-#     is_active = models.BooleanField(default=True)
-
-#     class Meta:
-#         verbose_name = "Бренд"
-#         verbose_name_plural = "Бренды"
-
-#     def __str__(self):
-#         return self.name
+    def __str__(self):
+        return self.name
 
 
-# class Tag(models.Model):
-#     name = models.CharField(max_length=100, unique=True)
-#     slug = models.SlugField(unique=True)
+class Brand(models.Model):
+    name = models.CharField(max_length=255, unique=True)
+    slug = models.SlugField(unique=True)
+    is_active = models.BooleanField(default=True)
 
-#     class Meta:
-#         verbose_name = "Тег"
-#         verbose_name_plural = "Теги"
+    class Meta:
+        verbose_name = "Бренд"
+        verbose_name_plural = "Бренды"
 
-#     def __str__(self):
-#         return self.name
-
-
-# class Unit(models.Model):
-#     """Единица измерения: шт, кг, л, м..."""
-#     name = models.CharField(max_length=50)
-#     short_name = models.CharField(max_length=10)  # "шт", "кг"
-
-#     class Meta:
-#         verbose_name = "Единица измерения"
-#         verbose_name_plural = "Единицы измерения"
-
-#     def __str__(self):
-#         return self.short_name
+    def __str__(self):
+        return self.name
 
 
-# # class Product(models.Model):
-# #     name = models.CharField(max_length=255, verbose_name="Название товара")
-# #     sku = models.CharField(max_length=100, unique=True, blank=True, verbose_name="Артикул")
+class Tag(models.Model):
+    name = models.CharField(max_length=100, unique=True)
+    slug = models.SlugField(unique=True)
 
-# #     category = models.ForeignKey(ProductCategory, on_delete=models.SET_NULL, null=True, blank=True, related_name='products')
-# #     brand = models.ForeignKey(Brand, on_delete=models.SET_NULL, null=True, blank=True, related_name='products')
-# #     unit = models.ForeignKey(Unit, on_delete=models.PROTECT, related_name='products')
-# #     tags = models.ManyToManyField(Tag, blank=True, related_name='products')
+    class Meta:
+        verbose_name = "Тег"
+        verbose_name_plural = "Теги"
 
-# #     price = models.DecimalField(max_digits=15, decimal_places=2, default=0, verbose_name="Цена продажи")
-# #     cost_price = models.DecimalField(max_digits=15, decimal_places=2, default=0, verbose_name="Себестоимость")
+    def __str__(self):
+        return self.name
 
-# #     is_active = models.BooleanField(default=True)
-# #     created_at = models.DateTimeField(auto_now_add=True)
-# #     updated_at = models.DateTimeField(auto_now=True)
 
-# #     # пользовательские доп.поля через конструктор
-# #     extra_data = models.JSONField(default=dict, blank=True)
+class Unit(models.Model):
+    """Единица измерения: шт, кг, л, м..."""
+    name = models.CharField(max_length=50)
+    short_name = models.CharField(max_length=10)  # "шт", "кг"
 
-# #     class Meta:
-# #         verbose_name = "Товар"
-# #         verbose_name_plural = "Товары"
-# #         indexes = [
-# #             GinIndex(fields=['extra_data'], name='product_extra_data_gin'),
-# #         ]
+    class Meta:
+        verbose_name = "Единица измерения"
+        verbose_name_plural = "Единицы измерения"
 
-# #     def __str__(self):
-# #         return self.name
+    def __str__(self):
+        return self.short_name
 
-# class Product(models.Model):
-#     name = models.CharField(max_length=255, verbose_name="Название товара")
-#     sku = models.CharField(max_length=100, unique=True, blank=True, verbose_name="Артикул")
+
+class Product(models.Model):
+    name = models.CharField(max_length=255, verbose_name="Название товара")
+    sku = models.CharField(max_length=100, unique=True, blank=True, null=True, verbose_name="Артикул")
     
-#     # Коды для сканирования
-#     barcode = models.CharField(max_length=100, unique=True, blank=True, null=True, verbose_name="Штрихкод (EAN-13)")
-#     qr_code = models.CharField(max_length=255, unique=True, blank=True, null=True, verbose_name="QR-код / Серийный номер")
+    # Коды для сканирования
+    barcode = models.CharField(max_length=100, unique=True, blank=True, null=True, verbose_name="Штрихкод (EAN-13)")
+    qr_code = models.CharField(max_length=255, unique=True, blank=True, null=True, verbose_name="QR-код / Серийный номер")
 
-#     category = models.ForeignKey(ProductCategory, on_delete=models.SET_NULL, null=True, blank=True, related_name='products', verbose_name="Категория")
-#     brand = models.ForeignKey(Brand, on_delete=models.SET_NULL, null=True, blank=True, related_name='products', verbose_name="Бренд")
-#     unit = models.ForeignKey(Unit, on_delete=models.PROTECT, related_name='products', verbose_name="Единица измерения")
-#     tags = models.ManyToManyField(Tag, blank=True, related_name='products', verbose_name="Теги")
+    category = models.ForeignKey(ProductCategory, on_delete=models.SET_NULL, null=True, blank=True, related_name='products', verbose_name="Категория")
+    brand = models.ForeignKey(Brand, on_delete=models.SET_NULL, null=True, blank=True, related_name='products', verbose_name="Бренд")
+    unit = models.ForeignKey(Unit, on_delete=models.PROTECT, null=True, related_name='products', verbose_name="Единица измерения")
+    tags = models.ManyToManyField(Tag, blank=True, related_name='products', verbose_name="Теги")
 
-#     price_retail = models.DecimalField(max_digits=15, decimal_places=2, default=0, verbose_name="Цена розница")
-#     price_wholesale = models.DecimalField(max_digits=15, decimal_places=2, default=0, verbose_name="Цена опт")
-#     cost_price = models.DecimalField(max_digits=15, decimal_places=2, default=0, verbose_name="Себестоимость")
+    price_retail = models.DecimalField(max_digits=15, decimal_places=2, default=0, verbose_name="Цена розница")
+    price_wholesale = models.DecimalField(max_digits=15, decimal_places=2, default=0, verbose_name="Цена опт")
+    cost_price = models.DecimalField(max_digits=15, decimal_places=2, default=0, verbose_name="Себестоимость")
 
-#     # Система проверяет: остаток на складе (5) < min_stock_level (10). Если условие верно — система сигнализирует: «Пора заказать!».
-#     min_stock_level = models.IntegerField(default=0, verbose_name="Мин. остаток для заказа")
-#     is_active = models.BooleanField(default=True, verbose_name="Активен")
+    # Система проверяет: остаток на складе (5) < min_stock_level (10). Если условие верно — система сигнализирует: «Пора заказать!».
+    min_stock_level = models.IntegerField(default=0, verbose_name="Мин. остаток для заказа")
+    is_active = models.BooleanField(default=True, verbose_name="Активен")
     
-#     created_at = models.DateTimeField(auto_now_add=True, verbose_name="Дата создания")
-#     updated_at = models.DateTimeField(auto_now=True, verbose_name="Дата обновления")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Дата создания")
+    updated_at = models.DateTimeField(auto_now=True, verbose_name="Дата обновления")
 
-#     extra_data = models.JSONField(default=dict, blank=True, verbose_name="Доп. данные")
+    extra_data = models.JSONField(default=dict, blank=True, verbose_name="Доп. данные")
 
-#     class Meta:
-#         verbose_name = "Товар"
-#         verbose_name_plural = "Товары"
-#         indexes = [
-#             GinIndex(fields=['extra_data'], name='product_extra_data_gin'),
-#             models.Index(fields=['barcode'], name='product_barcode_idx'),
-#             models.Index(fields=['qr_code'], name='product_qr_code_idx'),
-#             models.Index(fields=['name'], name='product_name_idx'),
-#         ]
+    class Meta:
+        verbose_name = "Товар"
+        verbose_name_plural = "Товары"
+        indexes = [
+            GinIndex(fields=['extra_data'], name='product_extra_data_gin'),
+            models.Index(fields=['barcode'], name='product_barcode_idx'),
+            models.Index(fields=['qr_code'], name='product_qr_code_idx'),
+            models.Index(fields=['name'], name='product_name_idx'),
+        ]
 
-#     def __str__(self):
-#         return f"{self.name} ({self.sku})"
+    def __str__(self):
+        return f"{self.name} ({self.sku})"
 
 
-
-# class CounterpartyManager(models.Manager):
-#     """Кастомный менеджер для удобной фильтрации контрагентов"""
+class CounterpartyManager(models.Manager):
+    """Кастомный менеджер для удобной фильтрации контрагентов"""
     
-#     def clients(self):
-#         # Возвращаем только тех, кто является Клиентом или И тем, и другим
-#         return self.filter(type__in=['client', 'both'])
+    def clients(self):
+        # Возвращаем только тех, кто является Клиентом или И тем, и другим
+        return self.filter(type__in=['client', 'both'])
 
-#     def suppliers(self):
-#         # Возвращаем только тех, кто является Поставщиком или И тем, и другим
-#         return self.filter(type__in=['supplier', 'both'])
+    def suppliers(self):
+        # Возвращаем только тех, кто является Поставщиком или И тем, и другим
+        return self.filter(type__in=['supplier', 'both'])
     
     
-# class Counterparty(models.Model):
-#     class Type(models.TextChoices):
-#         CLIENT = 'client', 'Клиент'
-#         SUPPLIER = 'supplier', 'Поставщик'
-#         BOTH = 'both', 'Клиент и поставщик'
+class Counterparty(models.Model):
+    class Type(models.TextChoices):
+        CLIENT = 'client', 'Клиент'
+        SUPPLIER = 'supplier', 'Поставщик'
+        BOTH = 'both', 'Клиент и поставщик'
 
-#     name = models.CharField(max_length=255, verbose_name="Название контрагента")
-#     type = models.CharField(max_length=20, choices=Type.choices, default=Type.BOTH)
+    name = models.CharField(max_length=255, verbose_name="Название контрагента")
+    type = models.CharField(max_length=20, choices=Type.choices, default=Type.BOTH)
 
-#     inn = models.CharField(max_length=20, blank=True, verbose_name="ИНН")
-#     phone = models.CharField(max_length=30, blank=True)
-#     email = models.EmailField(blank=True)
-#     address = models.TextField(blank=True)
+    inn = models.CharField(max_length=20, blank=True, verbose_name="ИНН")
+    phone = models.CharField(max_length=30, blank=True)
+    email = models.EmailField(blank=True)
+    address = models.TextField(blank=True)
 
-#     is_active = models.BooleanField(default=True)
-#     created_at = models.DateTimeField(auto_now_add=True)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
 
-#     extra_data = models.JSONField(default=dict, blank=True)
+    extra_data = models.JSONField(default=dict, blank=True)
     
-#     objects = CounterpartyManager()
+    objects = CounterpartyManager()
 
-#     class Meta:
-#         verbose_name = "Контрагент"
-#         verbose_name_plural = "Контрагенты"
-#         indexes = [
-#             GinIndex(fields=['extra_data'], name='counterparty_extra_data_gin'),
-#         ]
+    class Meta:
+        verbose_name = "Контрагент"
+        verbose_name_plural = "Контрагенты"
+        indexes = [
+            GinIndex(fields=['extra_data'], name='counterparty_extra_data_gin'),
+        ]
 
-#     def __str__(self):
-#         return self.name
+    def __str__(self):
+        return self.name
 
+
+class Warehouse(models.Model):
+    name = models.CharField(max_length=255)
+    branch = models.ForeignKey(Branch, null=True, blank=True, on_delete=models.SET_NULL, related_name='warehouses')
+    address = models.TextField(blank=True)
+    is_active = models.BooleanField(default=True)
+    is_main = models.BooleanField(default=False, verbose_name="Основной склад")  # явный флаг вместо "если нет branch"
+
+    class Meta:
+        verbose_name = "Склад"
+
+    def __str__(self):
+        return self.name
+    
+    
+class WarehouseStock(models.Model):
+    warehouse = models.ForeignKey(Warehouse, on_delete=models.CASCADE, related_name='stocks')
+    product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name='stocks')
+    quantity = models.DecimalField(max_digits=15, decimal_places=3, default=0)
+
+    class Meta:
+        unique_together = ('warehouse', 'product')
+        verbose_name = "Остаток на складе"
 
 
 

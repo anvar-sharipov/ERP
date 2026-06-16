@@ -8,7 +8,7 @@ import { Avatar } from "../../../../../../../components/ui/Avatar";
 import { ImagePreview } from "../../../../../../../components/ui/ImagePreview";
 import { Modal } from "../../../../../../../components/ui/Modal/Modal";
 import { useSidebar } from "../../../../../../../core/context/SidebarRightContext";
-import { companyApi } from "../../../../../../accounting/services/usersApi";
+import { companyApi } from "../../../../../../accounting/services/companyApi";
 import { RBACGuard } from "../../../../../../../components/ui/RBACGuard";
 import { usePageAccess } from "../../../../../../../core/hooks/usePageAccess";
 import { useTranslation } from "react-i18next";

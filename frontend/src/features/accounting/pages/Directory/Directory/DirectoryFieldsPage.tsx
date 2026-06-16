@@ -2,7 +2,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { useParams } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { directoryApi, directoryFieldApi } from "../../../services/usersApi";
+import { directoryApi, directoryFieldApi } from "../../../services/directoryApi";
 import { useNotify } from "../../../../../core/context/NotificationContext";
 import { usePageAccess } from "../../../../../core/hooks/usePageAccess";
 import { useSidebar } from "../../../../../core/context/SidebarRightContext";
@@ -23,12 +23,14 @@ const FIELD_TYPES = [
   { value: "number", label: "Число" },
   { value: "date", label: "Дата" },
   { value: "boolean", label: "Да/Нет" },
+  { value: "ref", label: "Ссылка на справочник" },
 ];
 
 interface FieldFormData {
   name: string;
   slug: string;
   field_type: string;
+  ref_directory: number | null;
   is_required: boolean;
   order: number;
 }
@@ -37,6 +39,7 @@ const EMPTY_FORM: FieldFormData = {
   name: "",
   slug: "",
   field_type: "text",
+  ref_directory: null,
   is_required: false,
   order: 0,
 };
@@ -84,6 +87,11 @@ const DirectoryFieldsPage = () => {
     retry: false,
   });
 
+  const { data: directories = [] } = useQuery({
+    queryKey: ["directories"],
+    queryFn: directoryApi.getDirectory,
+  });
+
   // Заполняем форму при редактировании
   useEffect(() => {
     if (editingField) {
@@ -91,6 +99,7 @@ const DirectoryFieldsPage = () => {
         name: editingField.name,
         slug: editingField.slug,
         field_type: editingField.field_type,
+        ref_directory: editingField.ref_directory ?? null,
         is_required: editingField.is_required,
         order: editingField.order,
       });
@@ -298,6 +307,29 @@ const DirectoryFieldsPage = () => {
               ))}
             </select>
           </div>
+
+          {formData.field_type === "ref" && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Связанный справочник</label>
+              <select
+                value={formData.ref_directory ?? ""}
+                onChange={(e) =>
+                  setFormData((prev) => ({
+                    ...prev,
+                    ref_directory: e.target.value ? Number(e.target.value) : null,
+                  }))
+                }
+                className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              >
+                <option value="">— выберите справочник —</option>
+                {directories.map((d: any) => (
+                  <option key={d.id} value={d.id}>
+                    {d.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
           <Input label="Порядок" type="number" value={String(formData.order)} onChange={(e) => setFormData((prev) => ({ ...prev, order: Number(e.target.value) }))} />
           <label className="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300 cursor-pointer">
             <input

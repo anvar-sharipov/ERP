@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { rolesApi, usersApi } from "../../../../../accounting/services/usersApi";
+import { rolesApi } from "../../../../../accounting/services/rolesApi";
+import { usersApi } from "../../../../services/userApi";
 import { Modal } from "../../../../../../components/ui/Modal/Modal";
 import { Button } from "../../../../../../components/ui/Button";
 import { useNotify } from "../../../../../../core/context/NotificationContext";

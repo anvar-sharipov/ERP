@@ -1,6 +1,6 @@
 import React, { createContext, useContext, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { companyApi } from "../../features/accounting/services/usersApi";
+import { companyApi } from "../../features/accounting/services/companyApi";
 
 interface CompanyContextType {
   company: any;

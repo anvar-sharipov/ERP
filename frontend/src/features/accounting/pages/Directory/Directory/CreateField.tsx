@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { useSidebar } from "../../../../../core/context/SidebarRightContext";
-import { directoryApi } from "../../../services/usersApi";
+import { directoryApi } from "../../../services/directoryApi";
 import { useNotify } from "../../../../../core/context/NotificationContext";
 import { getIconByName, DIRECTORY_ICONS } from "../../../../../core/utils/icons";
 import { Table, type Column } from "../../../../../components/ui/Table/Table";
@@ -12,7 +12,7 @@ import { IconPicker } from "../../../../../components/ui/Icon/IconPicker";
 import { ColorPicker } from "../../../../../components/ui/Icon/ColorPicker";
 import { ConfirmModal } from "../../../../../components/ui/Modal/ConfirmModal";
 import { Modal } from "../../../../../components/ui/Modal/Modal";
-import { Plus, Settings } from "lucide-react";
+import { List, Plus, Settings } from "lucide-react";
 import { slugify } from "../../../../../core/utils/slugify";
 import { RBACGuard } from "../../../../../components/ui/RBACGuard";
 import { usePageAccess } from "../../../../../core/hooks/usePageAccess";
@@ -46,10 +46,9 @@ const CreateField = () => {
   const queryClient = useQueryClient();
   const notify = useNotify();
 
-  
-
-  const { canPost: canPostDirectoryField , canPut: canPutDirectoryField } = usePageAccess("directoryfield");
+  const { canPost: canPostDirectoryField, canPut: canPutDirectoryField } = usePageAccess("directoryfield");
   const { canView, canPost, canPut, canDelete } = usePageAccess("directory");
+  const { canPost: canPostDirectoryRecord , canPut: canPutDirectoryRecord } = usePageAccess("directoryrecord");
 
   const [activeFilter, setActiveFilter] = useState<"all" | "active" | "inactive">("all");
   const [searchQuery, setSearchQuery] = useState("");
@@ -212,7 +211,18 @@ const CreateField = () => {
       render: (item) => (
         <div className="flex gap-2">
           <Button
-          disabled={!canPostDirectoryField || !canPutDirectoryField}
+            disabled={!canPostDirectoryRecord || !canPutDirectoryRecord} // или отдельный canViewRecord если нужно
+            variant="1c"
+            icon={<List size={14} />}
+            className="md:h-6 md:w-8 md:!p-0"
+            title={t("DirectoryRecords")}
+            onClick={(e) => {
+              e.stopPropagation();
+              navigate(ROUTES.APP.DIRECTORY_RECORDS.replace(":id", String(item.id)));
+            }}
+          />
+          <Button
+            disabled={!canPostDirectoryField || !canPutDirectoryField}
             variant="1c"
             icon={<Settings size={14} />}
             className="md:h-6 md:w-8 md:!p-0"

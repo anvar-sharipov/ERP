@@ -2,7 +2,7 @@
 
 // // frontend/src/features/accounting/pages/admin/CompanyAdminUser.tsx
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
-import { usersApi } from "../../../../../accounting/services/usersApi";
+import { usersApi } from "../../../../services/userApi";
 import { useSidebar } from "../../../../../../core/context/SidebarRightContext";
 import { useEffect, useState, useMemo } from "react";
 import { Button } from "../../../../../../components/ui/Button";

@@ -4,7 +4,7 @@ import { Plus, Folder } from "lucide-react";
 
 import { useSidebar } from "../../../../core/context/SidebarRightContext";
 import { useNotify } from "../../../../core/context/NotificationContext";
-import { accountApi } from "../../services/usersApi";
+import { accountApi } from "../../services/accountingApi";
 import { type Account as AccountInterface } from "../../../../core/types";
 import { Modal } from "../../../../components/ui/Modal/Modal";
 import { Button } from "../../../../components/ui/Button";

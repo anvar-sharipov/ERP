@@ -10,6 +10,7 @@ export const ROUTES = {
     ACCOUNTING: '/accounting',
     DIRECTORY: '/directory',
     DIRECTORY_FIELDS: '/directory/:id/fields',
+    DIRECTORY_RECORDS: '/directory/:id/records',
   },
   COMPANY_ADMIN: {
     USERS: '/admin/users',

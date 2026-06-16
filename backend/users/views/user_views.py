@@ -3,19 +3,24 @@ from rest_framework.views import APIView, Response
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from ..serializers.user_serializer import ProfileUpdateSerializer, UserSerializer, UserListSerializer
-from ..permissions import HasPermission
 from rest_framework import generics
-from ..models import User, Role, UserRole
-from rest_framework import serializers
+from ..models import User, UserRole
 from django.db.models import Prefetch
 from icecream import ic
+from users.permissions import _rbac
 
 # user update edit for admin
 class UserManagementView(generics.ListCreateAPIView):
     # Доступ только для тех, кто имеет право 'users:POST'
-    permission_classes = [IsAuthenticated, HasPermission('user', 'POST')]
+    # permission_classes = [IsAuthenticated, HasPermission('user', 'POST')]
     serializer_class = UserSerializer
+    
+    def get_permissions(self):
+        # GET -> 'list', POST -> 'create'
+        action = 'list' if self.request.method == 'GET' else 'create'
+        return _rbac(action, "user")
     # queryset = User.objects.all()
+    
     def get_queryset(self):
         return User.objects.prefetch_related(
             'userrole_set__role__rolepermission_set__permission'
@@ -43,13 +48,14 @@ class UserDetailView(generics.RetrieveUpdateDestroyAPIView):
         ).all()
 
     def get_permissions(self):
-        if self.request.method == 'GET':
-            return [IsAuthenticated(), HasPermission('user', 'GET')()]
-        elif self.request.method in ['PUT', 'PATCH']:
-            return [IsAuthenticated(), HasPermission('user', 'PUT')()]
-        elif self.request.method == 'DELETE':
-            return [IsAuthenticated(), HasPermission('user', 'DELETE')()]
-        return [IsAuthenticated()]
+        action_map = {
+            'GET': 'retrieve',
+            'PUT': 'update',
+            'PATCH': 'update',
+            'DELETE': 'destroy'
+        }
+        action = action_map.get(self.request.method, 'retrieve')
+        return _rbac(action, "user")
     
     
     
@@ -72,8 +78,12 @@ class MeView(APIView):
     
     
 class UserListView(generics.ListAPIView):
-    permission_classes = [IsAuthenticated, HasPermission('user', 'GET')]
+    # permission_classes = [IsAuthenticated, HasPermission('user', 'GET')]
     serializer_class = UserListSerializer
+    
+    
+    def get_permissions(self):
+        return _rbac('list', 'user')
     
     
     def get_queryset(self):

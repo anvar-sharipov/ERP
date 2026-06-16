@@ -2,7 +2,7 @@
 // frontend/src/features/users/pages/Roles.tsx
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { rolesApi } from "../../../../../accounting/services/usersApi";
+import { rolesApi } from "../../../../../accounting/services/rolesApi";
 import { useSidebar } from "../../../../../../core/context/SidebarRightContext";
 import { useEffect, useState, useMemo } from "react";
 import { Button } from "../../../../../../components/ui/Button";

@@ -1,7 +1,6 @@
 # backend/accounting/views/account_views.py
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
-from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from ..models import Account
@@ -10,6 +9,7 @@ from ..serializers.account_serializers import (
     AccountWriteSerializer,
 )
 from users.permissions import HasPermission
+from users.permissions import _rbac
 
 
 class AccountViewSet(viewsets.ModelViewSet):
@@ -32,15 +32,7 @@ class AccountViewSet(viewsets.ModelViewSet):
         return AccountSerializer
 
     def get_permissions(self):
-        if self.action in ['list', 'retrieve', 'tree']:
-            return [IsAuthenticated(), HasPermission('account', 'GET')()]
-        elif self.action == 'create':
-            return [IsAuthenticated(), HasPermission('account', 'POST')()]
-        elif self.action in ['update', 'partial_update']:
-            return [IsAuthenticated(), HasPermission('account', 'PUT')()]
-        elif self.action == 'destroy':
-            return [IsAuthenticated(), HasPermission('account', 'DELETE')()]
-        return [IsAuthenticated()]
+        return _rbac(self.action, "account")
 
     def destroy(self, request, *args, **kwargs):
         account = self.get_object()

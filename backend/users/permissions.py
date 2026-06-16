@@ -2,6 +2,7 @@
 from django.core.cache import cache
 from rest_framework import permissions
 from .models import UserRole
+from rest_framework.permissions import IsAuthenticated
 
 def HasPermission(resource, action):
     class PermissionClass(permissions.BasePermission):
@@ -27,3 +28,14 @@ def HasPermission(resource, action):
             return (resource, action) in user_perms
             
     return PermissionClass
+
+
+def _rbac(action: str, resource: str):
+    action_map = {
+        "list": "GET", "retrieve": "GET",
+        "create": "POST",
+        "update": "PUT", "partial_update": "PUT",
+        "destroy": "DELETE",
+    }
+    method = action_map.get(action, "GET")
+    return [IsAuthenticated(), HasPermission(resource, method)()]

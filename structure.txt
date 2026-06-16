@@ -195,6 +195,7 @@
 │   │   │   └── utils
 │   │   │       ├── directoryIcons.ts
 │   │   │       ├── excelHelpers.ts
+│   │   │       ├── focusManager.ts
 │   │   │       ├── icons.ts
 │   │   │       ├── media.ts
 │   │   │       ├── slugify.ts
@@ -212,14 +213,19 @@
 │   │   │   │   │   ├── Directory
 │   │   │   │   │   │   ├── Directory
 │   │   │   │   │   │   │   ├── CreateField.tsx
-│   │   │   │   │   │   │   └── DirectoryFieldsPage.tsx
+│   │   │   │   │   │   │   ├── DirectoryFieldsPage.tsx
+│   │   │   │   │   │   │   └── DirectoryRecordsPage.tsx
 │   │   │   │   │   │   ├── CreateDirectory.tsx
 │   │   │   │   │   │   ├── Directory.tsx
 │   │   │   │   │   │   └── FieldRenderer.tsx
 │   │   │   │   │   ├── Accounting.tsx
 │   │   │   │   │   └── Dashboard.tsx
 │   │   │   │   └── services
-│   │   │   │       └── usersApi.ts
+│   │   │   │       ├── accountingApi.ts
+│   │   │   │       ├── branchApi.ts
+│   │   │   │       ├── companyApi.ts
+│   │   │   │       ├── directoryApi.ts
+│   │   │   │       └── rolesApi.ts
 │   │   │   ├── admin
 │   │   │   │   └── components
 │   │   │   │       ├── AdminPanel.tsx
@@ -236,19 +242,21 @@
 │   │   │   │   ├── components
 │   │   │   │   └── pages
 │   │   │   └── users
-│   │   │       └── components
-│   │   │           └── pages
-│   │   │               └── admin
-│   │   │                   ├── Roles
-│   │   │                   │   ├── Branchs
-│   │   │                   │   │   └── Branchs.tsx
-│   │   │                   │   ├── Company
-│   │   │                   │   │   └── Company.tsx
-│   │   │                   │   ├── AssignRolesModal.tsx
-│   │   │                   │   ├── CompanyAdminUser.tsx
-│   │   │                   │   └── Roles.tsx
-│   │   │                   ├── Users
-│   │   │                   └── AdminPanel.tsx
+│   │   │       ├── components
+│   │   │       │   └── pages
+│   │   │       │       └── admin
+│   │   │       │           ├── Roles
+│   │   │       │           │   ├── Branchs
+│   │   │       │           │   │   └── Branchs.tsx
+│   │   │       │           │   ├── Company
+│   │   │       │           │   │   └── Company.tsx
+│   │   │       │           │   ├── AssignRolesModal.tsx
+│   │   │       │           │   ├── CompanyAdminUser.tsx
+│   │   │       │           │   └── Roles.tsx
+│   │   │       │           ├── Users
+│   │   │       │           └── AdminPanel.tsx
+│   │   │       └── services
+│   │   │           └── userApi.ts
 │   │   ├── locales
 │   │   │   ├── en
 │   │   │   │   └── translation.json

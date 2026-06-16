@@ -15,7 +15,7 @@ import { Input } from "../ui/Input";
 import { useUser } from "../../core/context/UserContext";
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { updateProfile } from "../../features/accounting/services/usersApi";
+import { updateProfile } from "../../features/users/services/userApi";
 import { useNotify } from "../../core/context/NotificationContext";
 import { playAside2Sound } from "../../core/utils/sound";
 import { useCompany } from "../../core/context/CompanyContext";
