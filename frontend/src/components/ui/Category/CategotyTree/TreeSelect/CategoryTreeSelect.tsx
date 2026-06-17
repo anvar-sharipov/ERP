@@ -2,8 +2,8 @@
 import { useMemo, useState } from "react";
 import { Search, FolderOpen, Check } from "lucide-react";
 import CategoryTreeSelectNode from "./CategoryTreeSelectNode";
-import { type TreeNode } from "./types";
-import { Input } from "../../Input";
+import { type TreeNode } from "../types";
+import { Input } from "../../../Input";
 import { useTranslation } from "react-i18next";
 
 interface Props {

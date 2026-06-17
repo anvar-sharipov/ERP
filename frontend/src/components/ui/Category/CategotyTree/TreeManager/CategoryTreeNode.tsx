@@ -1,9 +1,9 @@
 // frontend/src/components/ui/Category/CategotyTree/CategoryTreeNode.tsx
 import { useState } from "react";
 import { ChevronRight, ChevronDown, Folder, FolderOpen, GripVertical } from "lucide-react";
-import { Button } from "../../Button";
-import { type TreeNode } from "./types";
-import { getDescendantIds } from "./CategoryTree";
+import { Button } from "../../../Button";
+import { type TreeNode } from "../types";
+import { getDescendantIds } from "../TreeFilter/CategoryTree";
 
 interface Props {
   node: TreeNode;

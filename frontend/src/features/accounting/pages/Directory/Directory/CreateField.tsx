@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { useSidebar } from "../../../../../core/context/SidebarRightContext";
 import { directoryApi } from "../../../services/directoryApi";
@@ -21,6 +21,8 @@ import { StatusBadge } from "../../../../../components/ui/StatusBadge";
 import { useNavigate } from "react-router-dom";
 import { ROUTES } from "../../../../../core/router/routes";
 import { useRestoreScroll } from "../../../../../core/hooks/useRestoreScroll";
+import { useTableFilter } from "../../../../../core/hooks/useTableFilter";
+import { type Directory as DirectoryInterface } from "../../../../../core/types";
 
 interface DirectoryFormData {
   name: string;
@@ -48,7 +50,7 @@ const CreateField = () => {
 
   const { canPost: canPostDirectoryField, canPut: canPutDirectoryField } = usePageAccess("directoryfield");
   const { canView, canPost, canPut, canDelete } = usePageAccess("directory");
-  const { canPost: canPostDirectoryRecord , canPut: canPutDirectoryRecord } = usePageAccess("directoryrecord");
+  const { canPost: canPostDirectoryRecord, canPut: canPutDirectoryRecord } = usePageAccess("directoryrecord");
 
   const [activeFilter, setActiveFilter] = useState<"all" | "active" | "inactive">("all");
   const [searchQuery, setSearchQuery] = useState("");
@@ -70,7 +72,7 @@ const CreateField = () => {
     data: directories,
     isLoading,
     error,
-  } = useQuery({
+  } = useQuery<DirectoryInterface[]>({
     queryKey: ["directories"],
     queryFn: directoryApi.getDirectory,
     enabled: canView,
@@ -100,9 +102,10 @@ const CreateField = () => {
       if (!canPost || !canPut || !data) throw new Error(t("ErrorNoRights"));
       return directoryApi.saveDirectory(editingDir?.id || null, data);
     },
-    onSuccess: () => {
+    onSuccess: (res) => {
       queryClient.invalidateQueries({ queryKey: ["directories"] });
       notify("success", editingDir ? t("SuccessUpdated") : t("SuccessCreated"));
+      setSelectedDirId(res.data.id);
       setFormModalOpen(false);
       setEditingDir(null);
       setFormData(emptyForm);
@@ -126,17 +129,17 @@ const CreateField = () => {
     },
   });
 
-  const filteredDirectories = useMemo(() => {
-    if (!directories) return [];
-    let result = directories;
-    if (activeFilter === "active") result = result.filter((d: any) => d.is_active);
-    if (activeFilter === "inactive") result = result.filter((d: any) => !d.is_active);
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
-      result = result.filter((d: any) => d.name?.toLowerCase().includes(q) || d.slug?.toLowerCase().includes(q) || d.description?.toLowerCase().includes(q));
-    }
-    return result;
-  }, [directories, activeFilter, searchQuery]);
+  const filteredDirectories = useTableFilter(directories || [], {
+    search: searchQuery,
+    searchFields: ["id", "name", "slug", "description"],
+    filters: [
+      (item) => {
+        if (activeFilter === "active") return item.is_active;
+        if (activeFilter === "inactive") return !item.is_active;
+        return true;
+      },
+    ],
+  });
 
   useEffect(() => {
     setSidebarContent(
@@ -340,8 +343,8 @@ const CreateField = () => {
       <ConfirmModal
         isOpen={deleteModal}
         type="delete"
-        title={t("DeleteTitle")}
-        message={t("DeleteMessage", { name: dirToDelete?.name })}
+        title={t("Delete")}
+        message={t("DeleteDirectoryMessage", { name: dirToDelete?.name })}
         onClose={() => setDeleteModal(false)}
         onConfirm={() => {
           if (deleteTargetId) {

@@ -14,6 +14,7 @@ import { RBACGuard } from "../../../../components/ui/RBACGuard";
 import { Plus } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { slugify } from "../../../../core/utils/slugify";
+import { useTableFilter } from "../../../../core/hooks/useTableFilter";
 
 interface TagForm {
   name: string;
@@ -29,6 +30,8 @@ const TagsPage = () => {
   const { setSidebarContent } = useSidebar();
   const { canView, canPost, canPut, canDelete } = usePageAccess("tag");
 
+  const [highlightedId, setHighlightedId] = useState<number | null>(null);
+
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<any | null>(null);
   const [form, setForm] = useState<TagForm>(EMPTY);
@@ -37,7 +40,11 @@ const TagsPage = () => {
   const [deleteId, setDeleteId] = useState<number | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
 
-  const { data: tags = [], isLoading, error } = useQuery({
+  const {
+    data: tags = [],
+    isLoading,
+    error,
+  } = useQuery({
     queryKey: ["tags"],
     queryFn: tagApi.getAll,
     enabled: canView,
@@ -56,9 +63,10 @@ const TagsPage = () => {
 
   const saveMutation = useMutation({
     mutationFn: (data: TagForm) => tagApi.save(editing?.id ?? null, data),
-    onSuccess: () => {
+    onSuccess: (res) => {
       queryClient.invalidateQueries({ queryKey: ["tags"] });
       notify("success", editing ? t("SuccessUpdated") : t("SuccessCreated"));
+      setHighlightedId(res.data.id);
       setFormOpen(false);
       setEditing(null);
     },
@@ -85,9 +93,17 @@ const TagsPage = () => {
     setSidebarContent(
       <div className="space-y-4">
         <h4 className="font-bold text-indigo-300">{t("Actions")}</h4>
-        <Button disabled={!canPost} text={t("Add")} className="w-full" dark={true}
+        <Button
+          disabled={!canPost}
+          text={t("AddTag")}
+          className="w-full"
+          dark={true}
           icon={<Plus className="w-4 h-4" />}
-          onClick={() => { setEditing(null); setFormOpen(true); }} />
+          onClick={() => {
+            setEditing(null);
+            setFormOpen(true);
+          }}
+        />
       </div>,
     );
   }, [setSidebarContent, canPost, t]);
@@ -97,13 +113,32 @@ const TagsPage = () => {
     { header: t("Name"), accessor: "name", sortable: true, excelWidth: 25 },
     { header: t("Slug"), accessor: "slug", sortable: true, excelWidth: 20 },
     {
-      header: t("Actions"), hideInPrint: true,
+      header: t("Actions"),
+      hideInPrint: true,
       render: (item) => (
         <div className="flex gap-2">
-          <Button disabled={!canPut} variant="1c" icon={<span>✏️</span>} className="md:h-6 md:w-8 md:!p-0"
-            onClick={(e) => { e.stopPropagation(); setEditing(item); setFormOpen(true); }} />
-          <Button disabled={!canDelete} variant="1c" icon={<span>🗑️</span>} className="md:h-6 md:w-8 md:!p-0"
-            onClick={(e) => { e.stopPropagation(); setDeleteId(item.id); setDeleteModal(true); }} />
+          <Button
+            disabled={!canPut}
+            variant="1c"
+            icon={<span>✏️</span>}
+            className="md:h-6 md:w-8 md:!p-0"
+            onClick={(e) => {
+              e.stopPropagation();
+              setEditing(item);
+              setFormOpen(true);
+            }}
+          />
+          <Button
+            disabled={!canDelete}
+            variant="1c"
+            icon={<span>🗑️</span>}
+            className="md:h-6 md:w-8 md:!p-0"
+            onClick={(e) => {
+              e.stopPropagation();
+              setDeleteId(item.id);
+              setDeleteModal(true);
+            }}
+          />
         </div>
       ),
     },
@@ -111,34 +146,65 @@ const TagsPage = () => {
 
   const toDelete = tags.find((tg: any) => tg.id === deleteId);
 
+  const filtered = useTableFilter(tags, {
+    search: searchQuery,
+    searchFields: ["id", "name", "slug"],
+  });
+
   return (
     <RBACGuard isLoading={isLoading} error={error} canView={canView} forbiddenText={t("ForbiddenText")}>
-      <Table columns={columns} data={tags} tableId="tags_list"
-        searchQuery={searchQuery} onSearchChange={setSearchQuery}
-        onRowDoubleClick={(item) => { setEditing(item); setFormOpen(true); }} />
+      <Table
+        columns={columns}
+        data={filtered}
+        tableId="tags_list"
+        searchQuery={searchQuery}
+        onSearchChange={setSearchQuery}
+        onRowDoubleClick={(item) => {
+          setEditing(item);
+          setFormOpen(true);
+        }}
+        selectedRowId={highlightedId}
+        onHighlightConsumed={() => setHighlightedId(null)}
+      />
 
-      <Modal isOpen={formOpen} onClose={() => setFormOpen(false)}
-        title={editing ? t("Edit") : t("Add")} closeOnOutsideClick={false}>
+      <Modal isOpen={formOpen} onClose={() => setFormOpen(false)} title={editing ? t("Edit") : t("AddTag")} closeOnOutsideClick={false}>
         <div className="space-y-4">
-          <Input label={t("Name")} value={form.name}
+          <Input
+            label={t("Name")}
+            value={form.name}
             onChange={(e) => {
               const value = e.target.value;
               setForm((p) => ({ ...p, name: value, slug: slugEdited ? p.slug : slugify(value) }));
-            }} />
-          <Input label={t("Slug")} value={form.slug}
-            onChange={(e) => { setForm((p) => ({ ...p, slug: e.target.value })); setSlugEdited(true); }} />
+            }}
+          />
+          <Input
+            label={t("Slug")}
+            value={form.slug}
+            onChange={(e) => {
+              setForm((p) => ({ ...p, slug: e.target.value }));
+              setSlugEdited(true);
+            }}
+          />
           <div className="flex justify-end gap-2 pt-2">
             <Button text={t("Cancel")} onClick={() => setFormOpen(false)} />
-            <Button text={saveMutation.isPending ? t("Saving") : editing ? t("Save") : t("Create")}
-              onClick={() => saveMutation.mutate(form)} />
+            <Button text={saveMutation.isPending ? t("Saving") : editing ? t("Save") : t("Create")} onClick={() => saveMutation.mutate(form)} />
           </div>
         </div>
       </Modal>
 
-      <ConfirmModal isOpen={deleteModal} type="delete" title={t("DeleteTitle")}
-        message={t("DeleteMessage", { name: toDelete?.name })}
+      <ConfirmModal
+        isOpen={deleteModal}
+        type="delete"
+        title={t("Delete")}
+        message={t("DeleteTagMessage", { name: toDelete?.name })}
         onClose={() => setDeleteModal(false)}
-        onConfirm={() => { if (deleteId) { deleteMutation.mutate(deleteId); setDeleteModal(false); } }} />
+        onConfirm={() => {
+          if (deleteId) {
+            deleteMutation.mutate(deleteId);
+            setDeleteModal(false);
+          }
+        }}
+      />
     </RBACGuard>
   );
 };

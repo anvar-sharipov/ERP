@@ -15,6 +15,8 @@ import { StatusBadge } from "../../../../components/ui/StatusBadge";
 import { Plus } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { slugify } from "../../../../core/utils/slugify";
+import { useTableFilter } from "../../../../core/hooks/useTableFilter";
+import type { Brand } from "../../../../core/types";
 
 interface BrandForm {
   name: string;
@@ -30,6 +32,7 @@ const BrandsPage = () => {
   const queryClient = useQueryClient();
   const { setSidebarContent } = useSidebar();
   const { canView, canPost, canPut, canDelete } = usePageAccess("brand");
+  const [highlightedId, setHighlightedId] = useState<number | null>(null);
 
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<any | null>(null);
@@ -39,7 +42,13 @@ const BrandsPage = () => {
   const [deleteId, setDeleteId] = useState<number | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
 
-  const { data: brands = [], isLoading, error } = useQuery({
+  const [activeFilter, setActiveFilter] = useState<"all" | "active" | "inactive">("all");
+
+  const {
+    data: brands = [],
+    isLoading,
+    error,
+  } = useQuery<Brand[]>({
     queryKey: ["brands"],
     queryFn: brandApi.getAll,
     enabled: canView,
@@ -58,9 +67,10 @@ const BrandsPage = () => {
 
   const saveMutation = useMutation({
     mutationFn: (data: BrandForm) => brandApi.save(editing?.id ?? null, data),
-    onSuccess: () => {
+    onSuccess: (res) => {
       queryClient.invalidateQueries({ queryKey: ["brands"] });
       notify("success", editing ? t("SuccessUpdated") : t("SuccessCreated"));
+      setHighlightedId(res.data.id);
       setFormOpen(false);
       setEditing(null);
     },
@@ -87,31 +97,92 @@ const BrandsPage = () => {
     setSidebarContent(
       <div className="space-y-4">
         <h4 className="font-bold text-indigo-300">{t("Actions")}</h4>
-        <Button disabled={!canPost} text={t("Add")} className="w-full" dark={true}
+        <Button
+          disabled={!canPost}
+          text={t("AddBrand")}
+          className="w-full"
+          dark={true}
           icon={<Plus className="w-4 h-4" />}
-          onClick={() => { setEditing(null); setFormOpen(true); }} />
+          onClick={() => {
+            setEditing(null);
+            setFormOpen(true);
+          }}
+        />
+
+        <div className="pt-4 border-t border-indigo-900/30">
+          <h4 className="font-bold text-indigo-300 mb-2">{t("StatusFilter")}</h4>
+
+          <div className="flex flex-col gap-1">
+            {(["all", "active", "inactive"] as const).map((status) => (
+              <Button
+                key={status}
+                variant="ghost"
+                dark={true}
+                isActive={activeFilter === status}
+                className="w-full justify-start"
+                text={status === "all" ? t("AllBrands") : status === "active" ? t("OnlyActive") : t("OnlyInactive")}
+                icon={status !== "all" ? <span className={`w-2 h-2 rounded-full ${status === "active" ? "bg-green-500" : "bg-red-500"}`} /> : undefined}
+                onClick={() => setActiveFilter(status)}
+              />
+            ))}
+          </div>
+        </div>
       </div>,
     );
-  }, [setSidebarContent, canPost, t]);
+  }, [setSidebarContent, canPost, t, activeFilter]);
+
+  const filtered = useTableFilter(brands, {
+    search: searchQuery,
+    searchFields: ["id", "name", "slug"],
+    filters: [
+      (item) => {
+        if (activeFilter === "active") return item.is_active;
+        if (activeFilter === "inactive") return !item.is_active;
+        return true;
+      },
+    ],
+  });
 
   const columns: Column<any>[] = [
     { header: t("ID"), accessor: "id", sortable: true, excelWidth: 5 },
     { header: t("Name"), accessor: "name", sortable: true, excelWidth: 25 },
     { header: t("Slug"), accessor: "slug", sortable: true, excelWidth: 20 },
     {
-      header: t("Status"), accessor: "is_active", sortable: true, excelWidth: 8,
+      header: t("Status"),
+      accessor: "is_active",
+      sortable: true,
+      excelWidth: 8,
       sortValue: (item) => (item.is_active ? 1 : 0),
       excelValue: (item) => (item.is_active ? "+" : ""),
       render: (item) => <StatusBadge isActive={item.is_active} activeLabel={t("Active")} inactiveLabel={t("Inactive")} />,
     },
     {
-      header: t("Actions"), hideInPrint: true,
+      header: t("Actions"),
+      hideInPrint: true,
       render: (item) => (
         <div className="flex gap-2">
-          <Button disabled={!canPut} variant="1c" icon={<span>✏️</span>} className="md:h-6 md:w-8 md:!p-0"
-            onClick={(e) => { e.stopPropagation(); setEditing(item); setFormOpen(true); }} />
-          <Button disabled={!canDelete} variant="1c" icon={<span>🗑️</span>} className="md:h-6 md:w-8 md:!p-0"
-            onClick={(e) => { e.stopPropagation(); setDeleteId(item.id); setDeleteModal(true); }} />
+          <Button
+            disabled={!canPut}
+            variant="1c"
+            icon={<span>✏️</span>}
+            className="md:h-6 md:w-8 md:!p-0"
+            onClick={(e) => {
+              e.stopPropagation();
+              setEditing(item);
+              setFormOpen(true);
+            }}
+          />
+          <Button
+            disabled={!canDelete}
+            variant="1c"
+            icon={<span>🗑️</span>}
+            className="md:h-6 md:w-8 md:!p-0"
+            onClick={(e) => {
+              e.stopPropagation();
+              setDeleteId(item.id);
+              setDeleteModal(true);
+            }}
+          />
         </div>
       ),
     },
@@ -121,38 +192,67 @@ const BrandsPage = () => {
 
   return (
     <RBACGuard isLoading={isLoading} error={error} canView={canView} forbiddenText={t("ForbiddenText")}>
-      <Table columns={columns} data={brands} tableId="brands_list"
-        searchQuery={searchQuery} onSearchChange={setSearchQuery}
-        onRowDoubleClick={(item) => { setEditing(item); setFormOpen(true); }} />
+      <Table
+        columns={columns}
+        data={filtered}
+        tableId="brands_list"
+        searchQuery={searchQuery}
+        onSearchChange={setSearchQuery}
+        onRowDoubleClick={(item) => {
+          setEditing(item);
+          setFormOpen(true);
+        }}
+        selectedRowId={highlightedId}
+        onHighlightConsumed={() => setHighlightedId(null)}
+      />
 
-      <Modal isOpen={formOpen} onClose={() => setFormOpen(false)}
-        title={editing ? t("Edit") : t("Add")} closeOnOutsideClick={false}>
+      <Modal isOpen={formOpen} onClose={() => setFormOpen(false)} title={editing ? t("Edit") : t("Add")} closeOnOutsideClick={false}>
         <div className="space-y-4">
-          <Input label={t("Name")} value={form.name}
+          <Input
+            label={t("Name")}
+            value={form.name}
             onChange={(e) => {
               const value = e.target.value;
               setForm((p) => ({ ...p, name: value, slug: slugEdited ? p.slug : slugify(value) }));
-            }} />
-          <Input label={t("Slug")} value={form.slug}
-            onChange={(e) => { setForm((p) => ({ ...p, slug: e.target.value })); setSlugEdited(true); }} />
+            }}
+          />
+          <Input
+            label={t("Slug")}
+            value={form.slug}
+            onChange={(e) => {
+              setForm((p) => ({ ...p, slug: e.target.value }));
+              setSlugEdited(true);
+            }}
+          />
           <label className="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300 cursor-pointer">
-            <input type="checkbox" checked={form.is_active}
+            <input
+              type="checkbox"
+              checked={form.is_active}
               onChange={(e) => setForm((p) => ({ ...p, is_active: e.target.checked }))}
-              className="w-4 h-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" />
+              className="w-4 h-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+            />
             {t("IsActive")}
           </label>
           <div className="flex justify-end gap-2 pt-2">
             <Button text={t("Cancel")} onClick={() => setFormOpen(false)} />
-            <Button text={saveMutation.isPending ? t("Saving") : editing ? t("Save") : t("Create")}
-              onClick={() => saveMutation.mutate(form)} />
+            <Button text={saveMutation.isPending ? t("Saving") : editing ? t("Save") : t("Create")} onClick={() => saveMutation.mutate(form)} />
           </div>
         </div>
       </Modal>
 
-      <ConfirmModal isOpen={deleteModal} type="delete" title={t("DeleteTitle")}
-        message={t("DeleteMessage", { name: toDelete?.name })}
+      <ConfirmModal
+        isOpen={deleteModal}
+        type="delete"
+        title={t("Delete")}
+        message={t("Delete", { name: toDelete?.name })}
         onClose={() => setDeleteModal(false)}
-        onConfirm={() => { if (deleteId) { deleteMutation.mutate(deleteId); setDeleteModal(false); } }} />
+        onConfirm={() => {
+          if (deleteId) {
+            deleteMutation.mutate(deleteId);
+            setDeleteModal(false);
+          }
+        }}
+      />
     </RBACGuard>
   );
 };

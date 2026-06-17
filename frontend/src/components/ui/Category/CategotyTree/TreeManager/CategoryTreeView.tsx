@@ -2,8 +2,8 @@
 import { useState } from "react";
 import { FolderOpen } from "lucide-react";
 import CategoryTreeNode from "./CategoryTreeNode";
-import { type TreeNode } from "./types";
-import { getDescendantIds } from "./CategoryTree";
+import { type TreeNode } from "../types";
+import { getDescendantIds } from "../TreeFilter/CategoryTree";
 
 interface Props {
   items: TreeNode[];

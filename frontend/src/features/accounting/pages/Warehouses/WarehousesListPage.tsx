@@ -197,8 +197,8 @@ const WarehousesListPage = () => {
         </div>
       </Modal>
 
-      <ConfirmModal isOpen={deleteModal} type="delete" title={t("DeleteTitle")}
-        message={t("DeleteMessage", { name: toDelete?.name })}
+      <ConfirmModal isOpen={deleteModal} type="delete" title={t("Delete")}
+        message={t("DeleteWarehouseMessage", { name: toDelete?.name })}
         onClose={() => setDeleteModal(false)}
         onConfirm={() => { if (deleteId) { deleteMutation.mutate(deleteId); setDeleteModal(false); } }} />
     </RBACGuard>

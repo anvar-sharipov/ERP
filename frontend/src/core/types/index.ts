@@ -108,3 +108,34 @@ export interface Directory {
   slug: string;
   icon: string;
 }
+
+
+
+export interface Brand {
+  id: number;
+  name: string;
+  slug: string;
+  is_active: boolean;
+}
+
+
+export interface Unit {
+  id: number;
+  name: string;
+  short_name: string;
+}
+
+export interface Directory {
+  name: string;
+  slug: string;
+  icon: string;
+  color: string;
+  description: string;
+  is_active: boolean;
+}
+
+
+export interface Role {
+  id: number;
+  name: string;
+}

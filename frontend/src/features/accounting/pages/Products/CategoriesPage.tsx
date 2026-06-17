@@ -15,12 +15,11 @@ import { StatusBadge } from "../../../../components/ui/StatusBadge";
 import { Plus, Search } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { slugify } from "../../../../core/utils/slugify";
-import CategoryTree, { buildFlatTree, getDescendantIds, getBreadcrumb, getNodeLevel } from "../../../../components/ui/Category/CategotyTree/CategoryTree";
+import CategoryTree, { getDescendantIds, getBreadcrumb, getNodeLevel } from "../../../../components/ui/Category/CategotyTree/TreeFilter/CategoryTree";
 import type { TreeNode } from "../../../../components/ui/Category/CategotyTree/types";
-import CategoryTreeView from "../../../../components/ui/Category/CategotyTree/CategoryTreeView";
-import { filterTreeItems } from "../../../../components/ui/Category/CategotyTree/filterTreeItems";
-import CategoryTreeSelect from "../../../../components/ui/Category/CategotyTree/CategoryTreeSelect";
-import { Button2 } from "../../../../components/ui/Button2";
+import CategoryTreeView from "../../../../components/ui/Category/CategotyTree/TreeManager/CategoryTreeView";
+import { filterTreeItems } from "../../../../components/ui/Category/CategotyTree/TreeManager/filterTreeItems";
+import CategoryTreeSelect from "../../../../components/ui/Category/CategotyTree/TreeSelect/CategoryTreeSelect";
 import { SegmentedControl } from "../../../../components/ui/Tabs/SegmentedControl";
 
 interface CategoryForm {
@@ -38,6 +37,7 @@ const CategoriesPage = () => {
   const queryClient = useQueryClient();
   const { setSidebarContent } = useSidebar();
   const { canView, canPost, canPut, canDelete } = usePageAccess("productcategory");
+  const [highlightedId, setHighlightedId] = useState<number | null>(null);
 
   const [viewMode, setViewMode] = useState<"table" | "tree">("table");
 
@@ -83,9 +83,10 @@ const CategoriesPage = () => {
 
   const saveMutation = useMutation({
     mutationFn: (data: CategoryForm) => productCategoryApi.save(editing?.id ?? null, data),
-    onSuccess: () => {
+    onSuccess: (res) => {
       queryClient.invalidateQueries({ queryKey: ["product-categories"] });
       notify("success", editing ? t("SuccessUpdated") : t("SuccessCreated"));
+      setHighlightedId(res.data.id);
       setFormOpen(false);
       setEditing(null);
     },
@@ -285,17 +286,6 @@ const CategoriesPage = () => {
         </div>
       )}
 
-      {/* <Table
-        columns={columns}
-        data={filtered}
-        tableId="categories_list"
-        searchQuery={searchQuery}
-        onSearchChange={setSearchQuery}
-        onRowDoubleClick={(item) => {
-          setEditing(item);
-          setFormOpen(true);
-        }}
-      /> */}
 
       {viewMode === "table" ? (
         <Table
@@ -308,23 +298,11 @@ const CategoriesPage = () => {
             setEditing(item);
             setFormOpen(true);
           }}
+          selectedRowId={highlightedId}
+          onHighlightConsumed={() => setHighlightedId(null)}
         />
       ) : (
         <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-4">
-          {/* <CategoryTreeView
-            // items={categories}
-            // items={filtered}
-            items={treeItems}
-            // selectedId={parentFilter}
-            onEdit={(item) => {
-              setEditing(item);
-              setFormOpen(true);
-            }}
-            onDelete={(item) => {
-              setDeleteId(item.id);
-              setDeleteModal(true);
-            }}
-          /> */}
           <CategoryTreeView
             items={treeItems}
             onEdit={(item) => {
@@ -338,22 +316,6 @@ const CategoriesPage = () => {
             onMove={(draggedId, targetId) => moveMutation.mutate({ id: draggedId, parent: targetId })}
           />
         </div>
-        // <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-4">
-        //   <CategoryTree
-        //     items={categories as TreeNode[]}
-        //     selectedId={parentFilter}
-        //     onSelect={(id) => {
-        //       if (id !== "all") {
-        //         const category = categories.find((c: any) => c.id === id);
-        //         if (category) {
-        //           setEditing(category);
-        //           setFormOpen(true);
-        //         }
-        //       }
-        //     }}
-        //     showSearch
-        //   />
-        // </div>
       )}
 
       <Modal isOpen={formOpen} onClose={() => setFormOpen(false)} title={editing ? t("Edit") : t("Add")} closeOnOutsideClick={false}>
@@ -405,8 +367,8 @@ const CategoriesPage = () => {
       <ConfirmModal
         isOpen={deleteModal}
         type="delete"
-        title={t("DeleteTitle")}
-        message={t("DeleteMessage", { name: toDelete?.name })}
+        title={t("Delete")}
+        message={t("DeleteCategoryMessage", { name: toDelete?.name })}
         onClose={() => setDeleteModal(false)}
         onConfirm={() => {
           if (deleteId) {

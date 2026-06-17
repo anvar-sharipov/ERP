@@ -88,6 +88,7 @@ const ProductsListPage = () => {
   const queryClient = useQueryClient();
   const { setSidebarContent } = useSidebar();
   const { canView, canPost, canPut, canDelete } = usePageAccess("product");
+  const [highlightedId, setHighlightedId] = useState<number | null>(null);
 
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<any | null>(null);
@@ -156,9 +157,10 @@ const ProductsListPage = () => {
         barcode: data.barcode || null,
         qr_code: data.qr_code || null,
       }),
-    onSuccess: () => {
+    onSuccess: (res) => {
       queryClient.invalidateQueries({ queryKey: ["products"] });
       notify("success", editing ? t("SuccessUpdated") : t("SuccessCreated"));
+      setHighlightedId(res.data.id);
       setFormOpen(false);
       setEditing(null);
     },
@@ -353,6 +355,8 @@ const ProductsListPage = () => {
           setEditing(item);
           setFormOpen(true);
         }}
+        selectedRowId={highlightedId}
+        onHighlightConsumed={() => setHighlightedId(null)}
       />
 
       <Modal isOpen={formOpen} onClose={() => setFormOpen(false)} title={editing ? t("Edit") : t("Add")} closeOnOutsideClick={false}>
@@ -438,8 +442,8 @@ const ProductsListPage = () => {
       <ConfirmModal
         isOpen={deleteModal}
         type="delete"
-        title={t("DeleteTitle")}
-        message={t("DeleteMessage", { name: toDelete?.name })}
+        title={t("Delete")}
+        message={t("DeleteProductMessage", { name: toDelete?.name })}
         onClose={() => setDeleteModal(false)}
         onConfirm={() => {
           if (deleteId) {

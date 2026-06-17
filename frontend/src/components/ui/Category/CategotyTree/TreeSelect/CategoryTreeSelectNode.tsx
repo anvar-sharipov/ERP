@@ -1,7 +1,7 @@
 // frontend/src/components/ui/Category/CategotyTree/CategoryTreeSelectNode.tsx
 import { useState } from "react";
 import { ChevronRight, ChevronDown, Folder, FolderOpen, Check } from "lucide-react";
-import { type TreeNode } from "./types";
+import { type TreeNode } from "../types";
 
 interface Props {
   node: TreeNode;

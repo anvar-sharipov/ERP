@@ -1,10 +1,8 @@
-// // // frontend/src/features/accounting/pages/admin/CompanyAdminUser.tsx
-
-// // frontend/src/features/accounting/pages/admin/CompanyAdminUser.tsx
+// frontend/src/features/accounting/pages/admin/CompanyAdminUser.tsx
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { usersApi } from "../../../../services/userApi";
 import { useSidebar } from "../../../../../../core/context/SidebarRightContext";
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "../../../../../../components/ui/Button";
 import { Plus, User as UserIcon } from "lucide-react";
 import { Input } from "../../../../../../components/ui/Input";
@@ -19,6 +17,7 @@ import { RBACGuard } from "../../../../../../components/ui/RBACGuard";
 import { Badge } from "../../../../../../components/ui/Badge";
 import { usePageAccess } from "../../../../../../core/hooks/usePageAccess";
 import { useTranslation } from "react-i18next";
+import { useTableFilter } from "../../../../../../core/hooks/useTableFilter";
 
 const CompanyAdminUser = () => {
   const { t } = useTranslation();
@@ -28,6 +27,7 @@ const CompanyAdminUser = () => {
   const [activeFilter, setActiveFilter] = useState<"all" | "active" | "inactive">("all");
 
   const { canView, canPost, canPut, canDelete } = usePageAccess("user");
+  const [highlightedId, setHighlightedId] = useState<number | null>(null);
 
   const [deleteModal, setDeleteModal] = useState(false);
   const [deleteTargetId, setDeleteTargetId] = useState<number | null>(null);
@@ -59,11 +59,12 @@ const CompanyAdminUser = () => {
       const userId = editingUser?.id ? Number(editingUser.id) : null;
       return usersApi.saveUser(userId, payload);
     },
-    onSuccess: () => {
+    onSuccess: (res) => {
       queryClient.invalidateQueries({ queryKey: ["users"] });
       setUserModalOpen(false);
       setFormData({ username: "", first_name: "", last_name: "", phone: "", position: "", is_active: true, password: "" });
       notify("success", `${t("Success")}: ${editingUser ? t("Edit") : t("Create")}`);
+      setHighlightedId(res.data.id);
     },
     onError: (error: any) => {
       if (error._handled) return;
@@ -154,17 +155,17 @@ const CompanyAdminUser = () => {
     staleTime: 1000 * 60 * 5,
   });
 
-  const filteredUsers = useMemo(() => {
-    if (!users) return [];
-    let result = users;
-    if (activeFilter === "active") result = result.filter((u) => u.is_active);
-    if (activeFilter === "inactive") result = result.filter((u) => !u.is_active);
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
-      result = result.filter((u) => u.full_name?.toLowerCase().includes(q) || u.username?.toLowerCase().includes(q) || u.position?.toLowerCase().includes(q) || u.phone?.toLowerCase().includes(q));
-    }
-    return result;
-  }, [users, activeFilter, searchQuery]);
+  const filteredUsers = useTableFilter(users || [], {
+    search: searchQuery,
+    searchFields: ["full_name", "username", "position", "phone"],
+    filters: [
+      (u) => {
+        if (activeFilter === "active") return u.is_active;
+        if (activeFilter === "inactive") return !u.is_active;
+        return true;
+      },
+    ],
+  });
 
   const columns: Column<UserInterface>[] = [
     { header: t("Actions"), accessor: "id", sortable: true, excelWidth: 8, excelAlign: "center" },
@@ -215,7 +216,7 @@ const CompanyAdminUser = () => {
       render: (u) => (
         <div className="flex gap-2">
           <Button
-          title={t("Edit")}
+            title={t("Edit")}
             disabled={!canPut}
             variant="1c"
             icon={<span>✏️</span>}
@@ -227,7 +228,7 @@ const CompanyAdminUser = () => {
             }}
           />
           <Button
-          title={t("Delete")}
+            title={t("Delete")}
             disabled={!canDelete}
             variant="1c"
             icon={<span>🗑️</span>}
@@ -238,9 +239,9 @@ const CompanyAdminUser = () => {
               setDeleteModal(true);
             }}
           />
-          
+
           <Button
-          title={t("EditRoles")}
+            title={t("EditRoles")}
             disabled={!canPut}
             variant="1c"
             icon={<span>🛡️</span>}
@@ -269,17 +270,14 @@ const CompanyAdminUser = () => {
           setEditingUser(u);
           setUserModalOpen(true);
         }}
+        selectedRowId={highlightedId}
+        onHighlightConsumed={() => setHighlightedId(null)}
       />
 
       <Modal isOpen={userModalOpen} onClose={() => setUserModalOpen(false)} title={editingUser ? t("Edit") : t("Create")} closeOnOutsideClick={false}>
         <div className="space-y-4">
           <Input label={t("Username")} value={formData.username} onChange={(e) => setFormData({ ...formData, username: e.target.value })} />
-          <Input
-            label={editingUser ? t("NewPassword") : t("Password")}
-            type="password"
-            value={formData.password}
-            onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-          />
+          <Input label={editingUser ? t("NewPassword") : t("Password")} type="password" value={formData.password} onChange={(e) => setFormData({ ...formData, password: e.target.value })} />
           <Input label={t("FirstName")} value={formData.first_name} onChange={(e) => setFormData({ ...formData, first_name: e.target.value })} />
           <Input label={t("LastName")} value={formData.last_name} onChange={(e) => setFormData({ ...formData, last_name: e.target.value })} />
           <Input label={t("Phone")} value={formData.phone} onChange={(e) => setFormData({ ...formData, phone: e.target.value })} />

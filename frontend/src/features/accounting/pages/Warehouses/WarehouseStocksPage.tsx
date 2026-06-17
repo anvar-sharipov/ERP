@@ -252,7 +252,7 @@ const WarehouseStocksPage = () => {
       <ConfirmModal
         isOpen={deleteModal}
         type="delete"
-        title={t("DeleteTitle")}
+        title={t("Delete")}
         message={`Удалить остаток "${toDelete?.product_name}" на складе "${toDelete?.warehouse_name}"?`}
         onClose={() => setDeleteModal(false)}
         onConfirm={() => {

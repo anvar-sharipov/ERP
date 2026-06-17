@@ -117,7 +117,7 @@
     "InsufficientRights": "Недостаточно прав",
     "ErrorLoadingCompany": "Компания не загружена",
     "ErrorSaving": "Произошла ошибка при сохранении",
-    "ForbiddenText": "У вас нет прав на просмотра данных о филиале компании",
+    "ForbiddenText": "У вас нет прав на просмотра данных",
 
 
     "AddUser": "Добавить пользователя",
@@ -254,7 +254,37 @@
     "Root": "Корневая",
     "NoParent": "Нет родителя",
     "Table": "Таблица",
-    "Tree": "Дерево"
+    "Tree": "Дерево",
+
+    "SuccessUpdated": "Успешно обновлено",
+    "SuccessCreated": "Успешно создано",
+    "SuccessMoved": "Успешно перемещено",
+    "SuccessDeleted": "Успешно удалено",
+    
+    "AddBrand": "Добавить бренд",
+    "Add": "Добавить",
+
+    "DeleteBrandMessage": "Удалить бренд \"{{name}}\"?",
+
+    "DeleteCategoryMessage": "Удалить категорию \"{{name}}\"?",
+    "DeleteCounterpartyMessage": "Удалить контрагента \"{{name}}\"?",
+    "DeleteDirectoryMessage": "Удалить Справочник \"{{name}}\"?",
+    "DeleteFieldMessage": "Удалить поле \"{{name}}\"?",
+    "DeleteProductMessage": "Удалить товар \"{{name}}\"?",
+    "DeleteTagMessage": "Удалить тег \"{{name}}\"?",
+    "DeleteUnitMessage": "Удалить единицу измерения \"{{name}}\"?",
+    "DeleteWarehouseMessage": "Удалить склад \"{{name}}\"?",
+
+    "AddTag": "Добавить тег",
+
+    "AddUnit": "Добавить единицу измерения",
+
+    "AllBrands": "Все бренды"
+
+
+  
+
+    
 
 
 

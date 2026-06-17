@@ -2,7 +2,7 @@ import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { branchApi } from "../../../../../../accounting/services/branchApi";
 import { companyApi } from "../../../../../../accounting/services/companyApi";
 import { useSidebar } from "../../../../../../../core/context/SidebarRightContext";
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "../../../../../../../components/ui/Button";
 import { Plus } from "lucide-react";
 import { Input } from "../../../../../../../components/ui/Input";
@@ -16,6 +16,7 @@ import { Badge } from "../../../../../../../components/ui/Badge";
 import { RBACGuard } from "../../../../../../../components/ui/RBACGuard";
 import { usePageAccess } from "../../../../../../../core/hooks/usePageAccess";
 import { useTranslation } from "react-i18next";
+import { useTableFilter } from "../../../../../../../core/hooks/useTableFilter";
 
 const Branches = () => {
   const { t } = useTranslation();
@@ -33,6 +34,7 @@ const Branches = () => {
   const [activeFilter, setActiveFilter] = useState<"all" | "active" | "inactive">("all");
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [clearedFiles, setClearedFiles] = useState<string[]>([]);
+  const [highlightedId, setHighlightedId] = useState<number | null>(null);
 
   const { data: company } = useQuery<CompanyInterface[]>({
     queryKey: ["company-profile"],
@@ -120,10 +122,11 @@ const Branches = () => {
       return branchApi.saveBranch(editingBranch?.id || null, formData);
     },
 
-    onSuccess: () => {
+    onSuccess: (res) => {
       queryClient.invalidateQueries({ queryKey: ["branches"] });
       setModalOpen(false);
       notify("success", editingBranch ? t("BranchUpdated") : t("BranchCreated"));
+      setHighlightedId(res.data.id);
     },
     onError: (err: any) => {
       if (err._handled) return;
@@ -186,17 +189,18 @@ const Branches = () => {
     );
   }, [setSidebarContent, activeFilter, canPost, t]);
 
-  const filtered = useMemo(() => {
-    if (!branches) return [];
-    let result = branches;
-    if (activeFilter === "active") result = result.filter((b) => b.is_active);
-    if (activeFilter === "inactive") result = result.filter((b) => !b.is_active);
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
-      result = result.filter((b) => b.name?.toLowerCase().includes(q) || b.city?.toLowerCase().includes(q) || b.manager_name?.toLowerCase().includes(q));
-    }
-    return result;
-  }, [branches, searchQuery, activeFilter]);
+
+  const filtered = useTableFilter(branches || [], {
+    search: searchQuery,
+    searchFields: ["name", "city", "manager_name"],
+    filters: [
+      (b) => {
+        if (activeFilter === "active") return b.is_active;
+        if (activeFilter === "inactive") return !b.is_active;
+        return true;
+      },
+    ],
+  });
 
   const columns: Column<BranchInterface>[] = [
     { header: "ID", accessor: "id", sortable: true, excelAlign: "center", excelWidth: 5 },
@@ -288,6 +292,8 @@ const Branches = () => {
           setEditingBranch(b);
           setModalOpen(true);
         }}
+        selectedRowId={highlightedId}
+        onHighlightConsumed={() => setHighlightedId(null)}
       />
 
       <Modal isOpen={modalOpen} onClose={() => setModalOpen(false)} title={editingBranch ? t("EditBranch") : t("NewBranch")} closeOnOutsideClick={false} size="lg">

@@ -1,10 +1,8 @@
-// // frontend/src/features/users/pages/Roles.tsx
 // frontend/src/features/users/pages/Roles.tsx
-
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { rolesApi } from "../../../../../accounting/services/rolesApi";
 import { useSidebar } from "../../../../../../core/context/SidebarRightContext";
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "../../../../../../components/ui/Button";
 import { Plus, ShieldCheck } from "lucide-react";
 import { Table, type Column } from "../../../../../../components/ui/Table/Table";
@@ -16,11 +14,9 @@ import { useNotify } from "../../../../../../core/context/NotificationContext";
 import { Badge } from "../../../../../../components/ui/Badge";
 import { RBACGuard } from "../../../../../../components/ui/RBACGuard";
 import { usePageAccess } from "../../../../../../core/hooks/usePageAccess";
+import { useTableFilter } from "../../../../../../core/hooks/useTableFilter";
+import { type Role } from "../../../../../../core/types";
 
-interface Role {
-  id: number;
-  name: string;
-}
 
 const Roles = () => {
   const { setSidebarContent } = useSidebar();
@@ -32,6 +28,7 @@ const Roles = () => {
   // const { hasPermission } = useAccess();
   // const canViewPage = hasPermission("role", "GET");
   const { canView, canPost, canPut, canDelete } = usePageAccess("role");
+  const [highlightedId, setHighlightedId] = useState<number | null>(null);
 
   const [roleName, setRoleName] = useState("");
   const [selectedPerms, setSelectedPerms] = useState<number[]>([]);
@@ -111,7 +108,7 @@ const Roles = () => {
     data: roles,
     isLoading,
     error,
-  } = useQuery({
+  } = useQuery<Role[]>({
     queryKey: ["roles"],
     queryFn: rolesApi.getRoles,
     enabled: canView,
@@ -132,12 +129,14 @@ const Roles = () => {
       if (!canPost) throw new Error(t("InsufficientRights"));
       return rolesApi.saveRole(null, data);
     },
-    onSuccess: () => {
+    onSuccess: (res) => {
       setIsModalOpen(false);
       setEditingRole(null);
       setRoleName("");
       setSelectedPerms([]);
       notify("success", t("SaveSuccess"));
+      setHighlightedId(res.data.id);
+
       queryClient.invalidateQueries({ queryKey: ["roles"] }); // Обновить список ролей
     },
     onError: (error: any) => {
@@ -181,12 +180,11 @@ const Roles = () => {
     },
   ];
 
-  const filteredRoles = useMemo(() => {
-    if (!roles) return [];
-    if (!searchQuery.trim()) return roles;
-    const q = searchQuery.toLowerCase();
-    return roles.filter((r: Role) => r.name?.toLowerCase().includes(q));
-  }, [roles, searchQuery]);
+
+  const filteredRoles = useTableFilter(roles || [], {
+    search: searchQuery,
+    searchFields: ["name"],
+  });
 
   // Выбрать/отменить все права для конкретного ресурса
   const toggleResource = (actions: any[], select: boolean) => {
@@ -224,6 +222,8 @@ const Roles = () => {
           setEditingRole(user);
           setIsModalOpen(true);
         }}
+        selectedRowId={highlightedId}
+        onHighlightConsumed={() => setHighlightedId(null)}
       />
 
       <Modal

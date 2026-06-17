@@ -142,7 +142,17 @@
 │   │   │   │   └── SidebarRight.tsx
 │   │   │   └── ui
 │   │   │       ├── Category
-│   │   │       │   └── CategoryTreeSelect.tsx
+│   │   │       │   └── CategotyTree
+│   │   │       │       ├── TreeFilter
+│   │   │       │       ├── TreeManager
+│   │   │       │       ├── TreeSelect
+│   │   │       │       ├── CategoryTree.tsx
+│   │   │       │       ├── CategoryTreeNode.tsx
+│   │   │       │       ├── CategoryTreeSelect.tsx
+│   │   │       │       ├── CategoryTreeSelectNode.tsx
+│   │   │       │       ├── CategoryTreeView.tsx
+│   │   │       │       ├── filterTreeItems.ts
+│   │   │       │       └── types.ts
 │   │   │       ├── ErrorMessage
 │   │   │       │   └── ErrorMsg.tsx
 │   │   │       ├── Icon
@@ -154,10 +164,14 @@
 │   │   │       │   └── Modal.tsx
 │   │   │       ├── Table
 │   │   │       │   └── Table.tsx
+│   │   │       ├── Tabs
+│   │   │       │   ├── GoogleTabs.tsx
+│   │   │       │   └── SegmentedControl.tsx
 │   │   │       ├── Avatar.tsx
 │   │   │       ├── BackButton.tsx
 │   │   │       ├── Badge.tsx
 │   │   │       ├── Button.tsx
+│   │   │       ├── Button2.tsx
 │   │   │       ├── CompanyHeaderInfo.tsx
 │   │   │       ├── EmptyState.tsx
 │   │   │       ├── ErrMsg.tsx

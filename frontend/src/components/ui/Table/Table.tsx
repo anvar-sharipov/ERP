@@ -39,6 +39,7 @@ interface TableProps<T> {
   // Добавляем пропсы поиска
   searchQuery?: string;
   onSearchChange?: (val: string) => void;
+  onHighlightConsumed?: () => void; // snyatiya trigera selected row kotoryy wydelilsya posle create/edit
 }
 
 function usePersistedSet(key: string, defaultIndices: number[]): [Set<number>, (i: number) => void] {
@@ -64,7 +65,17 @@ function usePersistedSet(key: string, defaultIndices: number[]): [Set<number>, (
   return [set, toggle];
 }
 
-export const Table = <T extends { id: string | number }>({ columns, data, onRowClick, onRowDoubleClick, tableId = "", searchQuery, onSearchChange, selectedRowId }: TableProps<T>) => {
+export const Table = <T extends { id: string | number }>({
+  columns,
+  data,
+  onRowClick,
+  onRowDoubleClick,
+  tableId = "",
+  searchQuery,
+  onSearchChange,
+  selectedRowId,
+  onHighlightConsumed,
+}: TableProps<T>) => {
   const searchInputRef = useRef<HTMLInputElement>(null);
   const [selectedRow, setSelectedRow] = useState<string | number | null>(null);
   const [selectedCell, setSelectedCell] = useState<{ rowId: string | number; colIndex: number } | null>(null);
@@ -80,6 +91,14 @@ export const Table = <T extends { id: string | number }>({ columns, data, onRowC
   const isFirstRender = useRef(true);
   const containerRef = useRef<HTMLDivElement>(null);
   // const [_activeRegion, setActiveRegion] = useState(focusManager.getRegion());
+  // Table.tsx — добавить ref чтобы эффект срабатывал только на изменение значения
+  const prevSelectedRowId = useRef<string | number | null>(null);
+  const selectedRowRef = useRef<string | number | null>(null);
+
+  const setSelectedRowSync = useCallback((id: string | number | null) => {
+    selectedRowRef.current = id;
+    setSelectedRow(id);
+  }, []);
 
   // useEffect(() => {
   //   return focusManager.subscribe(setActiveRegion);
@@ -99,37 +118,6 @@ export const Table = <T extends { id: string | number }>({ columns, data, onRowC
     tableId ? `table:${tableId}:hiddenView` : "",
     columns.map((c, i) => (c.hideInView ? i : -1)).filter((i) => i !== -1),
   );
-
-  // useEffect(() => {
-  //   // Если это самый первый рендер, НЕ трогаем фокус (даем сработать фокусу на поиске)
-  //   if (isFirstRender.current) {
-  //     isFirstRender.current = false;
-  //     // Но всё равно восстанавливаем selectedRow для подсветки, если нужно
-  //     if (selectedRowId != null) setSelectedRow(selectedRowId);
-  //     return;
-  //   }
-
-  //   // Если это не первый рендер и пришел ID — фокусируем ячейку
-  //   if (selectedRowId != null) {
-  //     setSelectedRow(selectedRowId);
-  //     const visibleCols = columns.map((_, i) => i).filter((i) => !hiddenInView.has(i));
-  //     if (visibleCols.length > 0) {
-  //       setSelectedCell({
-  //         rowId: selectedRowId,
-  //         colIndex: visibleCols[0],
-  //       });
-  //       // Если ячейка сфокусирована, убираем фокус с поиска (если он там был)
-  //       searchInputRef.current?.blur();
-  //     }
-  //   }
-  // }, [selectedRowId, columns, hiddenInView]);
-
-  // useEffect(() => {
-  //   if (selectedRowId != null) {
-  //     setSelectedRow(selectedRowId);
-  //     // selectedCell НЕ трогаем — пусть мышь сама управляет ячейкой
-  //   }
-  // }, [selectedRowId]);
 
   // 3. А вот этот useEffect (который ставит фокус на поиск) верните обратно:
   useEffect(() => {
@@ -184,40 +172,152 @@ export const Table = <T extends { id: string | number }>({ columns, data, onRowC
   const userSelectedCell = useRef(false);
 
   // в handleCellClick добавить:
+  // const handleCellClick = (item: T, colIndex: number, column: Column<T>) => {
+  //   focusManager.setRegion("table");
+  //   playClickSound();
+  //   userSelectedCell.current = true; // <-- добавить
+  //   setSelectedRowSync(item.id);
+  //   setSelectedCell({ rowId: item.id, colIndex });
+  //   if (onRowClick) onRowClick(item);
+  //   if (column.onCellClick) column.onCellClick(item);
+  // };
   const handleCellClick = (item: T, colIndex: number, column: Column<T>) => {
     focusManager.setRegion("table");
     playClickSound();
-    userSelectedCell.current = true; // <-- добавить
-    setSelectedRow(item.id);
+    userSelectedCell.current = true;
+    setSelectedRowSync(item.id);
     setSelectedCell({ rowId: item.id, colIndex });
     if (onRowClick) onRowClick(item);
     if (column.onCellClick) column.onCellClick(item);
   };
 
   // в useEffect исправить:
+  // Найти этот useEffect в Table.tsx и заменить:
+
+  // useEffect(() => {
+  //   if (selectedRowId == null) return;
+  //   if (selectedRowId === prevSelectedRowId.current) return; // ← уже обработали
+  //   prevSelectedRowId.current = selectedRowId;
+  //   if (isFirstRender.current) {
+  //     isFirstRender.current = false;
+  //     if (selectedRowId != null) setSelectedRow(selectedRowId);
+  //     return;
+  //   }
+
+  //   if (selectedRowId != null) {
+  //     if (userSelectedCell.current) {
+  //       userSelectedCell.current = false;
+  //       setSelectedRow(selectedRowId);
+  //       return;
+  //     }
+  //     // Только для back-навигации — ставим первую ячейку
+  //     setSelectedRow(selectedRowId);
+  //     const visibleCols = columns.map((_, i) => i).filter((i) => !hiddenInView.has(i));
+  //     if (visibleCols.length > 0) {
+  //       setSelectedCell({ rowId: selectedRowId, colIndex: visibleCols[0] });
+  //       onHighlightConsumed?.(); // сразу говорим странице "я обработал, сбрось"
+  //       searchInputRef.current?.blur();
+  //     }
+  //   }
+  // }, [selectedRowId, columns, hiddenInView]);
+
+  // ЗАМЕНИТЬ НА:
+
+  // useEffect(() => {
+  //   if (selectedRowId == null) return;
+  //   if (selectedRowId === prevSelectedRowId.current) return; // ← уже обработали
+  //   prevSelectedRowId.current = selectedRowId;
+  //   if (isFirstRender.current) {
+  //     isFirstRender.current = false;
+  //     if (selectedRowId != null) setSelectedRow(selectedRowId);
+  //     return;
+  //   }
+
+  //   if (selectedRowId != null) {
+  //     if (userSelectedCell.current) {
+  //       userSelectedCell.current = false;
+  //       setSelectedRow(selectedRowId);
+  //       return;
+  //     }
+
+  //     setSelectedRow(selectedRowId);
+  //     const visibleCols = columns.map((_, i) => i).filter((i) => !hiddenInView.has(i));
+  //     if (visibleCols.length > 0) {
+  //       setSelectedCell({ rowId: selectedRowId, colIndex: visibleCols[0] });
+  //       onHighlightConsumed?.(); // сразу говорим странице "я обработал, сбрось"
+  //       // скроллим к строке
+  //       requestAnimationFrame(() => {
+  //         const row = containerRef.current?.querySelector(`tr[data-row-id="${selectedRowId}"]`);
+  //         if (row) row.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  //       });
+  //     }
+  //     // НЕ делаем blur поиска — модалка только закрылась,
+  //     // пусть фокус остаётся на таблице а не в поиске
+  //   }
+  // }, [selectedRowId, columns, hiddenInView]);
+
+  // useEffect(() => {
+  //   // сброс ref когда id обнуляется
+  //   if (selectedRowId == null) {
+  //     prevSelectedRowId.current = null;
+  //     return;
+  //   }
+  //   if (selectedRowId === prevSelectedRowId.current) return;
+  //   prevSelectedRowId.current = selectedRowId;
+
+  //   if (isFirstRender.current) {
+  //     isFirstRender.current = false;
+  //     setSelectedRow(selectedRowId);
+  //     return;
+  //   }
+
+  //   if (userSelectedCell.current) {
+  //     userSelectedCell.current = false;
+  //     setSelectedRow(selectedRowId);
+  //     return;
+  //   }
+
+  //   setSelectedRow(selectedRowId);
+  //   const visibleCols = columns.map((_, i) => i).filter((i) => !hiddenInView.has(i));
+  //   if (visibleCols.length > 0) {
+  //     setSelectedCell({ rowId: selectedRowId, colIndex: visibleCols[0] });
+  //     onHighlightConsumed?.();
+  //     requestAnimationFrame(() => {
+  //       const row = containerRef.current?.querySelector(`tr[data-row-id="${selectedRowId}"]`);
+  //       if (row) row.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  //     });
+  //   }
+  // }, [selectedRowId, columns, hiddenInView]);
+
   useEffect(() => {
-    if (isFirstRender.current) {
-      isFirstRender.current = false;
-      if (selectedRowId != null) setSelectedRow(selectedRowId);
+    if (selectedRowId == null) {
+      prevSelectedRowId.current = null;
+      return;
+    }
+    if (selectedRowId === prevSelectedRowId.current) return;
+    prevSelectedRowId.current = selectedRowId;
+
+    // Пользователь кликнул на ту же строку что редактировал — не трогаем его ячейку
+    if (userSelectedCell.current && selectedRowId === selectedRowRef.current) {
+      userSelectedCell.current = false;
+      setSelectedRowSync(selectedRowId);
       return;
     }
 
-    if (selectedRowId != null) {
-      if (userSelectedCell.current) {
-        // Пользователь сам кликнул — не перезаписываем ячейку
-        userSelectedCell.current = false;
-        setSelectedRow(selectedRowId);
-        return;
-      }
-      // Только для back-навигации — ставим первую ячейку
-      setSelectedRow(selectedRowId);
-      const visibleCols = columns.map((_, i) => i).filter((i) => !hiddenInView.has(i));
-      if (visibleCols.length > 0) {
-        setSelectedCell({ rowId: selectedRowId, colIndex: visibleCols[0] });
-        searchInputRef.current?.blur();
-      }
+    // Всё остальное: back-навигация / save / edit другой строки — первая ячейка
+    userSelectedCell.current = false;
+    setSelectedRowSync(selectedRowId);
+    const visibleCols = columns.map((_, i) => i).filter((i) => !hiddenInView.has(i));
+    if (visibleCols.length > 0) {
+      setSelectedCell({ rowId: selectedRowId, colIndex: visibleCols[0] });
+      onHighlightConsumed?.();
+      focusManager.setRegion("table"); // стрелки работают сразу после back
+      requestAnimationFrame(() => {
+        const row = containerRef.current?.querySelector(`tr[data-row-id="${selectedRowId}"]`);
+        if (row) row.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      });
     }
-  }, [selectedRowId, columns, hiddenInView]);
+  }, [selectedRowId, columns, hiddenInView]); // selectedRow намеренно не в deps
 
   // beg po yacheyla klawiaturoy
   useEffect(() => {
@@ -257,7 +357,7 @@ export const Table = <T extends { id: string | number }>({ columns, data, onRowC
           // Если мы в первой строке, возвращаем фокус в поиск
           playClickSound();
           setSelectedCell(null);
-          setSelectedRow(null);
+          setSelectedRowSync(null);
           searchInputRef.current?.focus();
           return; // Выходим, так как перемещение по таблице не требуется
         }
@@ -283,7 +383,7 @@ export const Table = <T extends { id: string | number }>({ columns, data, onRowC
         const nextCol = visibleCols[nextColIndex];
         if (nextItem) {
           playClickSound();
-          setSelectedRow(nextItem.id);
+          setSelectedRowSync(nextItem.id);
           setSelectedCell({ rowId: nextItem.id, colIndex: nextCol });
 
           requestAnimationFrame(() => {
@@ -304,6 +404,15 @@ export const Table = <T extends { id: string | number }>({ columns, data, onRowC
     return () => window.removeEventListener("keydown", handler);
   }, [selectedCell, sortedData, columns, hiddenInView, onRowDoubleClick]);
 
+  useEffect(() => {
+    if (selectedRowId != null) {
+      // back-навигация — поиск не фокусируем, и если браузер сам его сфокусировал — блюрим
+      searchInputRef.current?.blur();
+      return;
+    }
+    searchInputRef.current?.focus();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   const handleSearchKeyDown = (e: React.KeyboardEvent) => {
     // Обработка Esc: сбрасываем поиск и ОСТАВЛЯЕМ фокус
     if (e.key === "Escape") {
@@ -322,8 +431,12 @@ export const Table = <T extends { id: string | number }>({ columns, data, onRowC
 
     // Обработка стрелки вниз: переход в таблицу
     if (e.key === "ArrowDown" && sortedData.length > 0) {
+      // если уже есть выделенная ячейка — не перехватываем,
+      // глобальный handler сам обработает
+      if (selectedCell !== null) return;
+
       e.preventDefault();
-      e.stopPropagation(); // Важно: предотвращает конфликт с глобальным слушателем
+      e.stopPropagation();
 
       playClickSound();
       const visibleCols = columns.map((_, i) => i).filter((i) => !hiddenInView.has(i));
@@ -331,10 +444,9 @@ export const Table = <T extends { id: string | number }>({ columns, data, onRowC
 
       if (firstColIndex !== undefined) {
         const firstItem = sortedData[0];
-        setSelectedRow(firstItem.id);
+        setSelectedRowSync(firstItem.id);
         setSelectedCell({ rowId: firstItem.id, colIndex: firstColIndex });
-
-        // Убираем фокус с инпута только при переходе в таблицу
+        focusManager.setRegion("table"); // ← добавить
         searchInputRef.current?.blur();
       }
     }
@@ -583,7 +695,7 @@ export const Table = <T extends { id: string | number }>({ columns, data, onRowC
         e.preventDefault();
         // 1. Очищаем все текущие выделения в таблице
         setSelectedCell(null);
-        setSelectedRow(null);
+        setSelectedRowSync(null);
 
         // 2. Убираем фокус с элементов таблицы
         (document.activeElement as HTMLElement)?.blur();
@@ -622,7 +734,6 @@ export const Table = <T extends { id: string | number }>({ columns, data, onRowC
         )}
 
         <div className="ml-auto relative flex gap-2">
-  
           {/* excel */}
           <button
             onClick={handleExcelExport}

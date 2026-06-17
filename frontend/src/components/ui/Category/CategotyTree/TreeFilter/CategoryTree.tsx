@@ -1,7 +1,8 @@
 // frontend/src/components/ui/Category/CategotyTree/CategoryTree.tsx
 import { useState, useMemo } from "react";
 import { ChevronRight, ChevronDown, Folder } from "lucide-react";
-import { type TreeNode } from "./types";
+import { type TreeNode } from "../types";
+import { playClickSound } from "../../../../../core/utils/sound";
 
 export interface CategoryTreeProps {
   items: TreeNode[];
@@ -70,7 +71,10 @@ const SidebarTreeNode = ({ node, allItems, selectedId, onSelect, showInactive, d
   return (
     <div>
       <button
-        onClick={() => onSelect(node.id)}
+        onClick={() => {
+          playClickSound();
+          onSelect(node.id);
+        }}
         className={`
           w-full text-left flex items-center gap-1.5
           px-2 py-1.5 rounded transition-colors
@@ -81,6 +85,7 @@ const SidebarTreeNode = ({ node, allItems, selectedId, onSelect, showInactive, d
         <span
           className="shrink-0 w-4 h-4 flex items-center justify-center"
           onClick={(e) => {
+            playClickSound();
             if (!hasChildren) return;
             e.stopPropagation();
             setExpanded((v) => !v);
@@ -149,7 +154,10 @@ const CategoryTree = ({ items, selectedId, onSelect, allLabel = "Все", showSe
 
       {/* "Все" */}
       <button
-        onClick={() => onSelect("all")}
+        onClick={() => {
+          playClickSound();
+          onSelect("all");
+        }}
         className={`
           w-full text-left flex items-center gap-1.5
           px-2 py-1.5 rounded transition-colors text-sm

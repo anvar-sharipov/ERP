@@ -114,7 +114,7 @@
     "InsufficientRights": "Hukuklar ýeterlik däl",
     "ErrorLoadingCompany": "Kompaniýa ýüklenmedi",
     "ErrorSaving": "Ýatda saklananda ýalňyşlyk ýüze çykdy",
-    "ForbiddenText": "Kompaniýanyň filial maglumatlaryny görmäge hukuklaryňyz ýok",
+    "ForbiddenText": "Maglumatlaryny görmäge hukuklaryňyz ýok",
 
 
     "AddUser": "Ulanyjy goşmak",
@@ -247,7 +247,32 @@
     "Root": "Esasy",
     "NoParent": "Ene-ata ýok",
     "Table": "Tablisa",
-    "Tree": "Agaç"
+    "Tree": "Agaç",
+
+    "SuccessUpdated": "Üstünlikli täzelendi",
+    "SuccessCreated": "Üstünlikli döredildi",
+    "SuccessMoved": "Üstünlikli geçirildi",
+    "SuccessDeleted": "Üstünlikli öçürildi",
+
+    "AddBrand": "Brend goşmak",
+    "Add": "Goşmak",
+
+    "DeleteCategoryMessage": "\"{{name}}\" kategoriýasyny öçürmeli mi?",
+    "DeleteCounterpartyMessage": "\"{{name}}\" kontragentini öçürmeli mi?",
+    "DeleteDirectoryMessage": "\"{{name}}\" ýazgysyny öçürmeli mi?",
+    "DeleteFieldMessage": "\"{{name}}\" meýdanyny öçürmeli mi?",
+    "DeleteProductMessage": "\"{{name}}\" harydyny öçürmeli mi?",
+    "DeleteTagMessage": "\"{{name}}\" tegini öçürmeli mi?",
+    "DeleteUnitMessage": "\"{{name}}\" ölçeg birligini öçürmeli mi?",
+    "DeleteWarehouseMessage": "\"{{name}}\" ammardyny öçürmeli mi?",
+
+    "AddTag": "Teg goşmak",
+
+    "AddUnit": "Ölçeg birligini goşmak",
+
+    "AllBrands": "Ähli brendler"
+
+
     
 
 

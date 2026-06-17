@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Plus, Folder } from "lucide-react";
 
@@ -14,6 +14,7 @@ import { RBACGuard } from "../../../../components/ui/RBACGuard";
 import { usePageAccess } from "../../../../core/hooks/usePageAccess";
 import { useTranslation } from "react-i18next";
 import { StatusBadge } from "../../../../components/ui/StatusBadge";
+import { useTableFilter } from "../../../../core/hooks/useTableFilter";
 
 interface AccountFormData {
   code: string;
@@ -47,6 +48,7 @@ const AccountPage = () => {
   const [deleteTarget, setDeleteTarget] = useState<AccountInterface | null>(null);
   const [formData, setFormData] = useState<AccountFormData>(EMPTY_FORM);
   const [activeFilter, setActiveFilter] = useState<"all" | "active" | "inactive">("all");
+  const [highlightedId, setHighlightedId] = useState<number | null>(null);
 
   const { canView, canPost, canPut, canDelete } = usePageAccess("account");
 
@@ -62,7 +64,7 @@ const AccountPage = () => {
     staleTime: 1000 * 60 * 5,
   });
 
-  console.log("accounts", accounts);
+  // console.log("accounts", accounts);
 
   const groupOptions = accounts.filter((a) => a.is_group);
 
@@ -71,10 +73,11 @@ const AccountPage = () => {
       if (!canPost) throw new Error(t("NoCreateRights"));
       return accountApi.saveAccounts(editingAccount?.id ?? null, data);
     },
-    onSuccess: () => {
+    onSuccess: (res) => {
       queryClient.invalidateQueries({ queryKey: ["accounts"] });
       setFormModal(false);
       notify("success", editingAccount ? t("AccountUpdated") : t("AccountCreated"));
+      setHighlightedId(res.data.id);
     },
     onError: (err: any) => {
       if (err._handled) return;
@@ -268,39 +271,36 @@ const AccountPage = () => {
     );
   }, [setSidebarContent, filterGroup, activeFilter, canPost, t]);
 
-  // const filteredAccounts = useMemo(() => {
-  //   let result = accounts;
-  //   if (filterGroup === "group") result = result.filter((a) => a.is_group);
-  //   if (filterGroup === "account") result = result.filter((a) => !a.is_group);
-  //   if (searchQuery.trim()) {
-  //     const q = searchQuery.toLowerCase();
-  //     result = result.filter((a) => a.code.toLowerCase().includes(q) || a.name.toLowerCase().includes(q) || (a.parent_code ?? "").toLowerCase().includes(q));
-  //   }
-  //   return result;
-  // }, [accounts, filterGroup, searchQuery]);
 
-  const filteredAccounts = useMemo(() => {
-    let result = accounts;
-
-    // Фильтр по типу (группа/счет)
-    if (filterGroup === "group") result = result.filter((a) => a.is_group);
-    if (filterGroup === "account") result = result.filter((a) => !a.is_group);
-
-    // ФИЛЬТР ПО СТАТУСУ (ДОБАВЛЕНО)
-    if (activeFilter === "active") result = result.filter((a) => a.is_active);
-    if (activeFilter === "inactive") result = result.filter((a) => !a.is_active);
-
-    // Поиск
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
-      result = result.filter((a) => a.code.toLowerCase().includes(q) || a.name.toLowerCase().includes(q) || (a.parent_code ?? "").toLowerCase().includes(q));
-    }
-    return result;
-  }, [accounts, filterGroup, activeFilter, searchQuery]); // Не забудьте добавить activeFilter в массив зависимостей!
+  const filteredAccounts = useTableFilter(accounts, {
+    search: searchQuery,
+    searchFields: ["code", "name", "parent_code"],
+    filters: [
+      (a) => {
+        if (filterGroup === "group") return a.is_group;
+        if (filterGroup === "account") return !a.is_group;
+        return true;
+      },
+      (a) => {
+        if (activeFilter === "active") return a.is_active;
+        if (activeFilter === "inactive") return !a.is_active;
+        return true;
+      },
+    ],
+  });
 
   return (
     <RBACGuard isLoading={isLoading} error={error} canView={canView} forbiddenText={t("NoViewRights")}>
-      <Table columns={columns} data={filteredAccounts} tableId="accounts" searchQuery={searchQuery} onSearchChange={setSearchQuery} onRowDoubleClick={(account) => openEdit(account)} />
+      <Table
+        columns={columns}
+        data={filteredAccounts}
+        tableId="accounts"
+        searchQuery={searchQuery}
+        onSearchChange={setSearchQuery}
+        onRowDoubleClick={(account) => openEdit(account)}
+        selectedRowId={highlightedId}
+        onHighlightConsumed={() => setHighlightedId(null)}
+      />
 
       <Modal isOpen={formModal} onClose={() => setFormModal(false)} title={editingAccount ? `${t("EditAccount")} ${editingAccount.code}` : t("NewAccount")} closeOnOutsideClick={false}>
         <div className="space-y-4">
