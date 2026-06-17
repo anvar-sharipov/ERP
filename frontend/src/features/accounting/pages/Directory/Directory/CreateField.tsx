@@ -129,9 +129,12 @@ const CreateField = () => {
     },
   });
 
+
+
   const filteredDirectories = useTableFilter(directories || [], {
     search: searchQuery,
     searchFields: ["id", "name", "slug", "description"],
+    filterKey: activeFilter, // ← добавить
     filters: [
       (item) => {
         if (activeFilter === "active") return item.is_active;

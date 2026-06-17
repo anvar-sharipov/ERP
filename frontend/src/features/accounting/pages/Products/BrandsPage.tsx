@@ -134,6 +134,7 @@ const BrandsPage = () => {
   const filtered = useTableFilter(brands, {
     search: searchQuery,
     searchFields: ["id", "name", "slug"],
+    filterKey: activeFilter,
     filters: [
       (item) => {
         if (activeFilter === "active") return item.is_active;

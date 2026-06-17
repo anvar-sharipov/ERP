@@ -1,41 +1,91 @@
-import { useMemo } from "react";
+import { useMemo, useRef } from "react";
+
+// interface Options<T> {
+//   search?: string;
+//   searchFields?: (keyof T)[];
+//   filters?: ReadonlyArray<(item: T) => boolean>;
+// }
 
 interface Options<T> {
   search?: string;
   searchFields?: (keyof T)[];
   filters?: ReadonlyArray<(item: T) => boolean>;
+  filterKey?: unknown; // любое значение которое меняется при смене фильтра
 }
 
-export function useTableFilter<T extends object>(
-  items: T[],
-  options: Options<T>,
-) {
+export function useTableFilter<T extends object>(items: T[], options: Options<T>) {
+  // стабилизируем ссылки на массивы которые пересоздаются при каждом рендере
+  const searchFieldsRef = useRef(options.searchFields);
+  const filtersRef = useRef(options.filters);
+  searchFieldsRef.current = options.searchFields;
+  filtersRef.current = options.filters;
+
   return useMemo(() => {
-    let result = [...items];
+  let result = items as T[];
 
-    const searchFields = options.searchFields;
+  // сначала фильтры (active/inactive) — сужаем выборку
+  filtersRef.current?.forEach((filter) => {
+    result = result.filter(filter);
+  });
 
-    if (options.search?.trim() && searchFields?.length) {
-      const q = options.search.toLowerCase();
+  // потом поиск по уже отфильтрованному
+  const searchFields = searchFieldsRef.current;
+  if (options.search?.trim() && searchFields?.length) {
+    const q = options.search.toLowerCase();
+    result = result.filter((item) =>
+      searchFields.some((field) =>
+        String(item[field] ?? "").toLowerCase().includes(q)
+      )
+    );
+  }
 
-      result = result.filter((item) =>
-        searchFields.some((field) =>
-          String(item[field] ?? "")
-            .toLowerCase()
-            .includes(q),
-        ),
-      );
-    }
+  return result;
+}, [items, options.search, options.filterKey]);
 
-    options.filters?.forEach((filter) => {
-      result = result.filter(filter);
-    });
-
-    return result;
-  }, [
-    items,
-    options.search,
-    options.searchFields,
-    options.filters,
-  ]);
 }
+
+
+
+
+
+// import { useMemo } from "react";
+
+// interface Options<T> {
+//   search?: string;
+//   searchFields?: (keyof T)[];
+//   filters?: ReadonlyArray<(item: T) => boolean>;
+// }
+
+// export function useTableFilter<T extends object>(
+//   items: T[],
+//   options: Options<T>,
+// ) {
+//   return useMemo(() => {
+//     let result = [...items];
+
+//     const searchFields = options.searchFields;
+
+//     if (options.search?.trim() && searchFields?.length) {
+//       const q = options.search.toLowerCase();
+
+//       result = result.filter((item) =>
+//         searchFields.some((field) =>
+//           String(item[field] ?? "")
+//             .toLowerCase()
+//             .includes(q),
+//         ),
+//       );
+//     }
+
+//     options.filters?.forEach((filter) => {
+//       result = result.filter(filter);
+//     });
+
+//     return result;
+//   }, [
+//     items,
+//     options.search,
+//     options.searchFields,
+//     options.filters,
+//   ]);
+// }

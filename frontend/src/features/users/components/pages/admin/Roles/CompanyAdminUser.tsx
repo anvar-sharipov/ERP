@@ -158,6 +158,7 @@ const CompanyAdminUser = () => {
   const filteredUsers = useTableFilter(users || [], {
     search: searchQuery,
     searchFields: ["full_name", "username", "position", "phone"],
+    filterKey: activeFilter,
     filters: [
       (u) => {
         if (activeFilter === "active") return u.is_active;

@@ -271,10 +271,27 @@ const AccountPage = () => {
     );
   }, [setSidebarContent, filterGroup, activeFilter, canPost, t]);
 
+  // const filteredAccounts = useTableFilter(accounts, {
+  //   search: searchQuery,
+  //   searchFields: ["code", "name", "parent_code"],
+  //   filters: [
+  //     (a) => {
+  //       if (filterGroup === "group") return a.is_group;
+  //       if (filterGroup === "account") return !a.is_group;
+  //       return true;
+  //     },
+  //     (a) => {
+  //       if (activeFilter === "active") return a.is_active;
+  //       if (activeFilter === "inactive") return !a.is_active;
+  //       return true;
+  //     },
+  //   ],
+  // });
 
   const filteredAccounts = useTableFilter(accounts, {
     search: searchQuery,
     searchFields: ["code", "name", "parent_code"],
+    filterKey: `${filterGroup}:${activeFilter}`, // ← добавить
     filters: [
       (a) => {
         if (filterGroup === "group") return a.is_group;

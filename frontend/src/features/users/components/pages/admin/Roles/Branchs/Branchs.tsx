@@ -193,6 +193,7 @@ const Branches = () => {
   const filtered = useTableFilter(branches || [], {
     search: searchQuery,
     searchFields: ["name", "city", "manager_name"],
+    filterKey: activeFilter,
     filters: [
       (b) => {
         if (activeFilter === "active") return b.is_active;
