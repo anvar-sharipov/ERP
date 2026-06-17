@@ -2,6 +2,7 @@
 import { NavLink, Outlet } from "react-router-dom";
 import { playClickSound } from "../../../../core/utils/sound";
 import { useTranslation } from "react-i18next";
+import { GoogleTabs } from "../../../../components/ui/Tabs/GoogleTabs";
 
 const Products = () => {
   const { t } = useTranslation();
@@ -22,17 +23,9 @@ const Products = () => {
   ];
 
 
-  return (
+return (
     <div className="h-full flex flex-col">
-      <div className="flex border-b border-gray-200 dark:border-gray-700 overflow-x-auto scrollbar-hide print:hidden">
-        <div className="flex min-w-max px-2">
-          {tabs.map((tab) => (
-            <NavLink key={tab.to} to={tab.to} className={tabClass} onClick={playClickSound}>
-              {tab.label}
-            </NavLink>
-          ))}
-        </div>
-      </div>
+      <GoogleTabs items={tabs} />
       <div className="flex-1 p-4 md:p-6 overflow-auto">
         <Outlet />
       </div>

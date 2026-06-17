@@ -21,6 +21,7 @@ import CategoryTreeView from "../../../../components/ui/Category/CategotyTree/Ca
 import { filterTreeItems } from "../../../../components/ui/Category/CategotyTree/filterTreeItems";
 import CategoryTreeSelect from "../../../../components/ui/Category/CategotyTree/CategoryTreeSelect";
 import { Button2 } from "../../../../components/ui/Button2";
+import { SegmentedControl } from "../../../../components/ui/Tabs/SegmentedControl";
 
 interface CategoryForm {
   name: string;
@@ -94,6 +95,18 @@ const CategoriesPage = () => {
     },
   });
 
+  const moveMutation = useMutation({
+    mutationFn: ({ id, parent }: { id: number; parent: number | null }) => productCategoryApi.move(id, parent),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["product-categories"] });
+      notify("success", t("SuccessMoved"));
+    },
+    onError: (err: any) => {
+      if (err._handled) return;
+      notify("error", t("ErrorSaving"));
+    },
+  });
+
   const deleteMutation = useMutation({
     mutationFn: (id: number) => productCategoryApi.delete(id),
     onSuccess: () => {
@@ -135,7 +148,7 @@ const CategoriesPage = () => {
                 dark={true}
                 isActive={activeFilter === status}
                 className="w-full justify-start"
-                text={status === "all" ? t("AllDirectories") : status === "active" ? t("OnlyActive") : t("OnlyInactive")}
+                text={status === "all" ? t("AllCategories") : status === "active" ? t("OnlyActive") : t("OnlyInactive")}
                 icon={status !== "all" ? <span className={`w-2 h-2 rounded-full ${status === "active" ? "bg-green-500" : "bg-red-500"}`} /> : undefined}
                 onClick={() => setActiveFilter(status)}
               />
@@ -146,7 +159,7 @@ const CategoriesPage = () => {
         {viewMode === "table" && (
           <div className="pt-4 border-t border-indigo-900/30">
             <h4 className="font-bold text-indigo-300 mb-2">{t("Categories")}</h4>
-            <CategoryTree items={categories as TreeNode[]} selectedId={parentFilter} onSelect={setParentFilter} allLabel={t("AllDirectories")} showSearch={true} showInactive={true} />
+            <CategoryTree items={categories as TreeNode[]} selectedId={parentFilter} onSelect={setParentFilter} allLabel={t("AllCategories")} showSearch={true} showInactive={true} />
           </div>
         )}
       </div>,
@@ -186,7 +199,7 @@ const CategoriesPage = () => {
       render: (item) => <span className="font-medium">{item.name}</span>,
     },
     {
-      header: "Путь",
+      header: t("Nesting"),
       sortable: true,
       excelWidth: 35,
       sortValue: (item) => getBreadcrumb(item, categories as TreeNode[]),
@@ -256,16 +269,15 @@ const CategoriesPage = () => {
 
   return (
     <RBACGuard isLoading={isLoading} error={error} canView={canView} forbiddenText={t("ForbiddenText")}>
-      {/* <div className="flex gap-2 mb-4">
-        <Button text={t("Table")}  isActive={viewMode === "table"} onClick={() => setViewMode("table")} />
-
-        <Button text={t("Tree")} isActive={viewMode === "tree"} onClick={() => setViewMode("tree")} />
-      </div> */}
-      <div className="flex gap-1 mb-4">
-        <Button2 text={t("Table")} variant="ghost" isActive={viewMode === "table"} onClick={() => setViewMode("table")} />
-
-        <Button2 text={t("Tree")} variant="ghost" isActive={viewMode === "tree"} onClick={() => setViewMode("tree")} />
-      </div>
+      <SegmentedControl
+        className="mb-2"
+        options={[
+          { value: "table", label: t("Table") },
+          { value: "tree", label: t("Tree") },
+        ]}
+        value={viewMode}
+        onChange={(val) => setViewMode(val as "table" | "tree")}
+      />
 
       {viewMode === "tree" && (
         <div className="mb-4">
@@ -299,7 +311,7 @@ const CategoriesPage = () => {
         />
       ) : (
         <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-4">
-          <CategoryTreeView
+          {/* <CategoryTreeView
             // items={categories}
             // items={filtered}
             items={treeItems}
@@ -312,6 +324,18 @@ const CategoriesPage = () => {
               setDeleteId(item.id);
               setDeleteModal(true);
             }}
+          /> */}
+          <CategoryTreeView
+            items={treeItems}
+            onEdit={(item) => {
+              setEditing(item);
+              setFormOpen(true);
+            }}
+            onDelete={(item) => {
+              setDeleteId(item.id);
+              setDeleteModal(true);
+            }}
+            onMove={(draggedId, targetId) => moveMutation.mutate({ id: draggedId, parent: targetId })}
           />
         </div>
         // <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 p-4">

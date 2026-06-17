@@ -1,73 +1,130 @@
+// frontend/src/components/ui/Category/CategotyTree/CategoryTreeNode.tsx
 import { useState } from "react";
-import { ChevronRight, ChevronDown, Folder } from "lucide-react";
+import { ChevronRight, ChevronDown, Folder, FolderOpen, GripVertical } from "lucide-react";
 import { Button } from "../../Button";
 import { type TreeNode } from "./types";
-
-// interface TreeNode {
-//   id: number;
-//   name: string;
-//   parent: number | null;
-//   is_active?: boolean;
-// }
+import { getDescendantIds } from "./CategoryTree";
 
 interface Props {
   node: TreeNode;
   allItems: TreeNode[];
   onEdit: (item: TreeNode) => void;
   onDelete: (item: TreeNode) => void;
+  // dnd
+  draggedId: number | null;
+  setDraggedId: (id: number | null) => void;
+  onMove: (draggedId: number, targetId: number | null) => void;
 }
 
-export default function CategoryTreeNode({ node, allItems, onEdit, onDelete }: Props) {
+export default function CategoryTreeNode({ node, allItems, onEdit, onDelete, draggedId, setDraggedId, onMove }: Props) {
   const [expanded, setExpanded] = useState(true);
+  const [dragOver, setDragOver] = useState(false);
 
   const children = allItems.filter((x) => x.parent === node.id);
-
   const hasChildren = children.length > 0;
+  const isInactive = node.is_active === false;
+
+  const isDragging = draggedId === node.id;
+
+  // нельзя дропнуть на себя или своего потомка
+  const canDrop = draggedId !== null && draggedId !== node.id && !getDescendantIds(draggedId, allItems).includes(node.id);
 
   return (
     <div>
       <div
-        className="
-          flex items-center
-          justify-between
-          gap-2
-          px-2 py-0.5
-          md:px-3 md:py-1
-          rounded-lg
-          border
-          border-slate-200
-          dark:border-slate-700
-          bg-white
-          dark:bg-slate-800
-          hover:bg-slate-50
-          dark:hover:bg-slate-700
-        "
+        draggable
+        onDragStart={(e) => {
+          setDraggedId(node.id);
+          e.dataTransfer.effectAllowed = "move";
+        }}
+        onDragEnd={() => {
+          setDraggedId(null);
+          setDragOver(false);
+        }}
+        onDragOver={(e) => {
+          if (!canDrop) return;
+          e.preventDefault();
+          e.stopPropagation();
+          setDragOver(true);
+        }}
+        onDragLeave={(e) => {
+          // только если уходим за пределы самого элемента
+          if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+            setDragOver(false);
+          }
+        }}
+        onDrop={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          setDragOver(false);
+          if (canDrop) onMove(draggedId!, node.id);
+        }}
+        className={`
+          group flex items-center gap-1.5
+          px-2 py-1 rounded-md
+          border transition-colors
+          ${
+            dragOver && canDrop
+              ? "border-indigo-400 bg-indigo-50 dark:bg-indigo-900/30 dark:border-indigo-500"
+              : "border-transparent hover:border-slate-200 dark:hover:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/50"
+          }
+          ${isDragging ? "opacity-40" : ""}
+          ${isInactive ? "opacity-60" : ""}
+          cursor-grab active:cursor-grabbing
+        `}
       >
-        <div className="flex items-center gap-2">
-          {hasChildren ? (
-            <button onClick={() => setExpanded(!expanded)}>{expanded ? <ChevronDown size={14} className="md:w-4 md:h-4" /> : <ChevronRight size={14} className="md:w-4 md:h-4" />}</button>
-          ) : (
-            <div className="w-4" />
-          )}
+        {/* grip handle */}
+        <GripVertical size={13} className="shrink-0 text-slate-300 dark:text-slate-600 opacity-0 group-hover:opacity-100 transition-opacity" />
 
-          <Folder size={16} />
+        {/* chevron toggle */}
+        <button
+          type="button"
+          className="shrink-0 w-4 h-4 flex items-center justify-center text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300"
+          onClick={(e) => {
+            e.stopPropagation();
+            hasChildren && setExpanded((v) => !v);
+          }}
+          tabIndex={hasChildren ? 0 : -1}
+          style={{ cursor: hasChildren ? "pointer" : "default" }}
+        >
+          {hasChildren ? expanded ? <ChevronDown size={13} /> : <ChevronRight size={13} /> : null}
+        </button>
 
-          <span className={node.is_active === false ? "opacity-50" : ""}>{node.name}</span>
-        </div>
+        {/* folder icon */}
+        {expanded && hasChildren ? (
+          <FolderOpen size={15} className={`shrink-0 ${dragOver && canDrop ? "text-indigo-400 dark:text-indigo-300" : "text-amber-400 dark:text-amber-300"}`} />
+        ) : (
+          <Folder
+            size={15}
+            className={`shrink-0 ${dragOver && canDrop ? "text-indigo-400 dark:text-indigo-300" : hasChildren ? "text-amber-400 dark:text-amber-300" : "text-slate-400 dark:text-slate-500"}`}
+          />
+        )}
 
-        <div className="flex gap-0.5 md:gap-1 shrink-0">
+        {/* name */}
+        <span
+          className={`
+            flex-1 truncate text-sm select-none
+            ${isInactive ? "text-slate-400 dark:text-slate-500 line-through" : "text-slate-700 dark:text-slate-200"}
+          `}
+        >
+          {node.name}
+        </span>
+
+        {/* actions */}
+        <div className="flex gap-0.5 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
           <Button
             variant="1c"
             icon={<span>✏️</span>}
+            className="h-6 w-6 !p-0"
             onClick={(e) => {
               e.stopPropagation();
               onEdit(node);
             }}
           />
-
           <Button
             variant="1c"
             icon={<span>🗑️</span>}
+            className="h-6 w-6 !p-0"
             onClick={(e) => {
               e.stopPropagation();
               onDelete(node);
@@ -76,13 +133,108 @@ export default function CategoryTreeNode({ node, allItems, onEdit, onDelete }: P
         </div>
       </div>
 
-      {expanded && children.length > 0 && (
-        <div className="ml-3 md:ml-8 mt-1 md:mt-2 space-y-1 md:space-y-2 border-l pl-2 md:pl-4">
+      {expanded && hasChildren && (
+        <div className="ml-5 mt-0.5 space-y-0.5 border-l border-slate-200 dark:border-slate-700 pl-2">
           {children.map((child) => (
-            <CategoryTreeNode key={child.id} node={child} allItems={allItems} onEdit={onEdit} onDelete={onDelete} />
+            <CategoryTreeNode key={child.id} node={child} allItems={allItems} onEdit={onEdit} onDelete={onDelete} draggedId={draggedId} setDraggedId={setDraggedId} onMove={onMove} />
           ))}
         </div>
       )}
     </div>
   );
 }
+
+// // frontend/src/components/ui/Category/CategotyTree/CategoryTreeNode.tsx
+// import { useState } from "react";
+// import { ChevronRight, ChevronDown, Folder, FolderOpen } from "lucide-react";
+// import { Button } from "../../Button";
+// import { type TreeNode } from "./types";
+
+// interface Props {
+//   node: TreeNode;
+//   allItems: TreeNode[];
+//   onEdit: (item: TreeNode) => void;
+//   onDelete: (item: TreeNode) => void;
+// }
+
+// export default function CategoryTreeNode({ node, allItems, onEdit, onDelete }: Props) {
+//   const [expanded, setExpanded] = useState(true);
+
+//   const children = allItems.filter((x) => x.parent === node.id);
+//   const hasChildren = children.length > 0;
+//   const isInactive = node.is_active === false;
+
+//   return (
+//     <div>
+//       <div
+//         className={`
+//           group flex items-center gap-1.5
+//           px-2 py-1 rounded-md
+//           border border-transparent
+//           hover:border-slate-200 dark:hover:border-slate-700
+//           hover:bg-slate-50 dark:hover:bg-slate-700/50
+//           transition-colors
+//           ${isInactive ? "opacity-60" : ""}
+//         `}
+//       >
+//         {/* chevron toggle */}
+//         <button
+//           type="button"
+//           className="shrink-0 w-4 h-4 flex items-center justify-center text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300"
+//           onClick={() => hasChildren && setExpanded((v) => !v)}
+//           tabIndex={hasChildren ? 0 : -1}
+//           style={{ cursor: hasChildren ? "pointer" : "default" }}
+//         >
+//           {hasChildren ? expanded ? <ChevronDown size={13} /> : <ChevronRight size={13} /> : null}
+//         </button>
+
+//         {/* folder icon */}
+//         {expanded && hasChildren ? (
+//           <FolderOpen size={15} className="shrink-0 text-amber-400 dark:text-amber-300" />
+//         ) : (
+//           <Folder size={15} className={`shrink-0 ${hasChildren ? "text-amber-400 dark:text-amber-300" : "text-slate-400 dark:text-slate-500"}`} />
+//         )}
+
+//         {/* name */}
+//         <span
+//           className={`
+//             flex-1 truncate text-sm
+//             ${isInactive ? "text-slate-400 dark:text-slate-500 line-through" : "text-slate-700 dark:text-slate-200"}
+//           `}
+//         >
+//           {node.name}
+//         </span>
+
+//         {/* actions — видны при hover */}
+//         <div className="flex gap-0.5 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+//           <Button
+//             variant="1c"
+//             icon={<span>✏️</span>}
+//             className="h-6 w-6 !p-0"
+//             onClick={(e) => {
+//               e.stopPropagation();
+//               onEdit(node);
+//             }}
+//           />
+//           <Button
+//             variant="1c"
+//             icon={<span>🗑️</span>}
+//             className="h-6 w-6 !p-0"
+//             onClick={(e) => {
+//               e.stopPropagation();
+//               onDelete(node);
+//             }}
+//           />
+//         </div>
+//       </div>
+
+//       {expanded && hasChildren && (
+//         <div className="ml-5 mt-0.5 space-y-0.5 border-l border-slate-200 dark:border-slate-700 pl-2">
+//           {children.map((child) => (
+//             <CategoryTreeNode key={child.id} node={child} allItems={allItems} onEdit={onEdit} onDelete={onDelete} />
+//           ))}
+//         </div>
+//       )}
+//     </div>
+//   );
+// }

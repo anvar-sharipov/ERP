@@ -629,8 +629,8 @@ export const Table = <T extends { id: string | number }>({ columns, data, onRowC
             title={`${t("ExportToExcel")} (Ctrl + E)`}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded border border-green-300 dark:border-green-700 bg-white dark:bg-gray-800 text-green-600 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/20 transition shadow-sm"
           >
-            <span className="text-sm">📊</span>
-            <span className="text-sm">Excel</span>
+            <span>📊</span>
+            <span>Excel</span>
           </button>
 
           {/* Кнопка настройки колонок */}

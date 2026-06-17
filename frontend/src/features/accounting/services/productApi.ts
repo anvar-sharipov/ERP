@@ -47,6 +47,9 @@ export const productCategoryApi = {
     return api.post("/accounting/product-categories/", data);
   },
   delete: async (id: number) => api.delete(`/accounting/product-categories/${id}/`),
+
+  move: (id: number, parent: number | null) =>
+    api.patch(`/accounting/product-categories/${id}/`, { parent }),
 };
 
 export const productApi = {
