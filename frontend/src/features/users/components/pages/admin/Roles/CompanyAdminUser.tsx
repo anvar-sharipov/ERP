@@ -18,6 +18,7 @@ import { Badge } from "../../../../../../components/ui/Badge";
 import { usePageAccess } from "../../../../../../core/hooks/usePageAccess";
 import { useTranslation } from "react-i18next";
 import { useTableFilter } from "../../../../../../core/hooks/useTableFilter";
+import { PageHeaderText } from "../../../../../../components/ui/Tabs/PageHeaderText";
 
 const CompanyAdminUser = () => {
   const { t } = useTranslation();
@@ -213,11 +214,12 @@ const CompanyAdminUser = () => {
     { header: t("Phone"), accessor: "phone", sortable: true, excelWidth: 18 },
     {
       header: t("Actions"),
+      isActionColumn: true,
       hideInPrint: true,
       render: (u) => (
         <div className="flex gap-2">
           <Button
-            title={t("Edit")}
+            title={`F2 - ${t("Edit")}`}
             disabled={!canPut}
             variant="1c"
             icon={<span>✏️</span>}
@@ -229,7 +231,7 @@ const CompanyAdminUser = () => {
             }}
           />
           <Button
-            title={t("Delete")}
+            title={`DELETE - ${t("Delete")}`}
             disabled={!canDelete}
             variant="1c"
             icon={<span>🗑️</span>}
@@ -261,6 +263,7 @@ const CompanyAdminUser = () => {
 
   return (
     <RBACGuard isLoading={isLoading} error={error} canView={canView} forbiddenText={t("NoRights")}>
+      <PageHeaderText title={t("Users")} />
       <Table
         columns={columns}
         data={filteredUsers || []}

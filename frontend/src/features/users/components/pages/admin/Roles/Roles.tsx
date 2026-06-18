@@ -16,6 +16,7 @@ import { RBACGuard } from "../../../../../../components/ui/RBACGuard";
 import { usePageAccess } from "../../../../../../core/hooks/usePageAccess";
 import { useTableFilter } from "../../../../../../core/hooks/useTableFilter";
 import { type Role } from "../../../../../../core/types";
+import { PageHeaderText } from "../../../../../../components/ui/Tabs/PageHeaderText";
 
 
 const Roles = () => {
@@ -151,10 +152,11 @@ const Roles = () => {
     { header: t("RoleName"), sortable: true, excelWidth: 20, excelValue: (role) => role.name, render: (role) => <Badge text={role.name} text_position="start" /> },
     {
       header: t("Actions"),
+      isActionColumn: true,
       render: (role) => (
         <div className="flex gap-2">
           <Button
-            title={t("Edit")}
+            title={`F2 - ${t("Edit")}`}
             disabled={!canPut}
             variant="1c"
             icon={<span>✏️</span>}
@@ -165,7 +167,7 @@ const Roles = () => {
             }}
           />
           <Button
-            title={t("Delete")}
+            title={`DELETE - ${t("Delete")}`}
             disabled={!canDelete}
             variant="1c"
             icon={<span>🗑️</span>}
@@ -211,6 +213,7 @@ const Roles = () => {
 
   return (
     <RBACGuard isLoading={isLoading} error={error} canView={canView} forbiddenText={t("NoViewRights")}>
+      <PageHeaderText title={t("Roles")} />
       <Table
         columns={columns}
         data={filteredRoles}

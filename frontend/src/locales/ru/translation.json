@@ -279,7 +279,14 @@
 
     "AddUnit": "Добавить единицу измерения",
 
-    "AllBrands": "Все бренды"
+    "AllBrands": "Все бренды",
+
+    "ShowingResults": "Показано {{from}}–{{to}} из {{total}}",
+
+    "ExcelCurrentPage": "Текущая страница",
+    "ExcelAllData": "Все данные",
+    "PriceTypes": "Типы цен"
+
 
 
   

@@ -1,6 +1,9 @@
 # backend/accounting/admin.py
 from django.contrib import admin
-from .models import SubcontoType, Account, AccountSubconto, JournalEntry, Transaction, Counterparty, Warehouse, Product, CompanyProfile, Branch, Directory, DirectoryField, DirectoryRecord
+from .models import (SubcontoType, Account, AccountSubconto, JournalEntry, Transaction, Counterparty, Warehouse, 
+                     Product, CompanyProfile, Branch, Directory, DirectoryField, DirectoryRecord, ProductImage,
+                     Tag, Unit, Brand, ProductCategory,
+                     )
 from django.utils.html import format_html
 
 # 1. Позволяет добавлять субконто прямо на странице редактирования счета
@@ -55,16 +58,6 @@ class WarehouseAdmin(admin.ModelAdmin):
     search_fields = ('name',)
     ordering = ('name',)
 
-
-@admin.register(Product)
-class ProductAdmin(admin.ModelAdmin):
-    list_display = ('id', 'name')
-    search_fields = ('name',)
-    ordering = ('name',)
-    # Если товаров будет очень много, это ограничит вывод на одной странице
-    list_per_page = 50
-    
-    
     
     
     
@@ -183,35 +176,234 @@ class DirectoryRecordAdmin(admin.ModelAdmin):
     search_fields = ("name",)
     readonly_fields = ("created_at",)
 
-# class DirectoryFieldInline(admin.TabularInline):
-#     model = DirectoryField
-#     fk_name = 'directory'  # <--- ДОБАВЬТЕ ЭТУ СТРОКУ
+
+
+
+
+
+
+
+# _________________Product ____________________________________________________________________________________________________________________________
+
+@admin.register(ProductCategory)
+class ProductCategoryAdmin(admin.ModelAdmin):
+    search_fields = ("name",)
+    list_display = ("id", "name")
+
+
+@admin.register(Brand)
+class BrandAdmin(admin.ModelAdmin):
+    search_fields = ("name",)
+    list_display = ("id", "name")
+
+
+@admin.register(Unit)
+class UnitAdmin(admin.ModelAdmin):
+    search_fields = ("name",)
+    list_display = ("id", "name")
+
+
+@admin.register(Tag)
+class TagAdmin(admin.ModelAdmin):
+    search_fields = ("name",)
+    list_display = ("id", "name")
+
+
+# class ProductImageInline(admin.TabularInline):
+#     model = ProductImage
 #     extra = 1
-#     fields = ('name', 'slug', 'field_type', 'ref_directory', 'is_required', 'order')
 
-#     def formfield_for_foreignkey(self, db_field, request, **kwargs):
-#         if db_field.name == "ref_directory":
-#             # Исключаем текущий справочник из списка выбора
-#             if hasattr(request, '_obj_'):
-#                 kwargs["queryset"] = Directory.objects.exclude(pk=request._obj_.pk)
-#         return super().formfield_for_foreignkey(db_field, request, **kwargs)
+#     fields = (
+#         "preview",
+#         "image",
+#         "is_main",
+#         "sort_order",
+#         "alt_text",
+#     )
 
-# @admin.register(Directory)
-# class DirectoryAdmin(admin.ModelAdmin):
-#     list_display = ('name', 'slug', 'icon', 'description', 'is_active')
-#     prepopulated_fields = {'slug': ('name',)}
-#     inlines = [DirectoryFieldInline]
+#     readonly_fields = ("preview",)
 
-#     # Хак для передачи текущего объекта в inline (нужен для фильтрации ref_directory)
-#     def get_form(self, request, obj=None, **kwargs):
-#         request._obj_ = obj
-#         return super().get_form(request, obj, **kwargs)
+#     def preview(self, obj):
+#         if obj.pk and obj.image:
+#             return format_html(
+#                 '<img src="{}" style="max-height:80px; max-width:80px; border-radius:4px;" />',
+#                 obj.image.url,
+#             )
+#         return "—"
 
-# @admin.register(DirectoryRecord)
-# class DirectoryRecordAdmin(admin.ModelAdmin):
-#     list_display = ('name', 'directory', 'is_active', 'created_at')
-#     list_filter = ('directory', 'is_active')
-#     search_fields = ('name',)
-    
-    # В админке записи данные JSONField будут выглядеть как текст
-    # Если их много, можно кастомизировать вывод
+#     preview.short_description = "Превью"
+
+
+# @admin.register(Product)
+# class ProductAdmin(admin.ModelAdmin):
+#     list_display = (
+#         "id",
+#         "image_preview",
+#         "name",
+#         "sku",
+#         "category",
+#         "brand",
+#         "price_retail",
+#         "is_active",
+#         "created_at",
+#     )
+
+#     list_display_links = (
+#         "id",
+#         "name",
+#     )
+
+#     search_fields = (
+#         "name",
+#         "sku",
+#         "barcode",
+#         "qr_code",
+#     )
+
+#     list_filter = (
+#         "is_active",
+#         "category",
+#         "brand",
+#         "created_at",
+#     )
+
+#     autocomplete_fields = (
+#         "category",
+#         "brand",
+#         "unit",
+#     )
+
+#     filter_horizontal = ("tags",)
+
+#     readonly_fields = (
+#         "created_at",
+#         "updated_at",
+#         "image_preview",
+#     )
+
+#     inlines = [ProductImageInline]
+
+#     fieldsets = (
+#         (
+#             "Основная информация",
+#             {
+#                 "fields": (
+#                     "image_preview",
+#                     "name",
+#                     "sku",
+#                     "is_active",
+#                 )
+#             },
+#         ),
+#         (
+#             "Изображения",
+#             {
+#                 "fields": (
+#                     "image_mode",
+#                 )
+#             },
+#         ),
+#         (
+#             "Классификация",
+#             {
+#                 "fields": (
+#                     "category",
+#                     "brand",
+#                     "unit",
+#                     "tags",
+#                 )
+#             },
+#         ),
+#         (
+#             "Коды",
+#             {
+#                 "fields": (
+#                     "barcode",
+#                     "qr_code",
+#                 )
+#             },
+#         ),
+#         (
+#             "Цены",
+#             {
+#                 "fields": (
+#                     "cost_price",
+#                     "price_wholesale",
+#                     "price_retail",
+#                 )
+#             },
+#         ),
+#         (
+#             "Склад",
+#             {
+#                 "fields": (
+#                     "min_stock_level",
+#                 )
+#             },
+#         ),
+#         (
+#             "Служебная информация",
+#             {
+#                 "classes": ("collapse",),
+#                 "fields": (
+#                     "extra_data",
+#                     "created_at",
+#                     "updated_at",
+#                 ),
+#             },
+#         ),
+#     )
+
+#     def image_preview(self, obj):
+#         main_image = obj.images.filter(is_main=True).first()
+
+#         if main_image and main_image.image:
+#             return format_html(
+#                 '<img src="{}" style="max-height:120px; max-width:120px; border-radius:6px;" />',
+#                 main_image.image.url,
+#             )
+
+#         return "Нет изображения"
+
+#     image_preview.short_description = "Главное фото"
+
+
+# @admin.register(ProductImage)
+# class ProductImageAdmin(admin.ModelAdmin):
+#     list_display = (
+#         "id",
+#         "preview",
+#         "product",
+#         "is_main",
+#         "sort_order",
+#         "created_at",
+#     )
+
+#     list_filter = (
+#         "is_main",
+#         "created_at",
+#     )
+
+#     search_fields = (
+#         "product__name",
+#         "product__sku",
+#         "alt_text",
+#     )
+
+#     autocomplete_fields = ("product",)
+
+#     readonly_fields = (
+#         "preview",
+#         "created_at",
+#     )
+
+#     def preview(self, obj):
+#         if obj.image:
+#             return format_html(
+#                 '<img src="{}" style="max-height:80px; max-width:80px;" />',
+#                 obj.image.url,
+#             )
+
+#         return "—"
+
+#     preview.short_description = "Превью"

@@ -112,6 +112,7 @@ const UnitsPage = () => {
     { header: t("ShortName"), accessor: "short_name", sortable: true, excelWidth: 15 },
     {
       header: t("Actions"),
+      isActionColumn: true,
       hideInPrint: true,
       render: (item) => (
         <div className="flex gap-2">
@@ -179,7 +180,7 @@ const UnitsPage = () => {
       <ConfirmModal
         isOpen={deleteModal}
         type="delete"
-        title={t("Delete")}
+        title={`DELETE - ${t("Delete")}`}
         message={t("DeleteUnitMessage", { name: toDelete?.name })}
         onClose={() => setDeleteModal(false)}
         onConfirm={() => {

@@ -7,9 +7,10 @@ from PIL import Image
 
 def validate_image_size(value):
     # 1. Проверка размера (макс 2 МБ)
-    limit = 2 * 1024 * 1024
+    # limit = 2 * 1024 * 1024
+    limit = 10 * 1024 * 1024  # 10 МБ
     if value.size > limit:
-        raise ValidationError('Файл слишком большой. Максимальный размер 2 МБ.')
+        raise ValidationError('Файл слишком большой. Максимальный размер 10 МБ.')
 
     # 2. Проверка содержимого (безопасность)
     try:

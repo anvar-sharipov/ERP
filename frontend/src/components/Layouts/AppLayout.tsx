@@ -11,6 +11,7 @@ import { useUser } from "../../core/context/UserContext";
 import { CompanyHeaderInfo } from "../ui/CompanyHeaderInfo";
 import { useTranslation } from "react-i18next";
 import { focusManager } from "../../core/utils/focusManager";
+import { playAsideSound } from "../../core/utils/sound";
 
 const fullWidthPages: string[] = [];
 
@@ -28,6 +29,7 @@ export const AppLayout: React.FC = () => {
   useEffect(() => {
     const handleGlobalJump = (e: KeyboardEvent) => {
       if (e.key === "F6") {
+        playAsideSound();
         e.preventDefault();
         focusManager.setRegion("sidebar");
 

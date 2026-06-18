@@ -139,3 +139,88 @@ export interface Role {
   id: number;
   name: string;
 }
+
+export interface ProductImage {
+  id: number;
+  product: number;
+  image_url: string | null;
+  thumbnail_url: string | null;
+  is_main: boolean;
+  sort_order: number;
+  alt_text: string;
+  created_at: string;
+}
+
+export interface PriceType {
+  id: number;
+  name: string;
+}
+
+export interface ProductPrice {
+  id: number;
+  product: number;
+  warehouse: number | null;
+  warehouse_name: string | null;
+  price_type: number;
+  price_type_name: string;
+  price: string;
+  valid_from: string;
+  valid_to: string | null;
+  is_active: boolean;
+}
+
+export interface Product {
+  id: number;
+  name: string;
+  sku: string;
+  image_mode: "contain" | "cover";
+  barcode: string | null;
+  qr_code: string | null;
+  category: number | null;
+  category_detail: { id: number; name: string } | null;
+  brand: number | null;
+  brand_detail: { id: number; name: string } | null;
+  unit: number | null;
+  unit_detail: { id: number; name: string; short_name: string } | null;
+  tag_ids: number[];
+  tags_detail: { id: number; name: string; slug: string }[];
+  cost_price: string;
+  min_stock_level: number;
+  is_active: boolean;
+  extra_data: Record<string, unknown>;
+  images: ProductImage[];
+  main_image: ProductImage | null;
+  prices: ProductPrice[];
+  length: string;
+  width: string;
+  height: string;
+  weight: string;
+  volume_m3: string;
+  created_at: string;
+  updated_at: string;
+  description: string;
+}
+
+export interface Tag {
+  id: number;
+  name: string;
+  slug: string;
+}
+
+export interface ProductCategory {
+  id: number;
+  name: string;
+  slug: string;
+  parent: number | null;
+  is_active: boolean;
+}
+
+export interface Warehouse {
+  id: number;
+  name: string;
+  branch: number | null;
+  branch_name: string | null;
+  address: string;
+  is_active: boolean;
+  is_main: boolean;
+}

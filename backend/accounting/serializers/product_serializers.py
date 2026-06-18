@@ -1,6 +1,10 @@
 # backend/accounting/serializers/product_serializers.py
 from rest_framework import serializers
-from ..models import Unit, Brand, Tag, ProductCategory, Product, Counterparty, Warehouse, WarehouseStock
+from ..models import (
+    Unit, Brand, Tag, ProductCategory,
+    Product, ProductImage, PriceType, ProductPrice,
+    Counterparty, Warehouse, WarehouseStock,
+)
 
 
 class UnitSerializer(serializers.ModelSerializer):
@@ -27,7 +31,6 @@ class ProductCategorySerializer(serializers.ModelSerializer):
         fields = ["id", "name", "slug", "parent", "is_active"]
 
 
-# Для вложенного отображения в Product
 class ProductCategoryShortSerializer(serializers.ModelSerializer):
     class Meta:
         model = ProductCategory
@@ -46,8 +49,68 @@ class UnitShortSerializer(serializers.ModelSerializer):
         fields = ["id", "name", "short_name"]
 
 
+# ── Images ──────────────────────────────────────────────────────────────────
+
+class ProductImageSerializer(serializers.ModelSerializer):
+    image_url = serializers.SerializerMethodField()
+    thumbnail_url = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ProductImage
+        fields = [
+            "id", "product", "image_url", "thumbnail_url",
+            "is_main", "sort_order", "alt_text", "created_at",
+        ]
+        read_only_fields = ["created_at"]
+
+    def get_image_url(self, obj):
+        request = self.context.get("request")
+        if obj.image and request:
+            return request.build_absolute_uri(obj.image.url)
+        return None
+
+    def get_thumbnail_url(self, obj):
+        request = self.context.get("request")
+        try:
+            if obj.thumbnail and request:
+                return request.build_absolute_uri(obj.thumbnail.url)
+        except Exception:
+            pass
+        return None
+
+
+class ProductImageUploadSerializer(serializers.ModelSerializer):
+    """Отдельный сериализатор для загрузки — принимает файл"""
+    class Meta:
+        model = ProductImage
+        fields = ["id", "product", "image", "is_main", "sort_order", "alt_text"]
+
+
+# ── Prices ───────────────────────────────────────────────────────────────────
+
+class PriceTypeSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PriceType
+        fields = ["id", "name"]
+
+
+class ProductPriceSerializer(serializers.ModelSerializer):
+    price_type_name = serializers.CharField(source="price_type.name", read_only=True)
+    warehouse_name = serializers.CharField(source="warehouse.name", read_only=True)
+
+    class Meta:
+        model = ProductPrice
+        fields = [
+            "id", "product", "warehouse", "warehouse_name",
+            "price_type", "price_type_name",
+            "price", "valid_from", "valid_to", "is_active",
+        ]
+        read_only_fields = ["valid_from"]
+
+
+# ── Product ───────────────────────────────────────────────────────────────────
+
 class ProductSerializer(serializers.ModelSerializer):
-    # Read-only вложенные объекты для отображения
     category_detail = ProductCategoryShortSerializer(source="category", read_only=True)
     brand_detail = BrandShortSerializer(source="brand", read_only=True)
     unit_detail = UnitShortSerializer(source="unit", read_only=True)
@@ -56,21 +119,44 @@ class ProductSerializer(serializers.ModelSerializer):
     )
     tags_detail = TagSerializer(source="tags", many=True, read_only=True)
 
+    # Изображения — read only, загрузка через отдельный эндпоинт
+    images = ProductImageSerializer(many=True, read_only=True)
+    main_image = serializers.SerializerMethodField()
+
+    # Цены — read only, управление через отдельный эндпоинт
+    prices = ProductPriceSerializer(many=True, read_only=True)
+
     class Meta:
         model = Product
         fields = [
-            "id", "name", "sku", "barcode", "qr_code",
+            "id", "name", "sku", "image_mode", "barcode", "qr_code",
             "category", "category_detail",
             "brand", "brand_detail",
             "unit", "unit_detail",
             "tag_ids", "tags_detail",
-            "price_retail", "price_wholesale", "cost_price",
+            "cost_price",
             "min_stock_level", "is_active",
             "extra_data",
+            "images", "main_image",
+            "prices",
             "created_at", "updated_at",
+            "length", "width", "height", "weight", "volume_m3",
+            "description",
         ]
-        read_only_fields = ["created_at", "updated_at"]
+        read_only_fields = ["sku", "created_at", "updated_at"]
 
+    def get_main_image(self, obj):
+        # Берём из prefetch чтобы не делать лишний запрос
+        images = obj.images.all()
+        main = next((img for img in images if img.is_main), None)
+        if main is None and images:
+            main = images[0]
+        if main:
+            return ProductImageSerializer(main, context=self.context).data
+        return None
+
+
+# ── Counterparty ─────────────────────────────────────────────────────────────
 
 class CounterpartySerializer(serializers.ModelSerializer):
     class Meta:
@@ -82,6 +168,8 @@ class CounterpartySerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ["created_at"]
 
+
+# ── Warehouse ─────────────────────────────────────────────────────────────────
 
 class WarehouseSerializer(serializers.ModelSerializer):
     branch_name = serializers.CharField(source="branch.name", read_only=True)
@@ -96,11 +184,14 @@ class WarehouseStockSerializer(serializers.ModelSerializer):
     product_sku = serializers.CharField(source="product.sku", read_only=True)
     unit_short = serializers.CharField(source="product.unit.short_name", read_only=True)
     warehouse_name = serializers.CharField(source="warehouse.name", read_only=True)
+    available_quantity = serializers.DecimalField(
+        max_digits=15, decimal_places=3, read_only=True
+    )
 
     class Meta:
         model = WarehouseStock
         fields = [
             "id", "warehouse", "warehouse_name",
             "product", "product_name", "product_sku", "unit_short",
-            "quantity",
+            "quantity", "reserved_quantity", "available_quantity",
         ]

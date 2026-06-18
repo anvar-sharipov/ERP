@@ -114,6 +114,7 @@ const TagsPage = () => {
     { header: t("Slug"), accessor: "slug", sortable: true, excelWidth: 20 },
     {
       header: t("Actions"),
+      isActionColumn: true,
       hideInPrint: true,
       render: (item) => (
         <div className="flex gap-2">
@@ -195,7 +196,7 @@ const TagsPage = () => {
       <ConfirmModal
         isOpen={deleteModal}
         type="delete"
-        title={t("Delete")}
+        title={`DELETE - ${t("Delete")}`}
         message={t("DeleteTagMessage", { name: toDelete?.name })}
         onClose={() => setDeleteModal(false)}
         onConfirm={() => {

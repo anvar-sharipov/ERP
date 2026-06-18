@@ -1,5 +1,7 @@
 {
     "login": "Sign In",
     "username": "Username",
-    "password": "Password"
+    "password": "Password",
+
+    "ShowingResults": "{{total}} ýazgydan {{from}}–{{to}} görkezilýär"
 }

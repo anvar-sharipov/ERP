@@ -15,6 +15,7 @@ import { RBACGuard } from "../../../../components/ui/RBACGuard";
 import { StatusBadge } from "../../../../components/ui/StatusBadge";
 import { Plus } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import { PageHeaderText } from "../../../../components/ui/Tabs/PageHeaderText";
 
 const COUNTERPARTY_TYPES = [
   { value: "client",   label: "Клиент" },
@@ -167,7 +168,7 @@ const CounterpartiesPage = () => {
       render: (item) => <StatusBadge isActive={item.is_active} activeLabel={t("Active")} inactiveLabel={t("Inactive")} />,
     },
     {
-      header: t("Actions"), hideInPrint: true,
+      header: t("Actions"), hideInPrint: true, isActionColumn: true,
       render: (item) => (
         <div className="flex gap-2">
           <Button disabled={!canPut} variant="1c" icon={<span>✏️</span>} className="md:h-6 md:w-8 md:!p-0"
@@ -183,6 +184,7 @@ const CounterpartiesPage = () => {
 
   return (
     <RBACGuard isLoading={isLoading} error={error} canView={canView} forbiddenText={t("ForbiddenText")}>
+      <PageHeaderText title={t("Counterparties")} />
       <Table columns={columns} data={filtered} tableId="counterparties_list"
         searchQuery={searchQuery} onSearchChange={setSearchQuery}
         onRowDoubleClick={(item) => { setEditing(item); setFormOpen(true); }} />
@@ -228,7 +230,7 @@ const CounterpartiesPage = () => {
         </div>
       </Modal>
 
-      <ConfirmModal isOpen={deleteModal} type="delete" title={t("Delete")}
+      <ConfirmModal isOpen={deleteModal} type="delete" title={`DELETE - ${t("Delete")}`}
         message={t("DeleteCounterpartyMessage", { name: toDelete?.name })}
         onClose={() => setDeleteModal(false)}
         onConfirm={() => { if (deleteId) { deleteMutation.mutate(deleteId); setDeleteModal(false); } }} />

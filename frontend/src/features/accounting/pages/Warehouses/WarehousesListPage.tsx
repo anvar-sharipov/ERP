@@ -134,7 +134,7 @@ const WarehousesListPage = () => {
       render: (item) => <StatusBadge isActive={item.is_active} activeLabel={t("Active")} inactiveLabel={t("Inactive")} />,
     },
     {
-      header: t("Actions"), hideInPrint: true,
+      header: t("Actions"), hideInPrint: true, isActionColumn: true,
       render: (item) => (
         <div className="flex gap-2">
           <Button disabled={!canPut} variant="1c" icon={<span>✏️</span>} className="md:h-6 md:w-8 md:!p-0"
@@ -197,7 +197,7 @@ const WarehousesListPage = () => {
         </div>
       </Modal>
 
-      <ConfirmModal isOpen={deleteModal} type="delete" title={t("Delete")}
+      <ConfirmModal isOpen={deleteModal} type="delete" title={`DELETE - ${t("Delete")}`}
         message={t("DeleteWarehouseMessage", { name: toDelete?.name })}
         onClose={() => setDeleteModal(false)}
         onConfirm={() => { if (deleteId) { deleteMutation.mutate(deleteId); setDeleteModal(false); } }} />

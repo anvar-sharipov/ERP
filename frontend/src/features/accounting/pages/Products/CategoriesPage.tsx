@@ -234,11 +234,12 @@ const CategoriesPage = () => {
     },
     {
       header: t("Actions"),
+      isActionColumn: true,
       hideInPrint: true,
       render: (item) => (
         <div className="flex gap-2">
           <Button
-            title={t("Edit")}
+            title={`F2 - ${t("Edit")}`}
             disabled={!canPut}
             variant="1c"
             icon={<span>✏️</span>}
@@ -250,7 +251,7 @@ const CategoriesPage = () => {
             }}
           />
           <Button
-            title={t("Delete")}
+            title={`DELETE - ${t("Delete")}`}
             disabled={!canDelete}
             variant="1c"
             icon={<span>🗑️</span>}
@@ -367,7 +368,7 @@ const CategoriesPage = () => {
       <ConfirmModal
         isOpen={deleteModal}
         type="delete"
-        title={t("Delete")}
+        title={`DELETE - ${t("Delete")}`}
         message={t("DeleteCategoryMessage", { name: toDelete?.name })}
         onClose={() => setDeleteModal(false)}
         onConfirm={() => {

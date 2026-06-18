@@ -14,10 +14,13 @@ export const ROUTES = {
     // Товары
     PRODUCTS: '/products',
     PRODUCTS_LIST: '/products/list',
+    PRODUCTS_CREATE: "/products/create",
+    PRODUCTS_EDIT: "/products/:id/edit",
     PRODUCTS_CATEGORIES: '/products/categories',
     PRODUCTS_BRANDS: '/products/brands',
     PRODUCTS_TAGS: '/products/tags',
     PRODUCTS_UNITS: '/products/units',
+    PRODUCTS_PRICE_TYPES: "/products/price-types",
     // Контрагенты
     COUNTERPARTIES: '/counterparties',
     // Склады

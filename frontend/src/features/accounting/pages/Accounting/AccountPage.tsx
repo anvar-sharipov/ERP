@@ -196,10 +196,11 @@ const AccountPage = () => {
     },
     {
       header: t("Actions"),
+      isActionColumn: true,
       render: (account) => (
         <div className="flex gap-2">
           <Button
-            title={t("Edit")}
+            title={`F2 - ${t("Edit")}`}
             disabled={!canPut}
             variant="1c"
             icon={<span>✏️</span>}
@@ -210,7 +211,7 @@ const AccountPage = () => {
             }}
           />
           <Button
-            title={t("Delete")}
+            title={`DELETE - ${t("Delete")}`}
             disabled={!canDelete}
             variant="1c"
             icon={<span>🗑️</span>}

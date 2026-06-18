@@ -213,6 +213,7 @@ const CreateField = () => {
     { header: t("Slug"), excelWidth: 20, accessor: "slug", sortable: true },
     {
       header: t("Actions"),
+      isActionColumn: true,
       hideInPrint: true,
       render: (item) => (
         <div className="flex gap-2">
@@ -239,7 +240,7 @@ const CreateField = () => {
             }}
           />
           <Button
-            title={t("Edit")}
+            title={`F2 - ${t("Edit")}`}
             disabled={!canPut}
             variant="1c"
             icon={<span>✏️</span>}
@@ -251,7 +252,7 @@ const CreateField = () => {
             }}
           />
           <Button
-            title={t("Delete")}
+            title={`DELETE - ${t("Delete")}`}
             disabled={!canDelete}
             variant="1c"
             icon={<span>🗑️</span>}
@@ -346,7 +347,7 @@ const CreateField = () => {
       <ConfirmModal
         isOpen={deleteModal}
         type="delete"
-        title={t("Delete")}
+        title={`DELETE - ${t("Delete")}`}
         message={t("DeleteDirectoryMessage", { name: dirToDelete?.name })}
         onClose={() => setDeleteModal(false)}
         onConfirm={() => {

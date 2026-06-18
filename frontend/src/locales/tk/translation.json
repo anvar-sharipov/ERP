@@ -270,8 +270,13 @@
 
     "AddUnit": "Ölçeg birligini goşmak",
 
-    "AllBrands": "Ähli brendler"
+    "AllBrands": "Ähli brendler",
 
+    "ShowingResults": "Showing {{from}}–{{to}} of {{total}}",
+
+    "ExcelCurrentPage": "Häzirki sahypa",
+    "ExcelAllData": "Ähli maglumatlar",
+    "PriceTypes": "Nyrh görnüşleri"
 
     
 

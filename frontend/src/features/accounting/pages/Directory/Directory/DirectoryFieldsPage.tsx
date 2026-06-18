@@ -207,7 +207,7 @@ const DirectoryFieldsPage = () => {
       render: (item) => (
         <div className="flex gap-2">
           <Button
-            title={t("Edit")}
+            title={`F2 - ${t("Edit")}`}
             disabled={!canPut}
             variant="1c"
             icon={<span>✏️</span>}
@@ -219,7 +219,7 @@ const DirectoryFieldsPage = () => {
             }}
           />
           <Button
-            title={t("Delete")}
+            title={`DELETE - ${t("Delete")}`}
             disabled={!canDelete}
             variant="1c"
             icon={<span>🗑️</span>}

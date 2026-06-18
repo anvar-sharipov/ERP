@@ -17,6 +17,7 @@ import { RBACGuard } from "../../../../../../../components/ui/RBACGuard";
 import { usePageAccess } from "../../../../../../../core/hooks/usePageAccess";
 import { useTranslation } from "react-i18next";
 import { useTableFilter } from "../../../../../../../core/hooks/useTableFilter";
+import { PageHeaderText } from "../../../../../../../components/ui/Tabs/PageHeaderText";
 
 const Branches = () => {
   const { t } = useTranslation();
@@ -247,10 +248,11 @@ const Branches = () => {
     },
     {
       header: t("Actions"),
+      isActionColumn: true,
       render: (b) => (
         <div className="flex gap-2">
           <Button
-            title={t("Edit")}
+            title={`F2 - ${t("Edit")}`}
             disabled={!canPut}
             variant="1c"
             icon={<span>✏️</span>}
@@ -263,7 +265,7 @@ const Branches = () => {
           />
 
           <Button
-            title={t("Delete")}
+            title={`DELETE - ${t("Delete")}`}
             disabled={!canDelete}
             variant="1c"
             icon={<span>🗑️</span>}
@@ -283,6 +285,7 @@ const Branches = () => {
 
   return (
     <RBACGuard isLoading={isLoading} error={error} canView={canView} forbiddenText={t("ForbiddenText")}>
+      <PageHeaderText title={t("Branchs")} />
       <Table
         columns={columns}
         data={filtered}

@@ -33,6 +33,8 @@ import Warehouses from "../../features/accounting/pages/Warehouses/Warehouses";
 import WarehousesListPage from "../../features/accounting/pages/Warehouses/WarehousesListPage";
 import WarehouseStocksPage from "../../features/accounting/pages/Warehouses/WarehouseStocksPage";
 import CounterpartiesPage from "../../features/accounting/pages/Counterparties/CounterpartiesPage";
+import ProductFormPage from "../../features/accounting/pages/Products/Products/ProductFormPage";
+import PriceTypesPage from "../../features/accounting/pages/Products/PriceTypesPage";
 
 const AppRouter: React.FC = () => {
   return (
@@ -103,7 +105,10 @@ const AppRouter: React.FC = () => {
             <Route path="brands" element={<BrandsPage />} />
             <Route path="tags" element={<TagsPage />} />
             <Route path="units" element={<UnitsPage />} />
+            <Route path={ROUTES.APP.PRODUCTS_PRICE_TYPES} element={<PriceTypesPage />} />
           </Route>
+          <Route path={ROUTES.APP.PRODUCTS_CREATE} element={<ProductFormPage />} />
+          <Route path={ROUTES.APP.PRODUCTS_EDIT} element={<ProductFormPage />} />
 
           <Route path={ROUTES.APP.COUNTERPARTIES} element={<CounterpartiesPage />} />
 

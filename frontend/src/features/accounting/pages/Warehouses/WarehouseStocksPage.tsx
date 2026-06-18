@@ -160,6 +160,7 @@ const WarehouseStocksPage = () => {
     },
     {
       header: t("Actions"),
+      isActionColumn: true,
       hideInPrint: true,
       render: (item) => (
         <div className="flex gap-2">
@@ -252,7 +253,7 @@ const WarehouseStocksPage = () => {
       <ConfirmModal
         isOpen={deleteModal}
         type="delete"
-        title={t("Delete")}
+        title={`DELETE - ${t("Delete")}`}
         message={`Удалить остаток "${toDelete?.product_name}" на складе "${toDelete?.warehouse_name}"?`}
         onClose={() => setDeleteModal(false)}
         onConfirm={() => {

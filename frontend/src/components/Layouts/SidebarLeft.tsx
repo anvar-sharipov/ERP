@@ -3,7 +3,7 @@ import React, { useEffect, useRef } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import { ROUTES } from "../../core/router/routes";
 import { ADMIN_ICON, COMPANY_ICON, USERS_ICON, BRANCH_ICON, ACCOUNT_ICON, DIRECTORY_ICON, COUNTERPARTY_ICON, WAREHOUSE_ICON, PRODUCT_ICON } from "../Icons/LeftBarIcons";
-import { playClick2Sound, playAside2Sound } from "../../core/utils/sound";
+import { playClick2Sound, playAside2Sound, playClickSound } from "../../core/utils/sound";
 import { useAccess } from "../../core/hooks/useAccess";
 import { useTranslation } from "react-i18next";
 import { focusManager } from "../../core/utils/focusManager";
@@ -82,6 +82,7 @@ const SidebarLeft: React.FC<SidebarLeftProps> = ({ isOpen, setIsOpen }) => {
 
       // 3. Стрелки
       if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+        playClickSound();
         e.preventDefault();
         if (!sidebarRef.current) return;
 

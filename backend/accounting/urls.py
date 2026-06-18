@@ -7,6 +7,7 @@ from .views.directory_views import DirectoryViewSet, DirectoryFieldViewSet, Dire
 from .views.product_views import (
     UnitViewSet, BrandViewSet, TagViewSet, ProductCategoryViewSet,
     ProductViewSet, CounterpartyViewSet, WarehouseViewSet, WarehouseStockViewSet,
+    ProductImageViewSet, PriceTypeViewSet, ProductPriceViewSet
 )
 
 app_name = 'accounting'
@@ -31,6 +32,9 @@ router.register(r'brands', BrandViewSet, basename='brands')
 router.register(r'tags', TagViewSet, basename='tags')
 router.register(r'product-categories', ProductCategoryViewSet, basename='product-categories')
 router.register(r'products', ProductViewSet, basename='products')
+router.register(r'product-images', ProductImageViewSet, basename='product-images')
+router.register(r'price-types', PriceTypeViewSet, basename='price-types')
+router.register(r'product-prices', ProductPriceViewSet, basename='product-prices')
 
 # Counterparty
 router.register(r'counterparties', CounterpartyViewSet, basename='counterparties')

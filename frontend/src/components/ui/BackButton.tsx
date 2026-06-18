@@ -4,6 +4,7 @@ import { ArrowLeft } from "lucide-react";
 import { Button } from "./Button";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
+import { playAside2Sound } from "../../core/utils/sound";
 
 interface Props {
   id: number;
@@ -20,6 +21,7 @@ export const BackButton = ({ id, getBackProps, className }: Props) => {
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
       if (e.altKey && e.key === "ArrowLeft") {
+        playAside2Sound();
         e.preventDefault();
         backProps.onClick();
       }

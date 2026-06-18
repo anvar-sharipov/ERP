@@ -16,6 +16,7 @@
 │   │   │   ├── 0012_directory_color.py
 │   │   │   ├── 0013_account_is_active.py
 │   │   │   ├── 0014_brand_productcategory_tag_unit_warehousestock_and_more.py
+│   │   │   ├── 0015_product_image_mode_productimage.py
 │   │   │   └── __init__.py
 │   │   ├── serializers
 │   │   │   ├── __pycache__
@@ -144,14 +145,14 @@
 │   │   │       ├── Category
 │   │   │       │   └── CategotyTree
 │   │   │       │       ├── TreeFilter
+│   │   │       │       │   └── CategoryTree.tsx
 │   │   │       │       ├── TreeManager
+│   │   │       │       │   ├── CategoryTreeNode.tsx
+│   │   │       │       │   ├── CategoryTreeView.tsx
+│   │   │       │       │   └── filterTreeItems.ts
 │   │   │       │       ├── TreeSelect
-│   │   │       │       ├── CategoryTree.tsx
-│   │   │       │       ├── CategoryTreeNode.tsx
-│   │   │       │       ├── CategoryTreeSelect.tsx
-│   │   │       │       ├── CategoryTreeSelectNode.tsx
-│   │   │       │       ├── CategoryTreeView.tsx
-│   │   │       │       ├── filterTreeItems.ts
+│   │   │       │       │   ├── CategoryTreeSelect.tsx
+│   │   │       │       │   └── CategoryTreeSelectNode.tsx
 │   │   │       │       └── types.ts
 │   │   │       ├── ErrorMessage
 │   │   │       │   └── ErrorMsg.tsx
@@ -166,6 +167,7 @@
 │   │   │       │   └── Table.tsx
 │   │   │       ├── Tabs
 │   │   │       │   ├── GoogleTabs.tsx
+│   │   │       │   ├── PageHeaderText.tsx
 │   │   │       │   └── SegmentedControl.tsx
 │   │   │       ├── Avatar.tsx
 │   │   │       ├── BackButton.tsx
@@ -198,7 +200,8 @@
 │   │   │   │   ├── useAccess.ts
 │   │   │   │   ├── usePageAccess.ts
 │   │   │   │   ├── useRBACSocket.ts
-│   │   │   │   └── useRestoreScroll.ts
+│   │   │   │   ├── useRestoreScroll.ts
+│   │   │   │   └── useTableFilter.ts
 │   │   │   ├── router
 │   │   │   │   ├── AdminRoute.tsx
 │   │   │   │   ├── AppRouter.tsx
@@ -239,10 +242,11 @@
 │   │   │   │   │   │   ├── Directory.tsx
 │   │   │   │   │   │   └── FieldRenderer.tsx
 │   │   │   │   │   ├── Products
+│   │   │   │   │   │   ├── Products
+│   │   │   │   │   │   │   └── ProductsListPage.tsx
 │   │   │   │   │   │   ├── BrandsPage.tsx
 │   │   │   │   │   │   ├── CategoriesPage.tsx
 │   │   │   │   │   │   ├── Products.tsx
-│   │   │   │   │   │   ├── ProductsListPage.tsx
 │   │   │   │   │   │   ├── TagsPage.tsx
 │   │   │   │   │   │   └── UnitsPage.tsx
 │   │   │   │   │   ├── Warehouses

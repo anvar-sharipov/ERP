@@ -11,6 +11,7 @@ const Products = () => {
     { to: "brands",     label: t("Brands") },
     { to: "tags",       label: t("Tags") },
     { to: "units",      label: t("Units") },
+    { to: "price-types",      label: t("PriceTypes") },
   ];
 
 
