@@ -10,6 +10,8 @@ from .views.product_views import (
     ProductImageViewSet, PriceTypeViewSet, ProductPriceViewSet
 )
 
+from accounting.views.transaction_views import JournalEntryViewSet, StockMovementViewSet, ClosedPeriodViewSet
+
 app_name = 'accounting'
 
 router = DefaultRouter()
@@ -42,6 +44,10 @@ router.register(r'counterparties', CounterpartyViewSet, basename='counterparties
 # Warehouse
 router.register(r'warehouses', WarehouseViewSet, basename='warehouses')
 router.register(r'warehouse-stocks', WarehouseStockViewSet, basename='warehouse-stocks')
+
+router.register('journal-entries',  JournalEntryViewSet,  basename='journal-entry')
+router.register('stock-movements',  StockMovementViewSet, basename='stock-movement')
+router.register('closed-periods', ClosedPeriodViewSet, basename='closed-period')
 
 urlpatterns = [
     path('', include(router.urls)),

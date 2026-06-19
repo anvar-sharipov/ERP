@@ -2,13 +2,11 @@
 import React, { useEffect, useRef } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import { ROUTES } from "../../core/router/routes";
-import { ADMIN_ICON, COMPANY_ICON, USERS_ICON, BRANCH_ICON, ACCOUNT_ICON, DIRECTORY_ICON, COUNTERPARTY_ICON, WAREHOUSE_ICON, PRODUCT_ICON } from "../Icons/LeftBarIcons";
+import { ADMIN_ICON, COMPANY_ICON, USERS_ICON, BRANCH_ICON, ACCOUNT_ICON, DIRECTORY_ICON, COUNTERPARTY_ICON, WAREHOUSE_ICON, PRODUCT_ICON, JOURNAL_ICON, ROLES_ICON } from "../Icons/LeftBarIcons";
 import { playClick2Sound, playAside2Sound, playClickSound } from "../../core/utils/sound";
 import { useAccess } from "../../core/hooks/useAccess";
 import { useTranslation } from "react-i18next";
 import { focusManager } from "../../core/utils/focusManager";
-
-
 
 interface SidebarLeftProps {
   isOpen: boolean;
@@ -17,10 +15,21 @@ interface SidebarLeftProps {
 
 // Добавьте это в ваш файл с константами или прямо в SidebarLeft
 const NAV_ITEMS = {
+  // main: [
+  //   { name: "Admin", path: ROUTES.COMPANY_ADMIN.USERS, icon: ADMIN_ICON, permission: ["user", "GET"] },
+  //   { name: "Desktop", path: ROUTES.APP.DASHBOARD, icon: "📊" },
+  //   { name: "Accounting", path: ROUTES.APP.ACCOUNTING, icon: ACCOUNT_ICON, permission: ["transaction", "GET"] },
+  //   { name: "Journal", path: ROUTES.APP.JOURNAL, icon: JOURNAL_ICON, permission: ["journal", "GET"] },
+  //   { name: "Directoryes", path: ROUTES.APP.DIRECTORY, icon: DIRECTORY_ICON, permission: ["directory", "GET"] },
+  //   { name: "Products", path: ROUTES.APP.PRODUCTS, icon: PRODUCT_ICON, permission: ["product", "GET"] },
+  //   { name: "Counterparties", path: ROUTES.APP.COUNTERPARTIES, icon: COUNTERPARTY_ICON, permission: ["counterparty", "GET"] },
+  //   { name: "Warehouses", path: ROUTES.APP.WAREHOUSES, icon: WAREHOUSE_ICON, permission: ["warehouse", "GET"] },
+  // ],
   main: [
     { name: "Admin", path: ROUTES.COMPANY_ADMIN.USERS, icon: ADMIN_ICON, permission: ["user", "GET"] },
     { name: "Desktop", path: ROUTES.APP.DASHBOARD, icon: "📊" },
-    { name: "Accounting", path: ROUTES.APP.ACCOUNTING, icon: ACCOUNT_ICON, permission: ["transaction", "GET"] },
+    { name: "Accounting", path: ROUTES.APP.ACCOUNTING, icon: ACCOUNT_ICON, permission: ["account", "GET"] },
+    { name: "Journal", path: ROUTES.APP.JOURNAL, icon: JOURNAL_ICON, permission: ["journalentry", "GET"] },
     { name: "Directoryes", path: ROUTES.APP.DIRECTORY, icon: DIRECTORY_ICON, permission: ["directory", "GET"] },
     { name: "Products", path: ROUTES.APP.PRODUCTS, icon: PRODUCT_ICON, permission: ["product", "GET"] },
     { name: "Counterparties", path: ROUTES.APP.COUNTERPARTIES, icon: COUNTERPARTY_ICON, permission: ["counterparty", "GET"] },
@@ -28,14 +37,15 @@ const NAV_ITEMS = {
   ],
   admin: [
     { name: "Users", path: ROUTES.COMPANY_ADMIN.USERS, icon: USERS_ICON },
-    { name: "Roles", path: ROUTES.COMPANY_ADMIN.ROLES, icon: "🛡️" },
+    // { name: "Roles", path: ROUTES.COMPANY_ADMIN.ROLES, icon: "🛡️" },
+    { name: "Roles", path: ROUTES.COMPANY_ADMIN.ROLES, icon: ROLES_ICON },
     { name: "Company", path: ROUTES.COMPANY_ADMIN.COMPANIES, icon: COMPANY_ICON },
     { name: "Branchs", path: ROUTES.COMPANY_ADMIN.BRANCHS, icon: BRANCH_ICON },
   ],
 };
 
 const SidebarLeft: React.FC<SidebarLeftProps> = ({ isOpen, setIsOpen }) => {
-  const { hasPermission } = useAccess();
+  const { hasPermission, isLoading } = useAccess();
   const location = useLocation();
   const isAdminSection = location.pathname.startsWith("/admin");
   const { t } = useTranslation();
@@ -55,11 +65,28 @@ const SidebarLeft: React.FC<SidebarLeftProps> = ({ isOpen, setIsOpen }) => {
   // Фильтруем пункты меню на основе прав
   const mainNav = NAV_ITEMS.main.filter((item) => {
     if (!item.permission) return true;
-
     const [resource, action] = item.permission;
-
-    return hasPermission(resource, action);
+    if (isLoading) return true;
+    const result = hasPermission(resource, action);
+    console.log(`${resource}.${action} →`, result); // ← добавь
+    return result;
   });
+
+  // const mainNav = NAV_ITEMS.main.filter((item) => {
+  //   if (!item.permission) return true;
+  //   const [resource, action] = item.permission;
+  //   // isLoading — не скрываем пункты пока грузится юзер
+  //   if (isLoading) return true;
+  //   return hasPermission(resource, action);
+  // });
+
+  // const mainNav = NAV_ITEMS.main.filter((item) => {
+  //   if (!item.permission) return true;
+
+  //   const [resource, action] = item.permission;
+
+  //   return hasPermission(resource, action);
+  // });
 
   // Определяем, какой список отрисовать
   const currentNav = isAdminSection ? NAV_ITEMS.admin : mainNav;

@@ -16,6 +16,7 @@ import { BackButton } from "../../../../../components/ui/BackButton";
 import { SegmentedControl } from "../../../../../components/ui/Tabs/SegmentedControl";
 import { Trash2, Star, Upload } from "lucide-react";
 import type { Product, ProductImage, ProductPrice, PriceType } from "../../../../../core/types";
+import { useRestoreScroll } from "../../../../../core/hooks/useRestoreScroll";
 
 // ── Типы формы ────────────────────────────────────────────────────────────────
 
@@ -515,6 +516,7 @@ const ProductFormPage = () => {
   const queryClient = useQueryClient();
   const { setSidebarContent } = useSidebar();
   const { canPost, canPut } = usePageAccess("product");
+  const { getBackProps } = useRestoreScroll("selectedProductId", () => {});
 
   console.log("ID from params:", id, "isEdit:", !!id);
 
@@ -639,13 +641,7 @@ const ProductFormPage = () => {
     <RBACGuard isLoading={isEdit ? productLoading : false} error={isEdit ? productError : null} canView={isEdit ? canPut : canPost} forbiddenText={t("ForbiddenText")}>
       {/* Шапка */}
       <div className="flex items-center gap-3 mb-4">
-        <BackButton
-          id={productId ?? 0}
-          getBackProps={(navigate) => ({
-            onClick: () => navigate(ROUTES.APP.PRODUCTS_LIST),
-          })}
-          className="!px-2"
-        />
+        <BackButton id={productId ?? 0} getBackProps={getBackProps} className="!px-2" />
         <div>
           <h1 className="text-xl font-bold">{isEdit ? `Товар: ${product?.name ?? "..."}` : "Новый товар"}</h1>
           {isEdit && product && <p className="text-sm text-gray-500">Артикул: {product.sku}</p>}

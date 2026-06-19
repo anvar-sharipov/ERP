@@ -1,6 +1,6 @@
 # backend/accounting/admin.py
 from django.contrib import admin
-from .models import (SubcontoType, Account, AccountSubconto, JournalEntry, Transaction, Counterparty, Warehouse, 
+from .models import (SubcontoType, Account, AccountSubconto, Counterparty, Warehouse, 
                      Product, CompanyProfile, Branch, Directory, DirectoryField, DirectoryRecord, ProductImage,
                      Tag, Unit, Brand, ProductCategory,
                      )
@@ -23,24 +23,7 @@ class AccountAdmin(admin.ModelAdmin):
     search_fields = ('code', 'name')
     inlines = [AccountSubcontoInline]
 
-# 2. Позволяет добавлять проводки прямо внутри самой операции (JournalEntry)
-class TransactionInline(admin.TabularInline):
-    model = Transaction
-    extra = 1
 
-@admin.register(JournalEntry)
-class JournalEntryAdmin(admin.ModelAdmin):
-    list_display = ('number', 'date', 'status', 'description')
-    list_filter = ('status', 'date')
-    search_fields = ('number', 'description')
-    inlines = [TransactionInline]
-
-@admin.register(Transaction)
-class TransactionAdmin(admin.ModelAdmin):
-    list_display = ('journal_entry', 'account_deb', 'account_krt', 'amount')
-    list_filter = ('account_deb', 'account_krt')
-    
-    
     
 @admin.register(Counterparty)
 class CounterpartyAdmin(admin.ModelAdmin):

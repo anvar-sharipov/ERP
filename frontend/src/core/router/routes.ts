@@ -27,12 +27,25 @@ export const ROUTES = {
     WAREHOUSES: '/warehouses',
     WAREHOUSES_LIST: '/warehouses/list',
     WAREHOUSES_STOCKS: '/warehouses/stocks',
+
+    JOURNAL:          '/journal',
+    JOURNAL_ENTRIES:  '/journal/entries',
+    JOURNAL_MOVEMENTS:'/journal/movements',
+
   },
+  // COMPANY_ADMIN: {
+  //   USERS: '/admin/users',
+  //   ROLES: '/admin/roles',
+  //   COMPANIES: '/admin/companies',
+  //   BRANCHS: '/admin/branchs'
+  // },
   COMPANY_ADMIN: {
-    USERS: '/admin/users',
-    ROLES: '/admin/roles',
-    COMPANIES: '/admin/companies',
-    BRANCHS: '/admin/branchs'
+    USERS:      '/admin/users',
+    ROLES:      '/admin/roles',
+    ROLES_CREATE: '/admin/roles/create',
+    ROLES_EDIT:   '/admin/roles/:id/edit',
+    COMPANIES:  '/admin/companies',
+    BRANCHS:    '/admin/branchs',
   },
   ADMIN: {
     DASHBOARD: '/admin/dashboard',
@@ -41,30 +54,3 @@ export const ROUTES = {
   }
 } as const;
 
-
-// export const ROUTES = {
-//   AUTH: {
-//     LOGIN: '/login',
-//     REGISTER: '/register',
-//   },
-//   APP: {
-//     DASHBOARD: '/dashboard',
-//     COMPANIES: '/companies',
-//     ACCOUNTING: '/accounting',
-//     DIRECTORY: '/directory',
-//     DIRECTORY_FIELDS: '/directory/:id/fields',
-//     DIRECTORY_RECORDS: '/directory/:id/records',
-//   },
-//   COMPANY_ADMIN: {
-//     USERS: '/admin/users',
-//     ROLES: '/admin/roles',
-//     COMPANIES: '/admin/companies',
-//     BRANCHS: '/admin/branchs'
-//   },
-//   ADMIN: {
-//     DASHBOARD: '/admin/dashboard',
-//     USERS: '/admin/users', // Добавляем управление пользователями
-//     ROLES: '/admin/roles', // Добавляем управление ролями
-    
-//   }
-// } as const;

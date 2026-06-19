@@ -23,7 +23,7 @@ export const AppLayout: React.FC = () => {
   const location = useLocation();
   const { t } = useTranslation();
 
-  // console.log("currentUser", currentUser);
+  console.log("currentUser", currentUser);
   // const navItemsRef = useRef<(HTMLAnchorElement | null)[]>([]);
 
   useEffect(() => {

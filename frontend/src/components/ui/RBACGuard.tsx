@@ -1,29 +1,3 @@
-// import { type ReactNode } from "react";
-// import { Loader } from "./Loader";
-// import ErrMsg from "./ErrMsg";
-
-// interface RBACGuardProps {
-//   children: ReactNode;
-//   isLoading?: boolean;
-//   canView?: boolean;
-//   forbiddenText?: string;
-// }
-
-// export const RBACGuard = ({ children, isLoading = false, canView = true, forbiddenText = "Доступ запрещён" }: RBACGuardProps) => {
-//   if (isLoading) {
-//     return <Loader containerClass="mx-auto mt-20" />;
-//   }
-
-//   if (!canView) {
-//     return <ErrMsg error={{ response: { status: 403 } }} defaultText={forbiddenText} />;
-//   }
-
-//   return <>{children}</>;
-// };
-
-
-
-
 import { type ReactNode } from "react";
 import { Loader } from "./Loader";
 import ErrMsg from "./ErrMsg";

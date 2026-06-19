@@ -33,8 +33,12 @@ import Warehouses from "../../features/accounting/pages/Warehouses/Warehouses";
 import WarehousesListPage from "../../features/accounting/pages/Warehouses/WarehousesListPage";
 import WarehouseStocksPage from "../../features/accounting/pages/Warehouses/WarehouseStocksPage";
 import CounterpartiesPage from "../../features/accounting/pages/Counterparties/CounterpartiesPage";
-import ProductFormPage from "../../features/accounting/pages/Products/Products/ProductFormPage";
+import ProductFormPage from "../../features/accounting/pages/Products/Form/ProductFormPage";
 import PriceTypesPage from "../../features/accounting/pages/Products/PriceTypesPage";
+import JournalPage from "../../features/accounting/pages/Journal/JournalPage";
+import Journal from "../../features/accounting/pages/Journal/Journal";
+import StockMovementsPage from "../../features/accounting/pages/Journal/StockMovementsPage";
+import RoleFormPage from "../../features/users/components/pages/admin/Roles/RoleFormPage";
 
 const AppRouter: React.FC = () => {
   return (
@@ -60,43 +64,36 @@ const AppRouter: React.FC = () => {
           {/* Редирект с корня на дашборд */}
           <Route path="/" element={<Navigate to={ROUTES.APP.DASHBOARD} replace />} />
 
-          {/* ГРУППА АДМИНСКИХ РОУТОВ С ЗАЩИТОЙ */}
-          <Route element={<PermissionRoute resource="transaction" action="GET" />}>
+          <Route element={<PermissionRoute resource="user" action="GET" />}>
             <Route path={ROUTES.ADMIN.DASHBOARD} element={<AdminPanel />} />
             <Route path={ROUTES.COMPANY_ADMIN.USERS} element={<CompanyAdminUser />} />
             <Route path={ROUTES.COMPANY_ADMIN.ROLES} element={<Roles />} />
+            <Route path={ROUTES.COMPANY_ADMIN.ROLES_CREATE} element={<RoleFormPage />} />
+            <Route path={ROUTES.COMPANY_ADMIN.ROLES_EDIT} element={<RoleFormPage />} />
             <Route path={ROUTES.COMPANY_ADMIN.COMPANIES} element={<CompanyAdmin />} />
             <Route path={ROUTES.COMPANY_ADMIN.BRANCHS} element={<Branchs />} />
           </Route>
-
           {/* ОБЫЧНЫЕ РОУТЫ (доступны всем) */}
           <Route path={ROUTES.APP.DASHBOARD} element={<Dashboard />} />
           {/* <Route path={ROUTES.APP.ACCOUNTING} element={<Accounting />} /> */}
 
-          {/* Вложенный роут для Бухгалтерии */}
-          {/* ГРУППА БУХГАЛТЕРИИ */}
-          <Route element={<PermissionRoute resource="transaction" action="GET" />}>
+          {/* Бухгалтерия */}
+          <Route element={<PermissionRoute resource="account" action="GET" />}>
             <Route path={ROUTES.APP.ACCOUNTING} element={<Accounting />}>
               <Route index element={<Navigate to="accounts" replace />} />
               <Route path="accounts" element={<AccountPage />} />
             </Route>
+          </Route>
 
+          {/* Справочники */}
+          <Route element={<PermissionRoute resource="directory" action="GET" />}>
             <Route path={ROUTES.APP.DIRECTORY} element={<Directory />}>
               <Route index element={<Navigate to="create-fields-for-directory" replace />} />
-              {/* <Route path="create-directory-page" element={<CreateDirectoryPage />} /> */}
               <Route path="create-fields-for-directory" element={<CreateField />} />
             </Route>
           </Route>
           <Route path={ROUTES.APP.DIRECTORY_FIELDS} element={<DirectoryFieldsPage />} />
           <Route path={ROUTES.APP.DIRECTORY_RECORDS} element={<DirectoryRecordsPage />} />
-
-          {/* <Route path={ROUTES.APP.ACCOUNTING} element={<Accounting />}>
-            <Route index element={<Navigate to="journal" replace />} />
-            <Route path="journal" element={<EntryJournal />} />
-            <Route path="reports" element={<ReportsPage />} />
-            <Route path="analytics" element={<AnalyticsPage />} />
-            <Route path="accounts" element={<AccountPage />} />
-          </Route> */}
 
           <Route path={ROUTES.APP.PRODUCTS} element={<Products />}>
             <Route index element={<Navigate to="list" replace />} />
@@ -118,8 +115,14 @@ const AppRouter: React.FC = () => {
             <Route path="stocks" element={<WarehouseStocksPage />} />
           </Route>
 
-
-          
+          {/* Журнал */}
+          <Route element={<PermissionRoute resource="journalentry" action="GET" />}>
+            <Route path={ROUTES.APP.JOURNAL} element={<Journal />}>
+              <Route index element={<Navigate to="entries" replace />} />
+              <Route path="entries" element={<JournalPage />} />
+              <Route path="movements" element={<StockMovementsPage />} />
+            </Route>
+          </Route>
         </Route>
       </Route>
 

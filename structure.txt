@@ -3,20 +3,11 @@
 │   │   ├── migrations
 │   │   │   ├── __pycache__
 │   │   │   ├── 0001_initial.py
-│   │   │   ├── 0002_counterparty_product_warehouse.py
-│   │   │   ├── 0003_companyprofile.py
-│   │   │   ├── 0004_branch.py
-│   │   │   ├── 0005_companyprofile_logo2_alter_companyprofile_logo_and_more.py
-│   │   │   ├── 0006_alter_companyprofile_address_and_more.py
-│   │   │   ├── 0007_branch_city_branch_code_branch_email_and_more.py
-│   │   │   ├── 0008_branch_is_active.py
-│   │   │   ├── 0009_directory_subcontotype_directory_directoryrecord_and_more.py
-│   │   │   ├── 0010_account_account_type.py
-│   │   │   ├── 0011_directory_created_at_directory_description_and_more.py
-│   │   │   ├── 0012_directory_color.py
-│   │   │   ├── 0013_account_is_active.py
-│   │   │   ├── 0014_brand_productcategory_tag_unit_warehousestock_and_more.py
-│   │   │   ├── 0015_product_image_mode_productimage.py
+│   │   │   ├── 0002_product_height_product_length_product_volume_m3_and_more.py
+│   │   │   ├── 0003_product_description.py
+│   │   │   ├── 0004_journalentry_created_at_journalentry_created_by_and_more.py
+│   │   │   ├── 0005_closedperiod.py
+│   │   │   ├── 0006_stockmovement_date.py
 │   │   │   └── __init__.py
 │   │   ├── serializers
 │   │   │   ├── __pycache__
@@ -38,20 +29,22 @@
 │   │   │   ├── company_views.py
 │   │   │   ├── directory_views.py
 │   │   │   ├── product_views.py
+│   │   │   ├── transaction_views.py
 │   │   │   └── __init__.py
 │   │   ├── __pycache__
 │   │   ├── admin.py
 │   │   ├── apps.py
+│   │   ├── mixins.py
 │   │   ├── models.py
 │   │   ├── tests.py
 │   │   ├── urls.py
+│   │   ├── utils.py
 │   │   ├── views.py
 │   │   └── __init__.py
 │   ├── companies
 │   │   ├── migrations
 │   │   │   ├── __pycache__
 │   │   │   ├── 0001_initial.py
-│   │   │   ├── 0002_company_is_active.py
 │   │   │   └── __init__.py
 │   │   ├── serializers
 │   │   │   ├── __pycache__
@@ -83,11 +76,6 @@
 │   │   ├── migrations
 │   │   │   ├── __pycache__
 │   │   │   ├── 0001_initial.py
-│   │   │   ├── 0002_role_user_is_deleted_permission_rolepermission_and_more.py
-│   │   │   ├── 0003_alter_user_photo.py
-│   │   │   ├── 0004_user_position.py
-│   │   │   ├── 0005_alter_user_photo.py
-│   │   │   ├── 0006_remove_user_is_deleted.py
 │   │   │   └── __init__.py
 │   │   ├── serializers
 │   │   │   ├── __pycache__
@@ -186,7 +174,8 @@
 │   │   │       ├── StatusBadge.tsx
 │   │   │       ├── TablePrintHeader.tsx
 │   │   │       ├── TextArea.tsx
-│   │   │       └── ThemeToggle.tsx
+│   │   │       ├── ThemeToggle.tsx
+│   │   │       └── WorkDateWidget.tsx
 │   │   ├── core
 │   │   │   ├── api
 │   │   │   │   ├── axiosInstance.ts
@@ -198,6 +187,7 @@
 │   │   │   │   └── UserContext.tsx
 │   │   │   ├── hooks
 │   │   │   │   ├── useAccess.ts
+│   │   │   │   ├── useClosedPeriod.ts
 │   │   │   │   ├── usePageAccess.ts
 │   │   │   │   ├── useRBACSocket.ts
 │   │   │   │   ├── useRestoreScroll.ts
@@ -210,6 +200,7 @@
 │   │   │   │   ├── ProtectedRoute.tsx
 │   │   │   │   └── routes.ts
 │   │   │   ├── store
+│   │   │   │   ├── dateStore.ts
 │   │   │   │   └── index.ts
 │   │   │   ├── types
 │   │   │   │   └── index.ts
@@ -241,12 +232,21 @@
 │   │   │   │   │   │   ├── CreateDirectory.tsx
 │   │   │   │   │   │   ├── Directory.tsx
 │   │   │   │   │   │   └── FieldRenderer.tsx
+│   │   │   │   │   ├── Journal
+│   │   │   │   │   │   ├── Journal.tsx
+│   │   │   │   │   │   ├── JournalEntryForm.tsx
+│   │   │   │   │   │   ├── JournalPage.tsx
+│   │   │   │   │   │   └── StockMovementsPage.tsx
 │   │   │   │   │   ├── Products
-│   │   │   │   │   │   ├── Products
-│   │   │   │   │   │   │   └── ProductsListPage.tsx
+│   │   │   │   │   │   ├── Form
+│   │   │   │   │   │   │   ├── Tabs
+│   │   │   │   │   │   │   │   └── MainTabs.tsx
+│   │   │   │   │   │   │   └── ProductFormPage.tsx
 │   │   │   │   │   │   ├── BrandsPage.tsx
 │   │   │   │   │   │   ├── CategoriesPage.tsx
+│   │   │   │   │   │   ├── PriceTypesPage.tsx
 │   │   │   │   │   │   ├── Products.tsx
+│   │   │   │   │   │   ├── ProductsListPage.tsx
 │   │   │   │   │   │   ├── TagsPage.tsx
 │   │   │   │   │   │   └── UnitsPage.tsx
 │   │   │   │   │   ├── Warehouses
@@ -261,7 +261,8 @@
 │   │   │   │       ├── companyApi.ts
 │   │   │   │       ├── directoryApi.ts
 │   │   │   │       ├── productApi.ts
-│   │   │   │       └── rolesApi.ts
+│   │   │   │       ├── rolesApi.ts
+│   │   │   │       └── transactionApi.ts
 │   │   │   ├── admin
 │   │   │   │   └── components
 │   │   │   │       ├── AdminPanel.tsx

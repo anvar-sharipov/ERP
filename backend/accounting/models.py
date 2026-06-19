@@ -17,6 +17,7 @@ import os
 from django.db.models import Q
 from django.core.validators import MinValueValidator
 from decimal import Decimal
+import datetime
 
 
 
@@ -429,38 +430,59 @@ class AccountSubconto(models.Model):
 
 class JournalEntry(models.Model):
     class Status(models.TextChoices):
-        DRAFT = 'draft', 'Черновик'
-        POSTED = 'posted', 'Проведен'
-        
-    number = models.CharField(max_length=20, unique=True, verbose_name="Номер операции")
-    date = models.DateTimeField(db_index=True, verbose_name="Дата проводки") # Индекс для фильтрации по датам/периодам
-    
-    status = models.CharField(
-        max_length=10, 
-        choices=Status.choices, 
-        default=Status.DRAFT, 
-        db_index=True, # Индекс нужен, чтобы быстро фильтровать только проведенные (POSTED)
-        verbose_name="Статус операции"
-    )
-    
-    description = models.CharField(max_length=255, blank=True, verbose_name="Содержание / Комментарий")
-    
-    source_document_id = models.PositiveIntegerField(null=True, blank=True, verbose_name="ID документа-источника")
+        DRAFT  = 'draft',  'Черновик'
+        POSTED = 'posted', 'Проведён'
+
+    number      = models.CharField(max_length=20, unique=True)
+    date        = models.DateTimeField(db_index=True)
+    status      = models.CharField(max_length=10, choices=Status.choices,
+                                   default=Status.DRAFT, db_index=True)
+    description = models.CharField(max_length=255, blank=True)
+
+    # Документ-источник (накладная, акт и т.д.)
     source_document_type = models.ForeignKey(
-        ContentType, 
-        on_delete=models.SET_NULL, 
-        null=True, 
-        blank=True,
-        verbose_name="Тип документа-источника"
+        ContentType, on_delete=models.SET_NULL, null=True, blank=True
     )
-    
-    
-    # метод проверки баланса, сумма всех дебетов равна сумме всех кредитов внутри одной
+    source_document_id = models.PositiveIntegerField(null=True, blank=True)
+
+    created_by = models.ForeignKey(
+        'users.User', on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='journal_entries'
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
     def check_balance(self):
-        total_dt = self.transactions.aggregate(models.Sum('amount'))['amount__sum'] or 0
-        total_kt = self.transactions.aggregate(models.Sum('amount'))['amount__sum'] or 0
-        if total_dt != total_kt:
-            raise ValidationError("Сумма Дт не равна Кт!")
+        """Сумма всех Дт строк должна равняться сумме всех Кт строк."""
+        from django.db.models import Sum
+        totals = (
+            self.lines
+            .values('side')
+            .annotate(total=Sum('amount'))
+        )
+        sums = {row['side']: row['total'] for row in totals}
+        dt = sums.get('debit', 0)
+        kt = sums.get('credit', 0)
+        if dt != kt:
+            raise ValidationError(
+                f"Баланс не сходится: Дт={dt}, Кт={kt}"
+            )
+
+    def post(self):
+        from accounting.utils import check_period_open
+        if self.status == self.Status.POSTED:
+            raise ValidationError("Операция уже проведена")
+        check_period_open(self.date)  # ← проверка
+        self.check_balance()
+        self.status = self.Status.POSTED
+        self.save(update_fields=['status'])
+
+    def unpost(self):
+        from accounting.utils import check_period_open
+        if self.status == self.Status.DRAFT:
+            raise ValidationError("Операция ещё не проведена")
+        check_period_open(self.date)  # ← и при отмене тоже
+        self.status = self.Status.DRAFT
+        self.save(update_fields=['status'])
 
     class Meta:
         ordering = ['-date', '-number']
@@ -468,77 +490,248 @@ class JournalEntry(models.Model):
         verbose_name_plural = "Журнал операций"
 
     def __str__(self):
-        return f"Операция №{self.number} от {self.date.strftime('%d.%m.%Y')}"
+        return f"Операция №{self.number} от {self.date:%d.%m.%Y}"
 
 
-class Transaction(models.Model):
+
+class TransactionLine(models.Model):
+    """
+    Одна строка бухгалтерской операции.
+    Российская модель: каждая строка — либо Дт, либо Кт одного счёта.
+    Баланс обеспечивается на уровне JournalEntry.check_balance().
+    """
+    class Side(models.TextChoices):
+        DEBIT  = 'debit',  'Дебет'
+        CREDIT = 'credit', 'Кредит'
+
     journal_entry = models.ForeignKey(
-        JournalEntry, 
-        on_delete=models.CASCADE, 
-        related_name='transactions',
-        verbose_name="Родительская операция"
+        JournalEntry, on_delete=models.CASCADE, related_name='lines'
     )
-    
-    account_deb = models.ForeignKey(Account, on_delete=models.PROTECT, related_name='debit_transactions', verbose_name="Счет Дт")
-    account_krt = models.ForeignKey(Account, on_delete=models.PROTECT, related_name='credit_transactions', verbose_name="Счет Кт")
-    
-    amount = models.DecimalField(max_digits=15, decimal_places=2, verbose_name="Сумма")
+    order   = models.PositiveSmallIntegerField(default=0)  # порядок строки в операции
+    side    = models.CharField(max_length=6, choices=Side.choices, db_index=True)
+    account = models.ForeignKey(
+        Account, on_delete=models.PROTECT, related_name='transaction_lines'
+    )
+    amount  = models.DecimalField(
+        max_digits=15, decimal_places=2,
+        validators=[MinValueValidator(Decimal('0.01'))]
+    )
+    # {"kontragenty": {"id": 5, "name": "ИП Ахмедов"}, "sklad": {"id": 2, "name": "Основной"}}
+    subcontos = models.JSONField(default=dict, blank=True)
 
-    # НОВЫЙ ФОРМАТ ХРАНЕНИЯ: {"kontragenty": {"id": 5, "name": "ИП Ахмедов"}}
-    subcontos_deb = models.JSONField(default=dict, blank=True, verbose_name="Субконто Дт (JSON)")
-    subcontos_krt = models.JSONField(default=dict, blank=True, verbose_name="Субконто Кт (JSON)")
-    
-    
-    
     def clean(self):
-        # Запрет проводок по группам
-        if self.account_deb.is_group:
-            raise ValidationError("Нельзя проводить по счету-группе")
-    
-        """Валидация того, что JSON заполнен согласно требованиям плана счетов"""
-        self._validate_subcontos(self.account_deb, self.subcontos_deb, "Дебет")
-        self._validate_subcontos(self.account_krt, self.subcontos_krt, "Кредит")
+        if self.account.is_group:
+            raise ValidationError(
+                f"Нельзя делать проводку по счёту-группе: {self.account.code}"
+            )
+        self._validate_subcontos()
 
-    def _validate_subcontos(self, account, subcontos_json, side_name):
-        # Получаем все требуемые slug-и субконто для этого счета
-        required_subcontos = account.subcontos.values_list('slug', flat=True)
-        
-        # Проверяем наличие всех обязательных ключей в переданном JSON
-        for slug in required_subcontos:
-            if slug not in subcontos_json:
-                raise ValidationError(
-                    {f"subcontos_{side_name.lower()}": f"Для счета {account.code} обязательно заполнение аналитики: {slug}"}
-                )
-        
-        # Опционально: проверка на лишние ключи (если в JSON прислали то, чего не должно быть на счете)
-        for slug in subcontos_json.keys():
-            if slug not in required_subcontos:
-                raise ValidationError(
-                    {f"subcontos_{side_name.lower()}": f"Аналитика {slug} не предусмотрена для счета {account.code}"}
-                )
+    def _validate_subcontos(self):
+        required = set(self.account.subcontos.values_list('slug', flat=True))
+        provided = set(self.subcontos.keys())
+
+        missing = required - provided
+        if missing:
+            raise ValidationError(
+                f"Для счёта {self.account.code} не заполнены субконто: {missing}"
+            )
+        extra = provided - required
+        if extra:
+            raise ValidationError(
+                f"Лишние субконто для счёта {self.account.code}: {extra}"
+            )
 
     def save(self, *args, **kwargs):
-        # Вызываем clean перед сохранением, так как Django save() не вызывает clean() автоматически
         self.full_clean()
         super().save(*args, **kwargs)
-        
 
     class Meta:
-        verbose_name = "Проводка"
-        verbose_name_plural = "Проводки"
-        
-        # КРИТИЧЕСКИЙ НЮАНС: Вешаем инвертированные GIN-индексы на JSON-поля.
-        # Это позволит Postgres мгновенно искать совпадения внутри JSON структур
+        ordering = ['order']
+        verbose_name = "Строка операции"
+        verbose_name_plural = "Строки операций"
         indexes = [
-            GinIndex(fields=['subcontos_deb'], name='tx_subcontos_deb_gin'),
-            GinIndex(fields=['subcontos_krt'], name='tx_subcontos_krt_gin'),
+            GinIndex(fields=['subcontos'], name='tx_line_subcontos_gin'),
+            models.Index(fields=['account', 'side'], name='tx_line_account_side_idx'),
         ]
 
     def __str__(self):
-        return f"Дт {self.account_deb.code} - Кт {self.account_krt.code} на сумму {self.amount}"
-    
-    
+        return f"{self.get_side_display()} {self.account.code} — {self.amount}"
 
+
+# =====================================================================
+# ДВИЖЕНИЯ ПО СКЛАДУ
+# =====================================================================
+
+class StockMovement(models.Model):
+    """
+    Каждое физическое движение товара фиксируется здесь.
+    WarehouseStock.quantity обновляется сигналом после сохранения.
+    """
+    class Direction(models.TextChoices):
+        IN   = 'in',   'Приход'
+        OUT  = 'out',  'Расход'
+        MOVE = 'move', 'Перемещение'  # из одного склада в другой
+
+    warehouse     = models.ForeignKey("Warehouse", on_delete=models.PROTECT,
+                                      related_name='movements')
+    # Для перемещения: склад-получатель
+    warehouse_to  = models.ForeignKey("Warehouse", on_delete=models.PROTECT,
+                                      null=True, blank=True,
+                                      related_name='movements_in')
+    product       = models.ForeignKey("Product", on_delete=models.PROTECT,
+                                      related_name='movements')
+    direction     = models.CharField(max_length=4, choices=Direction.choices,
+                                     db_index=True)
+    quantity      = models.DecimalField(max_digits=15, decimal_places=3,
+                                        validators=[MinValueValidator(Decimal('0.001'))])
+    cost_price    = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+
+    # Связь с бухгалтерией (необязательна для ручных корректировок)
+    journal_entry = models.ForeignKey(JournalEntry, on_delete=models.SET_NULL,
+                                      null=True, blank=True,
+                                      related_name='stock_movements')
+
+    note          = models.CharField(max_length=255, blank=True)
+    created_by    = models.ForeignKey(
+        'users.User', on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='stock_movements'
+    )
+    created_at    = models.DateTimeField(auto_now_add=True, db_index=True)
+    
+    date = models.DateField(
+        default=datetime.date.today,
+        verbose_name="Дата операции",
+        db_index=True,
+    )
+
+    def clean(self):
+        if self.direction == self.Direction.MOVE and not self.warehouse_to:
+            raise ValidationError(
+                "Для перемещения нужно указать склад-получатель (warehouse_to)"
+            )
+        if self.direction != self.Direction.MOVE and self.warehouse_to:
+            raise ValidationError(
+                "warehouse_to заполняется только для перемещений"
+            )
+
+        
+    def save(self, *args, **kwargs):
+        from accounting.utils import check_period_open
+        self.full_clean()
+        check_period_open(self.date)
+        super().save(*args, **kwargs)
+        self._update_stock()
+
+    def _update_stock(self):
+        """Обновляем остатки сразу при сохранении движения."""
+        if self.direction == self.Direction.IN:
+            stock, _ = WarehouseStock.objects.get_or_create(
+                warehouse=self.warehouse, product=self.product,
+                defaults={'quantity': 0}
+            )
+            WarehouseStock.objects.filter(pk=stock.pk).update(
+                quantity=models.F('quantity') + self.quantity
+            )
+
+        elif self.direction == self.Direction.OUT:
+            stock, _ = WarehouseStock.objects.get_or_create(
+                warehouse=self.warehouse, product=self.product,
+                defaults={'quantity': 0}
+            )
+            WarehouseStock.objects.filter(pk=stock.pk).update(
+                quantity=models.F('quantity') - self.quantity
+            )
+
+        elif self.direction == self.Direction.MOVE:
+            # Списываем с источника
+            WarehouseStock.objects.get_or_create(
+                warehouse=self.warehouse, product=self.product,
+                defaults={'quantity': 0}
+            )
+            WarehouseStock.objects.filter(
+                warehouse=self.warehouse, product=self.product
+            ).update(quantity=models.F('quantity') - self.quantity)
+
+            # Добавляем получателю
+            WarehouseStock.objects.get_or_create(
+                warehouse=self.warehouse_to, product=self.product,
+                defaults={'quantity': 0}
+            )
+            WarehouseStock.objects.filter(
+                warehouse=self.warehouse_to, product=self.product
+            ).update(quantity=models.F('quantity') + self.quantity)
+
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = "Движение по складу"
+        verbose_name_plural = "Движения по складу"
+        indexes = [
+            models.Index(fields=['warehouse', 'product', 'created_at']),
+            models.Index(fields=['direction']),
+        ]
+        
+# =====================================================================
+# УНИВЕРСАЛЬНЫЙ АУДИТ-ЛОГ
+# =====================================================================
+class AuditLog(models.Model):
+    class Action(models.TextChoices):
+        CREATE = 'create', 'Создание'
+        UPDATE = 'update', 'Изменение'
+        DELETE = 'delete', 'Удаление'
+        POST   = 'post',   'Проведение'
+        UNPOST = 'unpost', 'Отмена проведения'
+
+    # Универсальная ссылка на любую модель
+    content_type = models.ForeignKey(ContentType, on_delete=models.CASCADE)
+    object_id    = models.PositiveIntegerField()
+    object_repr  = models.CharField(max_length=255)  # str(instance) на момент события
+
+    action       = models.CharField(max_length=10, choices=Action.choices, db_index=True)
+    user         = models.ForeignKey(
+        'users.User', on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='audit_logs'
+    )
+    ip_address   = models.GenericIPAddressField(null=True, blank=True)
+
+    # Что именно изменилось: {"field": ["old_value", "new_value"], ...}
+    changed_data = models.JSONField(default=dict, blank=True)
+    timestamp    = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        ordering = ['-timestamp']
+        verbose_name = "Запись аудита"
+        verbose_name_plural = "Журнал аудита"
+        indexes = [
+            models.Index(fields=['content_type', 'object_id']),
+            models.Index(fields=['user', 'timestamp']),
+            GinIndex(fields=['changed_data'], name='audit_changed_data_gin'),
+        ]
+
+    def __str__(self):
+        return f"{self.get_action_display()} {self.object_repr} — {self.timestamp:%d.%m.%Y %H:%M}"
+    
+# accounting/models.py — добавь в конец
+
+class ClosedPeriod(models.Model):
+    """
+    Закрытый день/период.
+    Если дата есть в этой таблице — день закрыт, операции запрещены.
+    """
+    date       = models.DateField(unique=True, verbose_name="Закрытая дата")
+    closed_by  = models.ForeignKey(
+        'users.User', on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='closed_periods'
+    )
+    closed_at  = models.DateTimeField(auto_now_add=True)
+    note       = models.CharField(max_length=255, blank=True)
+
+    class Meta:
+        ordering = ['-date']
+        verbose_name = "Закрытый период"
+        verbose_name_plural = "Закрытые периоды"
+
+    def __str__(self):
+        return f"Закрыт: {self.date}"
 
 
 # =====================================================================

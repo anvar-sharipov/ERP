@@ -4,6 +4,7 @@ import React from "react";
 import { useSidebar } from "../../core/context/SidebarRightContext";
 import { playAside2Sound } from "../../core/utils/sound";
 import { useCompany } from "../../core/context/CompanyContext";
+import WorkDateWidget from "../ui/WorkDateWidget";
 
 interface SidebarRightProps {
   isOpen: boolean;
@@ -62,6 +63,9 @@ const SidebarRight: React.FC<SidebarRightProps> = ({ isOpen, setIsOpen }) => {
           overflow-hidden flex flex-col
         `}
         >
+          <div className="p-3 border-b border-indigo-900/30">
+            <WorkDateWidget />
+          </div>
           {/* Контейнер с контентом и скроллом */}
           <div className={`flex-1 overflow-y-auto p-4 ${isOpen ? "block" : "hidden"}`}>
             {sidebarContent || (

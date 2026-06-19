@@ -1,25 +1,3 @@
-// // frontend/src/core/router/ProtectedRoute.tsx
-// import React from 'react';
-// import { Navigate, Outlet } from 'react-router-dom';
-// import { ROUTES } from './routes';
-
-// interface ProtectedRouteProps {
-//   redirectPath?: string;
-// }
-
-// const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ redirectPath = ROUTES.AUTH.LOGIN }) => {
-//   // В будущем тут будет проверка JWT-токена из Redux / LocalStorage
-//   const isAuthenticated = !!localStorage.getItem('access_token');
-
-//   if (!isAuthenticated) {
-//     return <Navigate to={redirectPath} replace />;
-//   }
-
-//   return <Outlet />;
-// };
-
-// export default ProtectedRoute;
-
 // frontend/src/core/router/ProtectedRoute.tsx
 import React from "react";
 import { Navigate, Outlet } from "react-router-dom";

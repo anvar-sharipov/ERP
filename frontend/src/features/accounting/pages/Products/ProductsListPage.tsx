@@ -14,6 +14,7 @@ import { Plus } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import { ROUTES } from "../../../../core/router/routes";
+import { useRestoreScroll } from '../../../../core/hooks/useRestoreScroll'
 
 // ── Основная страница ─────────────────────────────────────────────────────────
 const ProductsListPage = () => {
@@ -22,7 +23,8 @@ const ProductsListPage = () => {
   const queryClient = useQueryClient();
   const { setSidebarContent } = useSidebar();
   const { canView, canPost, canPut, canDelete } = usePageAccess("product");
-  const [highlightedId, setHighlightedId] = useState<number | null>(null);
+  const [highlightedId, setHighlightedId] = useState<number | null>(null)
+  const { } = useRestoreScroll('selectedProductId', setHighlightedId)
   const navigate = useNavigate();
 
   // const [formOpen, setFormOpen] = useState(false);
@@ -33,6 +35,7 @@ const ProductsListPage = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [categoryFilter, setCategoryFilter] = useState<number | null>(null);
   const [activeFilter, setActiveFilter] = useState<"all" | "active" | "inactive">("all");
+  
 
   // ── запросы ─────────────────────────────────────────────────────────────────
 

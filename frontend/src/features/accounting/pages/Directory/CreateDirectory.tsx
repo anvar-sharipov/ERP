@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
-import { directoryApi } from "../../services/usersApi";
+import { directoryApi } from "../../services/directoryApi";
 
 import { useNotify } from "../../../../core/context/NotificationContext";
 import { slugify } from "../../../../core/utils/slugify";

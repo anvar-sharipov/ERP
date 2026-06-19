@@ -8,6 +8,8 @@ import {
   UserCircleIcon,
   ShoppingBagIcon,
   BuildingStorefrontIcon,
+  ClipboardDocumentListIcon,
+  KeyIcon,
 } from "@heroicons/react/24/outline";
 
 // Добавляем эффект свечения и чуть более светлые тона для темных тем
@@ -18,8 +20,11 @@ export const COMPANY_ICON = <BuildingOfficeIcon className={`${iconClassName} tex
 export const BRANCH_ICON = <BriefcaseIcon className={`${iconClassName} text-indigo-400`} />;
 export const USERS_ICON = <UserGroupIcon className={`${iconClassName} text-sky-400`} />;
 export const ACCOUNT_ICON = <DocumentChartBarIcon className={`${iconClassName} text-emerald-400`} />;
-export const DIRECTORY_ICON = <QueueListIcon className={`${iconClassName} text-slate-400`} />;
+export const DIRECTORY_ICON = <QueueListIcon className={`${iconClassName} text-purple-400`} />;
 
 export const COUNTERPARTY_ICON = <UserCircleIcon className={`${iconClassName} text-orange-400`} />;
 export const WAREHOUSE_ICON = <BuildingStorefrontIcon className={`${iconClassName} text-amber-400`} />;
 export const PRODUCT_ICON = <ShoppingBagIcon className={`${iconClassName} text-rose-400`} />;
+
+export const JOURNAL_ICON = <ClipboardDocumentListIcon className={`${iconClassName} text-yellow-400`} />;
+export const ROLES_ICON = <KeyIcon className={`${iconClassName} text-red-400`} />;
