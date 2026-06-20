@@ -2,12 +2,30 @@
 import React, { useEffect, useRef } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import { ROUTES } from "../../core/router/routes";
-import { ADMIN_ICON, COMPANY_ICON, USERS_ICON, BRANCH_ICON, ACCOUNT_ICON, DIRECTORY_ICON, COUNTERPARTY_ICON, WAREHOUSE_ICON, PRODUCT_ICON, JOURNAL_ICON, ROLES_ICON } from "../Icons/LeftBarIcons";
-import { playClick2Sound, playAside2Sound, playClickSound } from "../../core/utils/sound";
+import {
+  ADMIN_ICON,
+  COMPANY_ICON,
+  USERS_ICON,
+  BRANCH_ICON,
+  ACCOUNT_ICON,
+  DIRECTORY_ICON,
+  COUNTERPARTY_ICON,
+  WAREHOUSE_ICON,
+  PRODUCT_ICON,
+  JOURNAL_ICON,
+  ROLES_ICON,
+  DASHBOARD_ICON,
+} from "../Icons/LeftBarIcons";
+import { playClick2Sound, playAside2Sound } from "../../core/utils/sound";
 import { useAccess } from "../../core/hooks/useAccess";
 import { useTranslation } from "react-i18next";
 import { focusManager } from "../../core/utils/focusManager";
 
+import { LanguageSwitcher } from "../ui/LanguageSwitcher";
+import { ThemeToggle } from "../ui/ThemeToggle";
+
+
+import { UserProfileBlock } from "../ui/UserProfileBlock";
 interface SidebarLeftProps {
   isOpen: boolean;
   setIsOpen: (open: boolean) => void;
@@ -15,19 +33,9 @@ interface SidebarLeftProps {
 
 // Добавьте это в ваш файл с константами или прямо в SidebarLeft
 const NAV_ITEMS = {
-  // main: [
-  //   { name: "Admin", path: ROUTES.COMPANY_ADMIN.USERS, icon: ADMIN_ICON, permission: ["user", "GET"] },
-  //   { name: "Desktop", path: ROUTES.APP.DASHBOARD, icon: "📊" },
-  //   { name: "Accounting", path: ROUTES.APP.ACCOUNTING, icon: ACCOUNT_ICON, permission: ["transaction", "GET"] },
-  //   { name: "Journal", path: ROUTES.APP.JOURNAL, icon: JOURNAL_ICON, permission: ["journal", "GET"] },
-  //   { name: "Directoryes", path: ROUTES.APP.DIRECTORY, icon: DIRECTORY_ICON, permission: ["directory", "GET"] },
-  //   { name: "Products", path: ROUTES.APP.PRODUCTS, icon: PRODUCT_ICON, permission: ["product", "GET"] },
-  //   { name: "Counterparties", path: ROUTES.APP.COUNTERPARTIES, icon: COUNTERPARTY_ICON, permission: ["counterparty", "GET"] },
-  //   { name: "Warehouses", path: ROUTES.APP.WAREHOUSES, icon: WAREHOUSE_ICON, permission: ["warehouse", "GET"] },
-  // ],
   main: [
     { name: "Admin", path: ROUTES.COMPANY_ADMIN.USERS, icon: ADMIN_ICON, permission: ["user", "GET"] },
-    { name: "Desktop", path: ROUTES.APP.DASHBOARD, icon: "📊" },
+    { name: "Desktop", path: ROUTES.APP.DASHBOARD, icon: DASHBOARD_ICON },
     { name: "Accounting", path: ROUTES.APP.ACCOUNTING, icon: ACCOUNT_ICON, permission: ["account", "GET"] },
     { name: "Journal", path: ROUTES.APP.JOURNAL, icon: JOURNAL_ICON, permission: ["journalentry", "GET"] },
     { name: "Directoryes", path: ROUTES.APP.DIRECTORY, icon: DIRECTORY_ICON, permission: ["directory", "GET"] },
@@ -37,14 +45,13 @@ const NAV_ITEMS = {
   ],
   admin: [
     { name: "Users", path: ROUTES.COMPANY_ADMIN.USERS, icon: USERS_ICON },
-    // { name: "Roles", path: ROUTES.COMPANY_ADMIN.ROLES, icon: "🛡️" },
     { name: "Roles", path: ROUTES.COMPANY_ADMIN.ROLES, icon: ROLES_ICON },
     { name: "Company", path: ROUTES.COMPANY_ADMIN.COMPANIES, icon: COMPANY_ICON },
     { name: "Branchs", path: ROUTES.COMPANY_ADMIN.BRANCHS, icon: BRANCH_ICON },
   ],
 };
 
-const SidebarLeft: React.FC<SidebarLeftProps> = ({ isOpen, setIsOpen }) => {
+const SidebarLeft: React.FC<SidebarLeftProps> = ({ isOpen }) => {
   const { hasPermission, isLoading } = useAccess();
   const location = useLocation();
   const isAdminSection = location.pathname.startsWith("/admin");
@@ -68,25 +75,9 @@ const SidebarLeft: React.FC<SidebarLeftProps> = ({ isOpen, setIsOpen }) => {
     const [resource, action] = item.permission;
     if (isLoading) return true;
     const result = hasPermission(resource, action);
-    console.log(`${resource}.${action} →`, result); // ← добавь
+    // console.log(`${resource}.${action} →`, result); // ← добавь
     return result;
   });
-
-  // const mainNav = NAV_ITEMS.main.filter((item) => {
-  //   if (!item.permission) return true;
-  //   const [resource, action] = item.permission;
-  //   // isLoading — не скрываем пункты пока грузится юзер
-  //   if (isLoading) return true;
-  //   return hasPermission(resource, action);
-  // });
-
-  // const mainNav = NAV_ITEMS.main.filter((item) => {
-  //   if (!item.permission) return true;
-
-  //   const [resource, action] = item.permission;
-
-  //   return hasPermission(resource, action);
-  // });
 
   // Определяем, какой список отрисовать
   const currentNav = isAdminSection ? NAV_ITEMS.admin : mainNav;
@@ -109,7 +100,9 @@ const SidebarLeft: React.FC<SidebarLeftProps> = ({ isOpen, setIsOpen }) => {
 
       // 3. Стрелки
       if (e.key === "ArrowDown" || e.key === "ArrowUp") {
-        playClickSound();
+        // playClickSound();
+        playAside2Sound();
+        // playAsideSound();
         e.preventDefault();
         if (!sidebarRef.current) return;
 
@@ -136,18 +129,6 @@ const SidebarLeft: React.FC<SidebarLeftProps> = ({ isOpen, setIsOpen }) => {
     return () => window.removeEventListener("keydown", handleKeyDown, { capture: true });
   }, []);
 
-  // Внутри SidebarLeft
-  // useEffect(() => {
-  //   const handleFocusSidebar = () => {
-  //     // Принудительно фокусируем первый элемент
-  //     navItemsRef.current[0]?.focus();
-  //     focusManager.setRegion("sidebar");
-  //   };
-
-  //   window.addEventListener("focus-sidebar", handleFocusSidebar);
-  //   return () => window.removeEventListener("focus-sidebar", handleFocusSidebar);
-  // }, []);
-
   const getLinkClass = ({ isActive }: { isActive: boolean }) => {
     const baseClass = "flex items-center px-1 py-1 md:px-3 md:py-2 font-medium transition-all duration-200 overflow-hidden whitespace-nowrap focus:ring-2 focus:ring-indigo-400 focus:outline-none";
     return isActive ? `${baseClass} bg-indigo-700 text-indigo-300 border border-indigo-500/30` : `${baseClass} text-indigo-200 hover:bg-indigo-900/20 hover:text-indigo-200`;
@@ -157,41 +138,95 @@ const SidebarLeft: React.FC<SidebarLeftProps> = ({ isOpen, setIsOpen }) => {
     <aside
       ref={sidebarRef}
       className={`
-  border-r border-slate-500 bg-slate-800 dark:bg-slate-900 p-2 flex flex-col justify-between transition-all duration-300 print:hidden
-  fixed left-0 top-16 h-[calc(100vh-4rem)] z-40
-  lg:relative lg:top-0 lg:h-full
-  ${isOpen ? "w-64" : "w-10 md:w-16"}
-`}
+        border-r border-slate-500 bg-slate-800 dark:bg-slate-900 p-2 flex flex-col transition-all duration-300 print:hidden
+        fixed left-0 top-16 h-[calc(100vh-4rem)] z-40
+        lg:relative lg:top-0 lg:h-full
+        ${isOpen ? "w-64" : "w-10 md:w-16"}
+      `}
     >
-      {/* Кнопка-переключатель */}
-      <button
-        tabIndex={0}
-        onClick={() => {
-          playAside2Sound();
-          setIsOpen(!isOpen);
-        }}
-        className="absolute -right-5 md:-right-3 top-0 w-5 h-5 md:w-6 md:h-6 bg-indigo-900 border border-indigo-700 rounded-full flex items-center justify-center shadow-lg hover:bg-indigo-800 z-10 transition-colors"
-      >
-        <svg className={`w-4 h-4 text-indigo-300 transition-transform duration-300 ${!isOpen ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-        </svg>
-      </button>
-
-      <nav className="space-y-1">
-        {/* Ссылка "Назад", если мы в админке */}
+      {/* Скроллируемая навигация */}
+      {/* <nav className="flex-1 overflow-y-auto min-h-0 py-2">
         {isAdminSection && (
           <NavLink
             to={ROUTES.APP.DASHBOARD}
-            ref={backButtonRef} // ДОБАВИТЬ ЭТО
-            tabIndex={0} // ДОБАВИТЬ ЭТО (чтобы фокусировалось)
-            className="mb-4 flex items-center text-indigo-400 hover:text-white focus:ring-2 focus:ring-indigo-400"
+            ref={backButtonRef}
+            tabIndex={0}
+            className="mb-3 mx-2 flex items-center gap-2 px-3 py-2 rounded-lg text-indigo-400 hover:text-white hover:bg-indigo-800/40 transition-all duration-200 group focus:outline-none focus:ring-2 focus:ring-indigo-400"
           >
+            <span className="transition-transform duration-200 group-hover:-translate-x-1">←</span>
+            <span className={`text-sm font-medium transition-all duration-300 ${isOpen ? "opacity-100 translate-x-0" : "opacity-0 -translate-x-2"}`}>{t("Back")}</span>
+          </NavLink>
+        )}
+
+        <div className="space-y-0.5 px-2">
+          {currentNav.map((item) => (
+            <NavLink
+              key={item.path}
+              to={item.path}
+              tabIndex={0}
+              className={({ isActive }) => `
+          relative flex items-center gap-3 px-3 py-2.5 rounded-lg
+          font-medium transition-all duration-200 group
+          focus:outline-none focus:ring-2 focus:ring-indigo-400
+          overflow-hidden
+          ${isActive ? "bg-indigo-600/90 text-white shadow-lg shadow-indigo-900/40" : "text-indigo-200/80 hover:text-white hover:bg-indigo-800/40"}
+        `}
+              onClick={() => {
+                playClick2Sound();
+                focusManager.setRegion("table");
+              }}
+            >
+              {({ isActive }) => (
+                <>
+                  <span
+                    className={`
+              absolute left-0 top-1/2 -translate-y-1/2 w-0.5 rounded-r-full bg-indigo-300
+              transition-all duration-300
+              ${isActive ? "h-6 opacity-100" : "h-0 opacity-0"}
+            `}
+                  />
+
+                  <span
+                    className={`
+              min-w-[20px] flex items-center justify-center
+              transition-transform duration-200
+              ${isActive ? "scale-110" : "group-hover:scale-105"}
+            `}
+                  >
+                    {item.icon}
+                  </span>
+
+                  <span
+                    className={`
+              text-sm whitespace-nowrap
+              transition-all duration-300
+              ${isOpen ? "opacity-100 translate-x-0 w-auto" : "opacity-0 -translate-x-2 w-0"}
+            `}
+                  >
+                    {t(item.name)}
+                  </span>
+                  <span
+                    className={`
+              absolute inset-0 rounded-lg opacity-0 group-hover:opacity-100
+              transition-opacity duration-200
+              bg-gradient-to-r from-indigo-600/10 to-transparent
+              pointer-events-none
+            `}
+                  />
+                </>
+              )}
+            </NavLink>
+          ))}
+        </div>
+      </nav> */}
+      <nav className="flex-1 overflow-y-auto space-y-1 min-h-0">
+        {isAdminSection && (
+          <NavLink to={ROUTES.APP.DASHBOARD} ref={backButtonRef} tabIndex={0} className="mb-4 flex items-center text-indigo-400 hover:text-white focus:ring-2 focus:ring-indigo-400">
             <span className="mr-1 md:mr-2">←</span>
             <span className={isOpen ? "opacity-100" : "opacity-0"}>{t("Back")}</span>
           </NavLink>
         )}
 
-        {/* Отрисовка текущего списка */}
         {currentNav.map((item) => (
           <NavLink
             key={item.path}
@@ -199,9 +234,8 @@ const SidebarLeft: React.FC<SidebarLeftProps> = ({ isOpen, setIsOpen }) => {
             className={getLinkClass}
             onClick={() => {
               playClick2Sound();
-              focusManager.setRegion("table"); // При клике на ссылку сразу переводим регион в таблицу
+              focusManager.setRegion("table");
             }}
-            // ref={(el) => (navItemsRef.current[index] = el)}
             tabIndex={0}
           >
             <span className="min-w-[20px] mr-1 md:mr-3">{item.icon}</span>
@@ -209,15 +243,31 @@ const SidebarLeft: React.FC<SidebarLeftProps> = ({ isOpen, setIsOpen }) => {
           </NavLink>
         ))}
       </nav>
-
-      {/* Нижняя часть сайдбара */}
-      <div className={`pt-4 border-t border-indigo-900/30 text-indigo-500/60 flex flex-col gap-1 transition-opacity duration-200 ${isOpen ? "opacity-100" : "opacity-0"}`}>
-        <div className="text-xs">
-          Лицензия: <span className="text-indigo-400">Активна</span>
+      {/* Фиксированный нижний блок */}
+      <div className="pt-3 border-t border-indigo-900/30 flex flex-col gap-2 shrink-0">
+        {/* Мобиль: профиль + язык + тема */}
+        <div
+          className={`
+    lg:hidden flex flex-col gap-2
+    transition-all duration-200
+    ${isOpen ? "opacity-100 translate-y-0 delay-300" : "opacity-0 -translate-y-2 delay-0 pointer-events-none"}
+  `}
+        >
+          <>
+            <UserProfileBlock variant="inline" showName={true} />
+            <div className="flex items-center gap-2 px-1">
+              <LanguageSwitcher />
+              <ThemeToggle />
+            </div>
+          </>
         </div>
-        <span className="text-xs text-gray-400 hidden md:block">
-          {t("Press")} <kbd className="px-1 bg-slate-700 rounded text-indigo-300 border border-slate-600">F6</kbd> {t("ToSidebar")}
-        </span>
+
+        {/* Лицензия */}
+        <div className={`text-indigo-500/60 flex flex-col gap-1 transition-opacity duration-200 ${isOpen ? "opacity-100" : "opacity-0"}`}>
+          <div className="text-xs">
+            Лицензия: <span className="text-indigo-400">Активна</span>
+          </div>
+        </div>
       </div>
     </aside>
   );

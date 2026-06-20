@@ -19,6 +19,7 @@ import { usePageAccess } from "../../../../../../core/hooks/usePageAccess";
 import { useTranslation } from "react-i18next";
 import { useTableFilter } from "../../../../../../core/hooks/useTableFilter";
 import { PageHeaderText } from "../../../../../../components/ui/Tabs/PageHeaderText";
+import { usePageHotkeys } from "../../../../../../core/hooks/usePageHotkeys";
 
 const CompanyAdminUser = () => {
   const { t } = useTranslation();
@@ -107,12 +108,10 @@ const CompanyAdminUser = () => {
         <div>
           <h4 className="font-bold text-indigo-300 mb-2">{t("Actions")}</h4>
           <Button
+            title={`Insert - ${t("AddUser")}`}
             disabled={!canPost}
             text={t("AddUser")}
-            onClick={() => {
-              setEditingUser(null);
-              setUserModalOpen(true);
-            }}
+            onClick={openCreateUser}
             className="w-full"
             icon={
               <div className="flex items-center gap-1">
@@ -168,6 +167,28 @@ const CompanyAdminUser = () => {
       },
     ],
   });
+
+  const openCreateUser = () => {
+    setEditingUser(null);
+    setFormData({
+      username: "",
+      first_name: "",
+      last_name: "",
+      phone: "",
+      position: "",
+      is_active: true,
+      password: "",
+    });
+    setUserModalOpen(true);
+  };
+
+  usePageHotkeys({
+    canPost,
+    onInsert: () => {
+      openCreateUser();
+    },
+  });
+
 
   const columns: Column<UserInterface>[] = [
     { header: t("Actions"), accessor: "id", sortable: true, excelWidth: 8, excelAlign: "center" },
@@ -329,3 +350,6 @@ const CompanyAdminUser = () => {
 };
 
 export default CompanyAdminUser;
+// function openCreateUser() {
+//   throw new Error("Function not implemented.");
+// }

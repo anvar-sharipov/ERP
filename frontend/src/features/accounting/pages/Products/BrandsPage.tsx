@@ -17,6 +17,7 @@ import { useTranslation } from "react-i18next";
 import { slugify } from "../../../../core/utils/slugify";
 import { useTableFilter } from "../../../../core/hooks/useTableFilter";
 import type { Brand } from "../../../../core/types";
+import { usePageHotkeys } from "../../../../core/hooks/usePageHotkeys";
 
 interface BrandForm {
   name: string;
@@ -142,6 +143,15 @@ const BrandsPage = () => {
         return true;
       },
     ],
+  });
+
+  usePageHotkeys({
+    canPost,
+    onInsert: () => {
+      setEditing(null);
+      setForm(EMPTY);
+      setFormOpen(true);
+    },
   });
 
   const columns: Column<any>[] = [

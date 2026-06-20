@@ -15,6 +15,7 @@ import { Plus } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { type Unit } from "../../../../core/types";
 import { useTableFilter } from "../../../../core/hooks/useTableFilter";
+import { usePageHotkeys } from "../../../../core/hooks/usePageHotkeys";
 
 interface UnitForm {
   name: string;
@@ -105,6 +106,16 @@ const UnitsPage = () => {
       </div>,
     );
   }, [setSidebarContent, canPost, t]);
+
+  usePageHotkeys({
+    canPost,
+    onInsert: () => {
+      setEditing(null);
+      setForm(EMPTY);
+      setFormOpen(true);
+    },
+  });
+
 
   const columns: Column<any>[] = [
     { header: t("ID"), accessor: "id", sortable: true, excelWidth: 5 },

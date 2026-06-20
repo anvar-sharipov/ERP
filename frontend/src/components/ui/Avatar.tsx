@@ -1,39 +1,7 @@
-// interface AvatarProps {
-//   src?: string | null;
-//   fallbackText: string;
-//   onClick: () => void;
-//   size?: "sm" | "md";
-//   rounded?: boolean; // добавь
-// }
-
-// export const Avatar = ({ src, fallbackText, onClick, size = "sm", rounded = false }: AvatarProps) => {
-//   const sizeClass = size === "sm" ? "w-8 h-8" : "w-12 h-12";
-//   const roundedClass = rounded ? "rounded-full" : "rounded";
-
-//   const handleAvatarClick = () => {
-//     onClick();
-//   };
-
-//   return (
-//     <div className="flex justify-center">
-//       {src ? (
-//         <img src={src} className={`${sizeClass} ${roundedClass} cursor-pointer hover:opacity-80 transition object-cover border border-gray-200`} onClick={handleAvatarClick} />
-//       ) : (
-//         <div
-//           className={`${sizeClass} ${roundedClass} bg-indigo-100 text-indigo-600 flex items-center justify-center text-xs font-bold border border-indigo-200 cursor-pointer`}
-//           onClick={handleAvatarClick}
-//         >
-//           {fallbackText.charAt(0).toUpperCase()}
-//         </div>
-//       )}
-//     </div>
-//   );
-// };
-
 interface AvatarProps {
   src?: string | null;
   fallbackText: string;
-  onClick: () => void;
+  onClick?: () => void;
   size?: "xs" | "sm" | "md" | "lg" | "xl" | "2xl";
   rounded?: boolean;
 }

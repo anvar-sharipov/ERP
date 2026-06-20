@@ -15,6 +15,7 @@ import { Plus } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useTableFilter } from "../../../../core/hooks/useTableFilter";
 import type { PriceType } from "../../../../core/types";
+import { usePageHotkeys } from "../../../../core/hooks/usePageHotkeys";
 
 interface PriceTypeForm {
   name: string;
@@ -106,6 +107,15 @@ const PriceTypesPage = () => {
   const filtered = useTableFilter(priceTypes, {
     search: searchQuery,
     searchFields: ["id", "name"],
+  });
+
+  usePageHotkeys({
+    canPost,
+    onInsert: () => {
+      setEditing(null);
+      setForm(EMPTY);
+      setFormOpen(true);
+    },
   });
 
   const columns: Column<any>[] = [

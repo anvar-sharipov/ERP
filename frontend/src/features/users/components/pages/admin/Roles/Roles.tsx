@@ -20,6 +20,7 @@ import { PageHeaderText } from "../../../../../../components/ui/Tabs/PageHeaderT
 import { useNavigate } from "react-router-dom";
 import { ROUTES } from "../../../../../../core/router/routes";
 import { useRestoreScroll } from "../../../../../../core/hooks/useRestoreScroll";
+import { usePageHotkeys } from "../../../../../../core/hooks/usePageHotkeys";
 
 const Roles = () => {
   const { setSidebarContent } = useSidebar();
@@ -90,6 +91,16 @@ const Roles = () => {
     enabled: canView,
     retry: false,
     staleTime: 1000 * 60 * 5,
+  });
+
+  usePageHotkeys({
+    canPost,
+    onInsert: () => {
+      const isOnCreatePage = location.pathname.includes("create");
+      const isOnEditPage = location.pathname.includes("edit");
+      if (isOnCreatePage || isOnEditPage) return;
+      navigate(ROUTES.COMPANY_ADMIN.ROLES_CREATE);
+    },
   });
 
   const columns: Column<Role>[] = [

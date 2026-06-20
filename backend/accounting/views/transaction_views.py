@@ -35,7 +35,11 @@ class JournalEntryViewSet(AuditMixin, viewsets.ModelViewSet):
         qs = (
             JournalEntry.objects
             .select_related('created_by', 'source_document_type')
-            .prefetch_related('lines__account__subcontos')
+            # .prefetch_related('lines__account__subcontos')
+            .prefetch_related(
+                'lines__account',
+                'lines__account__subcontos'
+            )
         )
 
         if self.action == 'list':

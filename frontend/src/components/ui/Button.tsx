@@ -14,9 +14,9 @@ interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
 }
 
 const sizes = {
-  sm: "px-2 py-0.5 text-xs",
-  md: "px-1 py-0.5 md:px-3 md:py-1.5 text-sm",
-  lg: "px-6 py-2 text-base",
+  sm: "px-2 py-0.5",
+  md: "px-1 py-0.5 md:px-3 md:py-1.5",
+  lg: "px-6 py-2",
 };
 
 export const Button: React.FC<ButtonProps> = ({

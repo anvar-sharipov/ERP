@@ -21,6 +21,7 @@ import CategoryTreeView from "../../../../components/ui/Category/CategotyTree/Tr
 import { filterTreeItems } from "../../../../components/ui/Category/CategotyTree/TreeManager/filterTreeItems";
 import CategoryTreeSelect from "../../../../components/ui/Category/CategotyTree/TreeSelect/CategoryTreeSelect";
 import { SegmentedControl } from "../../../../components/ui/Tabs/SegmentedControl";
+import { usePageHotkeys } from "../../../../core/hooks/usePageHotkeys";
 
 interface CategoryForm {
   name: string;
@@ -189,6 +190,16 @@ const CategoriesPage = () => {
     return (categories as TreeNode[]).filter((c) => !descendantIds.includes(c.id));
   }, [categories, editing]);
 
+  usePageHotkeys({
+    canPost,
+    onInsert: () => {
+      setEditing(null);
+      setForm(EMPTY);
+      setFormOpen(true);
+    },
+  });
+
+
   const columns: Column<any>[] = [
     { header: t("ID"), accessor: "id", sortable: true, excelWidth: 5 },
     {
@@ -286,7 +297,6 @@ const CategoriesPage = () => {
           <Input placeholder={t("Search")} value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} leftIcon={<Search size={18} />} />
         </div>
       )}
-
 
       {viewMode === "table" ? (
         <Table

@@ -14,7 +14,9 @@ import { Plus } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import { ROUTES } from "../../../../core/router/routes";
-import { useRestoreScroll } from '../../../../core/hooks/useRestoreScroll'
+import { useRestoreScroll } from "../../../../core/hooks/useRestoreScroll";
+import { usePageHotkeys } from "../../../../core/hooks/usePageHotkeys";
+import { useTableFilter } from "../../../../core/hooks/useTableFilter";
 
 // ── Основная страница ─────────────────────────────────────────────────────────
 const ProductsListPage = () => {
@@ -23,8 +25,8 @@ const ProductsListPage = () => {
   const queryClient = useQueryClient();
   const { setSidebarContent } = useSidebar();
   const { canView, canPost, canPut, canDelete } = usePageAccess("product");
-  const [highlightedId, setHighlightedId] = useState<number | null>(null)
-  const { } = useRestoreScroll('selectedProductId', setHighlightedId)
+  const [highlightedId, setHighlightedId] = useState<number | null>(null);
+  const {} = useRestoreScroll("selectedProductId", setHighlightedId);
   const navigate = useNavigate();
 
   // const [formOpen, setFormOpen] = useState(false);
@@ -35,7 +37,6 @@ const ProductsListPage = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [categoryFilter, setCategoryFilter] = useState<number | null>(null);
   const [activeFilter, setActiveFilter] = useState<"all" | "active" | "inactive">("all");
-  
 
   // ── запросы ─────────────────────────────────────────────────────────────────
 
@@ -107,19 +108,28 @@ const ProductsListPage = () => {
 
   // ── фильтрация ───────────────────────────────────────────────────────────────
 
-  const filtered = useMemo(() => {
-    let result = products as any[];
-    if (activeFilter === "active") result = result.filter((p) => p.is_active);
-    if (activeFilter === "inactive") result = result.filter((p) => !p.is_active);
-    if (categoryFilter !== null) result = result.filter((p) => p.category === categoryFilter);
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
-      result = result.filter((p) => p.name?.toLowerCase().includes(q) || p.sku?.toLowerCase().includes(q) || p.barcode?.toLowerCase().includes(q));
-    }
-    return result;
-  }, [products, activeFilter, categoryFilter, searchQuery]);
+  const filtered = useTableFilter(products as any[], {
+    search: searchQuery,
+    searchFields: ["name", "sku", "barcode"],
+    filterKey: `${activeFilter}:${categoryFilter}`,
+    filters: [
+      (p) => {
+        if (activeFilter === "active") return p.is_active;
+        if (activeFilter === "inactive") return !p.is_active;
+        return true;
+      },
+      (p) => categoryFilter === null || p.category === categoryFilter,
+    ],
+  });
 
   // ── колонки ──────────────────────────────────────────────────────────────────
+
+  usePageHotkeys({
+    canPost,
+    onInsert: () => {
+      navigate(ROUTES.APP.PRODUCTS_CREATE);
+    },
+  });
 
   const columns: Column<any>[] = [
     { header: t("ID"), accessor: "id", sortable: true, excelWidth: 5 },

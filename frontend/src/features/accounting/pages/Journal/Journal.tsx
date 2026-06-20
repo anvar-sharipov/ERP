@@ -7,8 +7,8 @@ const Journal = () => {
   const { t } = useTranslation();
 
   const tabs = [
-    { to: "entries", label: "Журнал операций" },
-    { to: "movements", label: "Движения склада" },
+    { to: t("entries"), label: "Журнал операций" },
+    { to: t("movements"), label: "Движения склада" },
   ];
 
   return (

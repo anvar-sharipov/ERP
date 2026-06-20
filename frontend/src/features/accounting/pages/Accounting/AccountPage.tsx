@@ -15,6 +15,7 @@ import { usePageAccess } from "../../../../core/hooks/usePageAccess";
 import { useTranslation } from "react-i18next";
 import { StatusBadge } from "../../../../components/ui/StatusBadge";
 import { useTableFilter } from "../../../../core/hooks/useTableFilter";
+import { usePageHotkeys } from "../../../../core/hooks/usePageHotkeys";
 
 interface AccountFormData {
   code: string;
@@ -58,7 +59,7 @@ const AccountPage = () => {
     error,
   } = useQuery<AccountInterface[], Error>({
     queryKey: ["accounts"],
-    queryFn: accountApi.getAccounts,
+    queryFn: () => accountApi.getAccounts(),
     retry: false,
     enabled: canView,
     staleTime: 1000 * 60 * 5,
@@ -130,6 +131,13 @@ const AccountPage = () => {
     setDeleteTarget(account);
     setDeleteModal(true);
   };
+
+  usePageHotkeys({
+    canPost,
+    onInsert: () => {
+      openCreate();
+    },
+  });
 
   const columns: Column<AccountInterface>[] = [
     { header: t("ID"), accessor: "id", sortable: true, excelWidth: 5, excelAlign: "center" },
@@ -231,7 +239,7 @@ const AccountPage = () => {
       <div className="space-y-4">
         <div>
           <h4 className="font-bold text-indigo-300 mb-2">{t("ActionsSidebar")}</h4>
-          <Button text={t("AddAccount")} onClick={openCreate} className="w-full" icon={<Plus size={16} />} dark={true} disabled={!canPost} />
+          <Button title={`Insert - ${t("AddAccount")}`} text={t("AddAccount")} onClick={openCreate} className="w-full" icon={<Plus size={16} />} dark={true} disabled={!canPost} />
         </div>
         <div className="pt-4 border-t border-indigo-900/30">
           <h4 className="font-bold text-indigo-300 mb-2">{t("HierarchyFilter")}</h4>

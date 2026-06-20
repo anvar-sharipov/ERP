@@ -21,6 +21,8 @@ export interface JournalEntry {
   id:               number
   number:           string
   date:             string
+  debit_accounts?: string
+  credit_accounts?: string
   status:           JournalStatus
   status_display:   string
   description:      string
@@ -31,8 +33,8 @@ export interface JournalEntry {
 }
 
 export interface JournalEntryPayload {
-  number:      string
-  date:        string
+  number?:      string
+  date?:        string
   description: string
   lines:       TransactionLine[]
 }

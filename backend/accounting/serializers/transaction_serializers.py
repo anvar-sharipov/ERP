@@ -3,7 +3,7 @@
 from rest_framework import serializers
 from django.db import transaction
 from django.contrib.contenttypes.models import ContentType
-from accounting.utils import check_period_open
+from accounting.utils import check_period_open, generate_journal_number
 from rest_framework import serializers as drf_serializers
 
 
@@ -40,9 +40,9 @@ class TransactionLineSerializer(serializers.ModelSerializer):
             'account', 'account_code', 'account_name',
             'amount', 'subcontos',
         ]
-        extra_kwargs = {
-            'account': {'write_only': True},
-        }
+        # extra_kwargs = {
+        #     'account': {'write_only': True},
+        # }
 
     def validate_account(self, account):
         if account.is_group:
@@ -107,7 +107,7 @@ class JournalEntrySerializer(serializers.ModelSerializer):
             'source_document_type', 'source_document_id',
             'created_by', 'created_by_name', 'created_at',
         ]
-        read_only_fields = ['status', 'created_by', 'created_at']
+        read_only_fields = ['status', 'created_by', 'created_at', 'number']
 
     def validate_lines(self, lines):
         if len(lines) < 2:
@@ -135,6 +135,7 @@ class JournalEntrySerializer(serializers.ModelSerializer):
         journal_entry = JournalEntry.objects.create(
             **validated_data,
             created_by=user,
+            number=generate_journal_number(),
         )
         self._create_lines(journal_entry, lines_data)
         return journal_entry
@@ -163,7 +164,8 @@ class JournalEntrySerializer(serializers.ModelSerializer):
             TransactionLine(
                 journal_entry=journal_entry,
                 order=idx,
-                **line_data,
+                # **line_data,
+                **{k: v for k, v in line_data.items() if k != "order"},
             )
             for idx, line_data in enumerate(lines_data)
         ]
@@ -183,13 +185,38 @@ class JournalEntrySerializer(serializers.ModelSerializer):
 
 class JournalEntryListSerializer(serializers.ModelSerializer):
     status_display  = serializers.CharField(source='get_status_display', read_only=True)
-    created_by_name = serializers.CharField(source='created_by.get_full_name', read_only=True)
+    # created_by_name = serializers.CharField(source='created_by.get_full_name', read_only=True)
+    created_by_name = serializers.SerializerMethodField()
     debit_total     = serializers.SerializerMethodField()
+    
+    debit_accounts = serializers.SerializerMethodField()
+    credit_accounts = serializers.SerializerMethodField()
+    
+    def get_created_by_name(self, obj):
+        user = obj.created_by
+        if not user:
+            return None
+
+        name_parts = [user.last_name, user.first_name]
+        full_name = " ".join([p for p in name_parts if p])
+        return full_name or user.username
+    
+    def get_debit_accounts(self, obj):
+        return ", ".join(
+            obj.lines.filter(side='debit')
+            .values_list('account__code', flat=True)
+        )
+
+    def get_credit_accounts(self, obj):
+        return ", ".join(
+            obj.lines.filter(side='credit')
+            .values_list('account__code', flat=True)
+        )
 
     class Meta:
         model  = JournalEntry
         fields = [
-            'id', 'number', 'date', 'status', 'status_display',
+            'id', 'number', 'date', 'debit_accounts', 'credit_accounts', 'status', 'status_display',
             'description', 'debit_total', 'created_by_name', 'created_at',
         ]
 

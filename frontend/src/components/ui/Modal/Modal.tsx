@@ -45,6 +45,38 @@ export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, 
     xl: "max-w-4xl",
   };
 
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        onClose();
+        return;
+      }
+
+      if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+        const focusable = Array.from(modalRef.current?.querySelectorAll<HTMLElement>("input, textarea, select, button:not(.modal-close)") ?? []);
+        if (focusable.length === 0) return;
+
+        const current = document.activeElement;
+        const idx = focusable.indexOf(current as HTMLElement);
+
+        if (e.key === "ArrowDown") {
+          e.preventDefault();
+          const next = focusable[(idx + 1) % focusable.length];
+          next?.focus();
+        } else {
+          e.preventDefault();
+          const prev = focusable[(idx - 1 + focusable.length) % focusable.length];
+          prev?.focus();
+        }
+      }
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [isOpen, onClose]);
+
   if (!isOpen) return null;
 
   return ReactDOM.createPortal(

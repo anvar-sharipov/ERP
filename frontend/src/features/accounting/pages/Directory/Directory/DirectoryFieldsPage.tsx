@@ -17,6 +17,7 @@ import { useTranslation } from "react-i18next";
 import { useRestoreScroll } from "../../../../../core/hooks/useRestoreScroll";
 import { BackButton } from "../../../../../components/ui/BackButton";
 import { Plus } from "lucide-react";
+import { usePageHotkeys } from "../../../../../core/hooks/usePageHotkeys";
 
 const FIELD_TYPES = [
   { value: "text", label: "Текст" },
@@ -149,8 +150,9 @@ const DirectoryFieldsPage = () => {
         <div>
           <h4 className="font-bold text-indigo-300 mb-2">Действия</h4>
           <Button
+            title={`Insert - ${t("AddField")}`}
             disabled={!canPost}
-            text="Добавить поле"
+            text={t("AddField")}
             className="w-full"
             dark={true}
             icon={<Plus className="w-4 h-4" />}
@@ -182,6 +184,14 @@ const DirectoryFieldsPage = () => {
     const q = searchQuery.toLowerCase();
     return fields.filter((f: any) => f.name?.toLowerCase().includes(q) || f.slug?.toLowerCase().includes(q));
   }, [fields, searchQuery]);
+
+  usePageHotkeys({
+    canPost,
+    onInsert: () => {
+      setEditingField(null);
+      setFormModalOpen(true);
+    },
+  });
 
   const columns: Column<any>[] = [
     { header: "ID", accessor: "id", sortable: true, excelWidth: 5 },

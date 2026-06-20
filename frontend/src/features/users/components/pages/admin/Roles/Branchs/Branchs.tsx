@@ -18,6 +18,7 @@ import { usePageAccess } from "../../../../../../../core/hooks/usePageAccess";
 import { useTranslation } from "react-i18next";
 import { useTableFilter } from "../../../../../../../core/hooks/useTableFilter";
 import { PageHeaderText } from "../../../../../../../components/ui/Tabs/PageHeaderText";
+import { usePageHotkeys } from "../../../../../../../core/hooks/usePageHotkeys";
 
 const Branches = () => {
   const { t } = useTranslation();
@@ -190,7 +191,6 @@ const Branches = () => {
     );
   }, [setSidebarContent, activeFilter, canPost, t]);
 
-
   const filtered = useTableFilter(branches || [], {
     search: searchQuery,
     searchFields: ["name", "city", "manager_name"],
@@ -202,6 +202,14 @@ const Branches = () => {
         return true;
       },
     ],
+  });
+
+  usePageHotkeys({
+    canPost,
+    onInsert: () => {
+      setEditingBranch(null);
+      setModalOpen(true);
+    },
   });
 
   const columns: Column<BranchInterface>[] = [

@@ -687,7 +687,11 @@ export const Table = <T extends { id: string | number }>({
 
       playClickSound();
       const visibleCols = columns.map((_, i) => i).filter((i) => !hiddenInView.has(i));
-      const firstColIndex = visibleCols[0];
+      const firstColIndex = visibleCols[0]; // ← вот здесь берётся первая колонка
+      // // Последняя видимая колонка:
+      // const targetColIndex = visibleCols[visibleCols.length - 1];
+      // Предпоследняя:
+      // const targetColIndex = visibleCols[visibleCols.length - 2] ?? visibleCols[visibleCols.length - 1];
 
       if (firstColIndex !== undefined) {
         const firstItem = paginatedData[0];
@@ -912,6 +916,30 @@ export const Table = <T extends { id: string | number }>({
     const pageButtons = paginationRange.filter((p) => p !== "...");
     return { pageButtons, total: pageButtons.length + 2 }; // +2 = prev + next
   }, [paginationRange]);
+
+  useEffect(() => {
+    const handler = (e: FocusEvent) => {
+      const target = e.target as HTMLElement;
+
+      // Если фокус ушёл в интерактивный элемент ВНЕ контейнера таблицы
+      const isInsideTable = containerRef.current?.contains(target);
+      const isSearchInput = searchInputRef.current === target;
+      const isInsidePagination = paginationRef.current?.contains(target);
+
+      if (isInsideTable || isSearchInput || isInsidePagination) return;
+
+      // Фокус ушёл куда-то за пределы — если это редактируемый элемент, сбрасываем регион
+      const isEditable = target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.tagName === "SELECT" || target.isContentEditable;
+
+      if (isEditable) {
+        focusManager.setRegion("none"); // или любой нейтральный регион
+        setSelectedCell(null); // опционально — снять выделение ячейки
+      }
+    };
+
+    document.addEventListener("focusin", handler);
+    return () => document.removeEventListener("focusin", handler);
+  }, []);
 
   if (isLoading) {
     return (

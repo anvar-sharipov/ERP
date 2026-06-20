@@ -518,7 +518,7 @@ const ProductFormPage = () => {
   const { canPost, canPut } = usePageAccess("product");
   const { getBackProps } = useRestoreScroll("selectedProductId", () => {});
 
-  console.log("ID from params:", id, "isEdit:", !!id);
+  // console.log("ID from params:", id, "isEdit:", !!id);
 
   const toOptions = (arr: readonly string[]) => arr.map((s) => ({ value: s, label: s }));
 
@@ -616,9 +616,11 @@ const ProductFormPage = () => {
       queryClient.invalidateQueries({ queryKey: ["products"] });
       queryClient.invalidateQueries({ queryKey: ["product", productId] });
       notify("success", isEdit ? t("SuccessUpdated") : t("SuccessCreated"));
+
       if (!isEdit) {
-        // После создания переходим на страницу редактирования
-        navigate(ROUTES.APP.PRODUCTS_EDIT.replace(":id", String(res.data.id)));
+        // replace: true — заменяет /products/create на /products/:id/edit
+        // в history стеке остаётся только одна запись, не две
+        navigate(ROUTES.APP.PRODUCTS_EDIT.replace(":id", String(res.data.id)), { replace: true });
       }
     },
     onError: (err: any) => {

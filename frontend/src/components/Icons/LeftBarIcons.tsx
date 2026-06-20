@@ -10,6 +10,7 @@ import {
   BuildingStorefrontIcon,
   ClipboardDocumentListIcon,
   KeyIcon,
+  ComputerDesktopIcon,
 } from "@heroicons/react/24/outline";
 
 // Добавляем эффект свечения и чуть более светлые тона для темных тем
@@ -28,3 +29,4 @@ export const PRODUCT_ICON = <ShoppingBagIcon className={`${iconClassName} text-r
 
 export const JOURNAL_ICON = <ClipboardDocumentListIcon className={`${iconClassName} text-yellow-400`} />;
 export const ROLES_ICON = <KeyIcon className={`${iconClassName} text-red-400`} />;
+export const DASHBOARD_ICON = <ComputerDesktopIcon className={`${iconClassName} text-cyan-400`} />;

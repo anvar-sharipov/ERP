@@ -23,24 +23,33 @@ export const AppLayout: React.FC = () => {
   const location = useLocation();
   const { t } = useTranslation();
 
-  console.log("currentUser", currentUser);
+  // console.log("currentUser", currentUser);
   // const navItemsRef = useRef<(HTMLAnchorElement | null)[]>([]);
 
   useEffect(() => {
     const handleGlobalJump = (e: KeyboardEvent) => {
-      if (e.key === "F6") {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "b") {
         playAsideSound();
         e.preventDefault();
+        // setIsLeftOpen((v) => !v);
+        setIsLeftOpen(true);
         focusManager.setRegion("sidebar");
 
         // Даем время на рендер, если секция поменялась
         setTimeout(() => {
-          // Пытаемся сфокусировать либо кнопку Назад, либо первый элемент списка
           const sidebar = document.querySelector("aside");
-          const firstFocusable = sidebar?.querySelector('[tabindex="0"]') as HTMLElement;
-          firstFocusable?.focus();
+          // ищем активный NavLink
+          const activeLink = sidebar?.querySelector<HTMLElement>(".bg-indigo-700");
+          // если нет активного — первый focusable
+          const firstFocusable = sidebar?.querySelector<HTMLElement>('[tabindex="0"]');
+          (activeLink ?? firstFocusable)?.focus();
         }, 50);
       }
+
+      // if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "b") {
+      //   e.preventDefault();
+      //   setIsLeftOpen((v) => !v);
+      // }
 
       if (e.key === "Escape") {
         // Возвращаем фокус в таблицу, например, на последнюю активную ячейку
@@ -83,12 +92,12 @@ export const AppLayout: React.FC = () => {
   return (
     <div className="flex flex-col h-screen text-[11px] md:text-base bg-gray-100 dark:bg-slate-900 text-gray-900 dark:text-slate-100 overflow-hidden print:p-0 print:m-0 print:bg-white print:block print:h-auto">
       {/* 1. ХЕДЕР */}
-      {isSubdomain ? <Header /> : <AdminHeader />}
+      {isSubdomain ? <Header onToggleSidebar={() => setIsLeftOpen((v) => !v)} onToggleSidebarRight={() => setIsRightOpen((v) => !v)} /> : <AdminHeader />}
 
       {/* 2. РАБОЧАЯ ОБЛАСТЬ */}
       <div className="flex flex-1 min-h-0 overflow-hidden relative">
         {/* ЛЕВЫЙ САЙДБАР */}
-        {isSubdomain ? <SidebarLeft isOpen={isLeftOpen} setIsOpen={setIsLeftOpen}/> : <AdminSidebarLeft />}
+        {isSubdomain ? <SidebarLeft isOpen={isLeftOpen} setIsOpen={setIsLeftOpen} /> : <AdminSidebarLeft />}
 
         {/* OVERLAY: затемнение контента при открытом сайдбаре на мобильных */}
         {(isLeftOpen || isRightOpen) && (
@@ -102,11 +111,11 @@ export const AppLayout: React.FC = () => {
         )}
 
         {/* ГЛАВНАЯ ОБЛАСТЬ (Серый фон) */}
-        <main className="flex-1 flex flex-col min-w-0 bg-gray-100 dark:bg-slate-950 p-1 ml-12 lg:ml-0 md:p-2 overflow-hidden">
+        <main className="flex-1 flex flex-col min-w-0 bg-gray-100 dark:bg-slate-950 p-1 ml-12 lg:ml-0 md:p-2 overflow-hidden print:m-0 print:p-0">
           {/* БЕЛАЯ КАРТОЧКА (Центрирована, ограничена по ширине) */}
           <div
             className={`
-              flex-1 overflow-auto bg-white dark:bg-slate-900 shadow-sm border border-slate-200 dark:border-slate-800 rounded-lg
+              flex-1 overflow-auto bg-white dark:bg-slate-900 shadow-sm border border-slate-200 dark:border-slate-800 rounded-lg print:border-none print:shadow-none
               ${isFullWidth ? "w-full" : "w-full max-w-screen-2xl mx-auto"}
               p-2 md:p-4
             `}

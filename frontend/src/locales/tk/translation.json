@@ -131,7 +131,7 @@
     "UserDeleted": "Ulanyjy üstünlikli pozuldy",
     "Success": "Üstünlikli",
     "Error": "Ýalňyşlyk",
-    "NoRights": "Ulanyjylary görmäge hukuklaryňyz ýok",
+    "NoRights": "Hukuklaryňyz ýok",
 
     "CreateRole": "Roly döretmek",
     "EditRole": "Roly redaktirlemek",
@@ -276,7 +276,14 @@
 
     "ExcelCurrentPage": "Häzirki sahypa",
     "ExcelAllData": "Ähli maglumatlar",
-    "PriceTypes": "Nyrh görnüşleri"
+    "PriceTypes": "Nyrh görnüşleri",
+    "AddField": "Meýdan goşmak",
+    "AddRecord": "Ýazgy goşmak",
+
+    "Posted": "Hasaba alnan",
+    "Draft": "Çernowik",
+    "Dt": "Dt",
+    "Kt": "Kt"
 
     
 

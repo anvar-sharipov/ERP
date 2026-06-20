@@ -17,6 +17,7 @@ import { BackButton } from "../../../../../components/ui/BackButton";
 import { useRestoreScroll } from "../../../../../core/hooks/useRestoreScroll";
 import { useTranslation } from "react-i18next";
 import { Plus } from "lucide-react";
+import { usePageHotkeys } from "../../../../../core/hooks/usePageHotkeys";
 
 // ─── типы ────────────────────────────────────────────────────────────────────
 
@@ -240,10 +241,11 @@ const DirectoryRecordsPage = () => {
     setSidebarContent(
       <div className="space-y-4">
         <div>
-          <h4 className="font-bold text-indigo-300 mb-2">Действия</h4>
+          <h4 className="font-bold text-indigo-300 mb-2">{t("Actions")}</h4>
           <Button
+            title={`Insert - ${t("AddRecord")}`}
             disabled={!canPost}
-            text="Добавить запись"
+            text={t("AddRecord")}
             className="w-full"
             dark={true}
             icon={<Plus className="w-4 h-4" />}
@@ -272,6 +274,14 @@ const DirectoryRecordsPage = () => {
   }, [setSidebarContent, canPost, fields]);
 
   // ── колонки ────────────────────────────────────────────────────────────────
+
+  usePageHotkeys({
+    canPost,
+    onInsert: () => {
+      setEditingRecord(null);
+      setFormModalOpen(true);
+    },
+  });
 
   const dynamicColumns: Column<DirectoryRecord>[] = fields.map((field) => ({
     header: field.name,

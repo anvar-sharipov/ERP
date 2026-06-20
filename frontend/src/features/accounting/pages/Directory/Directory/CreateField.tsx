@@ -23,6 +23,7 @@ import { ROUTES } from "../../../../../core/router/routes";
 import { useRestoreScroll } from "../../../../../core/hooks/useRestoreScroll";
 import { useTableFilter } from "../../../../../core/hooks/useTableFilter";
 import { type Directory as DirectoryInterface } from "../../../../../core/types";
+import { usePageHotkeys } from "../../../../../core/hooks/usePageHotkeys";
 
 interface DirectoryFormData {
   name: string;
@@ -129,8 +130,6 @@ const CreateField = () => {
     },
   });
 
-
-
   const filteredDirectories = useTableFilter(directories || [], {
     search: searchQuery,
     searchFields: ["id", "name", "slug", "description"],
@@ -144,12 +143,21 @@ const CreateField = () => {
     ],
   });
 
+  usePageHotkeys({
+    canPost,
+    onInsert: () => {
+      setEditingDir(null);
+      setFormModalOpen(true);
+    },
+  });
+
   useEffect(() => {
     setSidebarContent(
       <div className="space-y-4">
         <div>
           <h4 className="font-bold text-indigo-300 mb-2">{t("Actions")}</h4>
           <Button
+            title={`Insert - ${t("CreateDirectory")}`}
             disabled={!canPost}
             text={t("CreateDirectory")}
             className="w-full"
