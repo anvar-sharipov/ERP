@@ -11,6 +11,7 @@ from users.permissions import _rbac
 
 # user update edit for admin
 class UserManagementView(generics.ListCreateAPIView):
+    pagination_class = None
     # Доступ только для тех, кто имеет право 'users:POST'
     # permission_classes = [IsAuthenticated, HasPermission('user', 'POST')]
     serializer_class = UserSerializer
@@ -28,6 +29,7 @@ class UserManagementView(generics.ListCreateAPIView):
     
 # user update edit for user   
 class ProfileUpdateView(generics.UpdateAPIView):
+    pagination_class = None
     permission_classes = [IsAuthenticated]
     
     def get_serializer_class(self):
@@ -40,6 +42,7 @@ class ProfileUpdateView(generics.UpdateAPIView):
 
 
 class UserDetailView(generics.RetrieveUpdateDestroyAPIView):
+    pagination_class = None
     serializer_class = UserSerializer
 
     def get_queryset(self):
@@ -60,6 +63,7 @@ class UserDetailView(generics.RetrieveUpdateDestroyAPIView):
     
     
 class MeView(APIView):
+    pagination_class = None
     permission_classes = [IsAuthenticated]
     
     def get(self, request):
@@ -78,6 +82,7 @@ class MeView(APIView):
     
     
 class UserListView(generics.ListAPIView):
+    pagination_class = None
     # permission_classes = [IsAuthenticated, HasPermission('user', 'GET')]
     serializer_class = UserListSerializer
     

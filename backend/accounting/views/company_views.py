@@ -14,6 +14,7 @@ from users.permissions import _rbac
 
 
 class CompanyProfileViewSet(viewsets.ModelViewSet):
+    pagination_class = None
     queryset = CompanyProfile.objects.prefetch_related('branches').all()
 
     def get_serializer_class(self):
@@ -32,6 +33,7 @@ class CompanyProfileViewSet(viewsets.ModelViewSet):
   
   
 class BranchViewSet(viewsets.ModelViewSet):
+    pagination_class = None
     queryset = Branch.objects.select_related('company_profile').all()
     
     def get_serializer_class(self):

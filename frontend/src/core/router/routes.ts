@@ -7,7 +7,6 @@ export const ROUTES = {
   APP: {
     DASHBOARD: '/dashboard',
     COMPANIES: '/companies',
-    ACCOUNTING: '/accounting',
     DIRECTORY: '/directory',
     DIRECTORY_FIELDS: '/directory/:id/fields',
     DIRECTORY_RECORDS: '/directory/:id/records',
@@ -31,6 +30,19 @@ export const ROUTES = {
     JOURNAL:          '/journal',
     JOURNAL_ENTRIES:  '/journal/entries',
     JOURNAL_MOVEMENTS:'/journal/movements',
+
+    ACCOUNTING: '/accounting',
+    ACCOUNTING_ACCOUNTS: '/accounting/accounts',
+    ACCOUNTING_SUBCONTO_TYPES: '/accounting/subconto-types', // добавить
+
+    ACCOUNTING_OSV: '/accounting/osv',
+
+
+    EMPLOYEES: '/employees',
+    EMPLOYEES_LIST: '/employees/list',
+    POSITIONS: '/employees/positions',
+
+    ACCOUNTING_AUDIT_LOG: '/accounting/audit-log',
 
   },
   // COMPANY_ADMIN: {

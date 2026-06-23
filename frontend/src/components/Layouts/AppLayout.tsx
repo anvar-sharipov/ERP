@@ -39,7 +39,8 @@ export const AppLayout: React.FC = () => {
         setTimeout(() => {
           const sidebar = document.querySelector("aside");
           // ищем активный NavLink
-          const activeLink = sidebar?.querySelector<HTMLElement>(".bg-indigo-700");
+          // const activeLink = sidebar?.querySelector<HTMLElement>(".bg-indigo-700");
+          const activeLink = sidebar?.querySelector<HTMLElement>('[aria-current="page"]');
           // если нет активного — первый focusable
           const firstFocusable = sidebar?.querySelector<HTMLElement>('[tabindex="0"]');
           (activeLink ?? firstFocusable)?.focus();
@@ -111,7 +112,7 @@ export const AppLayout: React.FC = () => {
         )}
 
         {/* ГЛАВНАЯ ОБЛАСТЬ (Серый фон) */}
-        <main className="flex-1 flex flex-col min-w-0 bg-gray-100 dark:bg-slate-950 p-1 ml-12 lg:ml-0 md:p-2 overflow-hidden print:m-0 print:p-0">
+        <main className="flex-1 flex flex-col min-w-0 bg-gray-300 dark:bg-slate-950 p-1 ml-12 lg:ml-0 md:p-2 overflow-hidden print:m-0 print:p-0">
           {/* БЕЛАЯ КАРТОЧКА (Центрирована, ограничена по ширине) */}
           <div
             className={`

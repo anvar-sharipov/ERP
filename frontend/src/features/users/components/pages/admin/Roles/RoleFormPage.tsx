@@ -196,7 +196,7 @@ const RoleFormPage = () => {
           <div className="space-y-4">
             <Input label={t("RoleName")} value={roleName} onChange={(e) => setRoleName(e.target.value)} />
             <div className="flex gap-2 mt-4">
-              <Button text={saveMutation.isPending ? t("Saving") : isEdit ? t("Save") : t("Create")} onClick={() => saveMutation.mutate()} disabled={!roleName.trim() || saveMutation.isPending} />
+              <Button text={saveMutation.isPending ? t("Saving") : isEdit ? t("Save") : t("Create")} onClick={() => saveMutation.mutate()} disabled={!roleName.trim() || saveMutation.isPending} variant="danger" />
               <Button text={t("Cancel")} variant="ghost" onClick={() => navigate(ROUTES.COMPANY_ADMIN.ROLES)} />
             </div>
           </div>
@@ -207,7 +207,7 @@ const RoleFormPage = () => {
           <div className="space-y-4">
             <PermissionsTab matrix={matrix} matrixLoading={matrixLoading} selectedPerms={selectedPerms} onToggle={togglePerm} onToggleResource={toggleResource} onToggleAll={toggleAll} />
             <div className="flex gap-2 pt-2">
-              <Button text={saveMutation.isPending ? t("Saving") : t("Save")} onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending} />
+              <Button text={saveMutation.isPending ? t("Saving") : t("Save")} onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending} variant="danger" />
               <Button text={t("Cancel")} variant="ghost" onClick={() => navigate(ROUTES.COMPANY_ADMIN.ROLES)} />
             </div>
           </div>

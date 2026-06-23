@@ -2,13 +2,17 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from .views.company_views import CompanyProfileViewSet, BranchViewSet
-from .views.account_views import AccountViewSet
+from .views.account_views import AccountViewSet, SubcontoTypeViewSet, available_content_types
 from .views.directory_views import DirectoryViewSet, DirectoryFieldViewSet, DirectoryRecordViewSet
 from .views.product_views import (
     UnitViewSet, BrandViewSet, TagViewSet, ProductCategoryViewSet,
     ProductViewSet, CounterpartyViewSet, WarehouseViewSet, WarehouseStockViewSet,
     ProductImageViewSet, PriceTypeViewSet, ProductPriceViewSet
 )
+
+from accounting.views.audit_views import AuditLogViewSet
+
+from .views.employee_views import PositionViewSet, EmployeeViewSet
 
 from accounting.views.transaction_views import JournalEntryViewSet, StockMovementViewSet, ClosedPeriodViewSet
 
@@ -48,9 +52,19 @@ router.register(r'warehouse-stocks', WarehouseStockViewSet, basename='warehouse-
 router.register('journal-entries',  JournalEntryViewSet,  basename='journal-entry')
 router.register('stock-movements',  StockMovementViewSet, basename='stock-movement')
 router.register('closed-periods', ClosedPeriodViewSet, basename='closed-period')
+router.register(r'subconto-types', SubcontoTypeViewSet, basename='subconto-type')
+
+router.register('positions', PositionViewSet, basename='position')
+router.register('employees', EmployeeViewSet, basename='employee')
+
+
+router.register('audit-logs', AuditLogViewSet, basename='audit-log')
+
+
 
 urlpatterns = [
     path('', include(router.urls)),
+    path('content-types/', available_content_types),
 ]
 
 

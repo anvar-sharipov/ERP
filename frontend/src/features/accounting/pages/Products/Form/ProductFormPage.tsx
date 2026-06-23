@@ -17,6 +17,7 @@ import { SegmentedControl } from "../../../../../components/ui/Tabs/SegmentedCon
 import { Trash2, Star, Upload } from "lucide-react";
 import type { Product, ProductImage, ProductPrice, PriceType } from "../../../../../core/types";
 import { useRestoreScroll } from "../../../../../core/hooks/useRestoreScroll";
+import CategoryTreeSelect from "../../../../../components/ui/Category/CategotyTree/TreeSelect/CategoryTreeSelect";
 
 // ── Типы формы ────────────────────────────────────────────────────────────────
 
@@ -39,6 +40,7 @@ interface ProductFormData {
   weight: string;
   volume_m3: string;
   description: string;
+  extra_data: Record<string, string>;
 }
 
 const EMPTY: ProductFormData = {
@@ -60,6 +62,7 @@ const EMPTY: ProductFormData = {
   weight: "0",
   volume_m3: "0",
   description: "",
+  extra_data: {},
 };
 
 const selectClass =
@@ -93,14 +96,13 @@ const MainTab = ({ form, setForm, units, brands, tags, categories, isEdit }: Mai
 
       <div className="grid grid-cols-2 gap-3">
         <Input label="Артикул" value={form.sku} onChange={() => {}} disabled={true} placeholder={isEdit ? "" : "авто"} />
-        {/* <Input label="Штрихкод" value={form.barcode} onChange={f("barcode")} /> */}
         <div className="grid grid-cols-2 gap-3">
           <Input label="Штрихкод" value={form.barcode} onChange={f("barcode")} placeholder="авто" />
           <Input label="QR-код" value={form.qr_code} onChange={f("qr_code")} placeholder="авто" />
         </div>
       </div>
 
-      <Input label="QR-код / Серийный номер" value={form.qr_code} onChange={f("qr_code")} />
+      {/* ❌ Убрали дублирующий QR-код который был здесь */}
 
       <div className="grid grid-cols-2 gap-3">
         <div>
@@ -114,19 +116,23 @@ const MainTab = ({ form, setForm, units, brands, tags, categories, isEdit }: Mai
             ))}
           </select>
         </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Категория</label>
-          <select value={form.category ?? ""} onChange={(e) => setForm((p) => ({ ...p, category: e.target.value ? Number(e.target.value) : null }))} className={selectClass}>
-            <option value="">— без категории —</option>
-            {categories.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
+        {/* <div>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Ед. изм. *</label>
+          <select value={form.unit ?? ""} onChange={(e) => setForm((p) => ({ ...p, unit: e.target.value ? Number(e.target.value) : null }))} className={selectClass}>
+            <option value="">— выберите —</option>
+            {units.map((u) => (
+              <option key={u.id} value={u.id}>
+                {u.name} ({u.short_name})
               </option>
             ))}
           </select>
-        </div>
+        </div> */}
+
+        {/* ✅ CategoryTreeSelect вместо <select> */}
+        <CategoryTreeSelect items={categories} value={form.category} onChange={(id) => setForm((p) => ({ ...p, category: id }))} label="Категория" />
       </div>
 
+      {/* остальное без изменений... */}
       <div>
         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Бренд</label>
         <select value={form.brand ?? ""} onChange={(e) => setForm((p) => ({ ...p, brand: e.target.value ? Number(e.target.value) : null }))} className={selectClass}>
@@ -189,6 +195,117 @@ const MainTab = ({ form, setForm, units, brands, tags, categories, isEdit }: Mai
   );
 };
 
+// const MainTab = ({ form, setForm, units, brands, tags, categories, isEdit }: MainTabProps) => {
+//   const f = (key: keyof ProductFormData) => (e: React.ChangeEvent<HTMLInputElement>) => setForm((p) => ({ ...p, [key]: e.target.value }));
+
+//   const toggleTag = (id: number) =>
+//     setForm((p) => ({
+//       ...p,
+//       tag_ids: p.tag_ids.includes(id) ? p.tag_ids.filter((t) => t !== id) : [...p.tag_ids, id],
+//     }));
+
+//   return (
+//     <div className="space-y-4">
+//       <Input label="Название *" value={form.name} onChange={f("name")} />
+
+//       <div className="grid grid-cols-2 gap-3">
+//         <Input label="Артикул" value={form.sku} onChange={() => {}} disabled={true} placeholder={isEdit ? "" : "авто"} />
+//         {/* <Input label="Штрихкод" value={form.barcode} onChange={f("barcode")} /> */}
+//         <div className="grid grid-cols-2 gap-3">
+//           <Input label="Штрихкод" value={form.barcode} onChange={f("barcode")} placeholder="авто" />
+//           <Input label="QR-код" value={form.qr_code} onChange={f("qr_code")} placeholder="авто" />
+//         </div>
+//       </div>
+
+//       <Input label="QR-код / Серийный номер" value={form.qr_code} onChange={f("qr_code")} />
+
+//       <div className="grid grid-cols-2 gap-3">
+//         <div>
+//           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Ед. изм. *</label>
+//           <select value={form.unit ?? ""} onChange={(e) => setForm((p) => ({ ...p, unit: e.target.value ? Number(e.target.value) : null }))} className={selectClass}>
+//             <option value="">— выберите —</option>
+//             {units.map((u) => (
+//               <option key={u.id} value={u.id}>
+//                 {u.name} ({u.short_name})
+//               </option>
+//             ))}
+//           </select>
+//         </div>
+//         <div>
+//           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Категория</label>
+//           <select value={form.category ?? ""} onChange={(e) => setForm((p) => ({ ...p, category: e.target.value ? Number(e.target.value) : null }))} className={selectClass}>
+//             <option value="">— без категории —</option>
+//             {categories.map((c) => (
+//               <option key={c.id} value={c.id}>
+//                 {c.name}
+//               </option>
+//             ))}
+//           </select>
+//         </div>
+//       </div>
+
+//       <div>
+//         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Бренд</label>
+//         <select value={form.brand ?? ""} onChange={(e) => setForm((p) => ({ ...p, brand: e.target.value ? Number(e.target.value) : null }))} className={selectClass}>
+//           <option value="">— без бренда —</option>
+//           {brands.map((b) => (
+//             <option key={b.id} value={b.id}>
+//               {b.name}
+//             </option>
+//           ))}
+//         </select>
+//       </div>
+
+//       <div className="grid grid-cols-2 gap-3">
+//         <Input label="Себестоимость" type="number" value={form.cost_price} onChange={f("cost_price")} />
+//         <Input label="Мин. остаток" type="number" value={form.min_stock_level} onChange={f("min_stock_level")} />
+//       </div>
+
+//       <div>
+//         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Режим изображения</label>
+//         <select value={form.image_mode} onChange={(e) => setForm((p) => ({ ...p, image_mode: e.target.value as "contain" | "cover" }))} className={selectClass}>
+//           <option value="contain">Вписать</option>
+//           <option value="cover">Заполнить</option>
+//         </select>
+//       </div>
+
+//       {/* Теги */}
+//       <div>
+//         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Теги</label>
+//         <div className="flex flex-wrap gap-2">
+//           {tags.map((tag) => {
+//             const active = form.tag_ids.includes(tag.id);
+//             return (
+//               <button
+//                 key={tag.id}
+//                 type="button"
+//                 onClick={() => toggleTag(tag.id)}
+//                 className={`px-2 py-1 text-xs rounded-full border transition-colors ${
+//                   active ? "bg-indigo-600 border-indigo-600 text-white" : "border-gray-300 dark:border-slate-600 text-gray-600 dark:text-gray-400 hover:border-indigo-400"
+//                 }`}
+//               >
+//                 {tag.name}
+//               </button>
+//             );
+//           })}
+//         </div>
+//       </div>
+
+//       <Input label="description" value={form.description} onChange={f("description")} placeholder="description" />
+
+//       <label className="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300 cursor-pointer">
+//         <input
+//           type="checkbox"
+//           checked={form.is_active}
+//           onChange={(e) => setForm((p) => ({ ...p, is_active: e.target.checked }))}
+//           className="w-4 h-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+//         />
+//         Активен
+//       </label>
+//     </div>
+//   );
+// };
+
 // ── Таб: Характеристики ───────────────────────────────────────────────────────
 interface SpecsTabProps {
   form: ProductFormData;
@@ -196,8 +313,62 @@ interface SpecsTabProps {
   product?: Product; // для показа volume_m3 (read-only)
 }
 
+// const SpecsTab = ({ form, setForm }: SpecsTabProps) => {
+//   const f = (key: keyof ProductFormData) => (e: React.ChangeEvent<HTMLInputElement>) => setForm((p) => ({ ...p, [key]: e.target.value }));
+
+//   return (
+//     <div className="space-y-4">
+//       {/* Габариты */}
+//       <div>
+//         <p className="text-sm font-semibold text-gray-600 dark:text-gray-400 mb-2">Габариты (см)</p>
+//         <div className="grid grid-cols-3 gap-3">
+//           <Input label="Длина" type="number" value={form.length} onChange={f("length")} />
+//           <Input label="Ширина" type="number" value={form.width} onChange={f("width")} />
+//           <Input label="Высота" type="number" value={form.height} onChange={f("height")} />
+//         </div>
+//       </div>
+
+//       {/* Вес */}
+//       <Input label="Вес (кг)" type="number" value={form.weight} onChange={f("weight")} />
+//       <Input label="Объём (м³)" type="number" value={form.volume_m3} onChange={f("volume_m3")} />
+//     </div>
+//   );
+// };
+
 const SpecsTab = ({ form, setForm }: SpecsTabProps) => {
   const f = (key: keyof ProductFormData) => (e: React.ChangeEvent<HTMLInputElement>) => setForm((p) => ({ ...p, [key]: e.target.value }));
+
+  const extraEntries = Object.entries(form.extra_data);
+
+  const addAttr = () => {
+    setForm((p) => ({
+      ...p,
+      extra_data: { ...p.extra_data, "": "" },
+    }));
+  };
+
+  const updateKey = (oldKey: string, newKey: string) => {
+    setForm((p) => {
+      const entries = Object.entries(p.extra_data);
+      const updated = entries.map(([k, v]) => (k === oldKey ? [newKey, v] : [k, v]));
+      return { ...p, extra_data: Object.fromEntries(updated) };
+    });
+  };
+
+  const updateValue = (key: string, value: string) => {
+    setForm((p) => ({
+      ...p,
+      extra_data: { ...p.extra_data, [key]: value },
+    }));
+  };
+
+  const removeAttr = (key: string) => {
+    setForm((p) => {
+      const copy = { ...p.extra_data };
+      delete copy[key];
+      return { ...p, extra_data: copy };
+    });
+  };
 
   return (
     <div className="space-y-4">
@@ -210,10 +381,46 @@ const SpecsTab = ({ form, setForm }: SpecsTabProps) => {
           <Input label="Высота" type="number" value={form.height} onChange={f("height")} />
         </div>
       </div>
-
-      {/* Вес */}
       <Input label="Вес (кг)" type="number" value={form.weight} onChange={f("weight")} />
       <Input label="Объём (м³)" type="number" value={form.volume_m3} onChange={f("volume_m3")} />
+
+      {/* Доп. атрибуты */}
+      <div>
+        <div className="flex items-center justify-between mb-2">
+          <p className="text-sm font-semibold text-gray-600 dark:text-gray-400">Доп. атрибуты</p>
+          <button type="button" onClick={addAttr} className="text-xs px-2 py-1 rounded bg-indigo-600 text-white hover:bg-indigo-700 transition-colors">
+            + Добавить
+          </button>
+        </div>
+
+        {extraEntries.length === 0 ? (
+          <p className="text-xs text-gray-400">Нет атрибутов</p>
+        ) : (
+          <div className="space-y-2">
+            {extraEntries.map(([key, value], idx) => (
+              <div key={idx} className="flex gap-2 items-center">
+                <input
+                  type="text"
+                  placeholder="Название"
+                  value={key}
+                  onChange={(e) => updateKey(key, e.target.value)}
+                  className="flex-1 px-3 py-1.5 text-sm border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+                <input
+                  type="text"
+                  placeholder="Значение"
+                  value={value}
+                  onChange={(e) => updateValue(key, e.target.value)}
+                  className="flex-1 px-3 py-1.5 text-sm border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+                <button type="button" onClick={() => removeAttr(key)} className="p-1.5 text-red-400 hover:text-red-600 transition-colors" title="Удалить">
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 };
@@ -570,6 +777,7 @@ const ProductFormPage = () => {
         weight: product.weight,
         volume_m3: product.volume_m3,
         description: product.description,
+        extra_data: (product.extra_data as Record<string, string>) ?? {},
       });
     }
   }, [product]);
@@ -678,7 +886,7 @@ const ProductFormPage = () => {
           <>
             <SpecsTab form={form} setForm={setForm} product={product} />
             <div className="flex gap-2 mt-6">
-              <Button text={saveMutation.isPending ? t("Saving") : t("Save")} onClick={() => saveMutation.mutate(form)} />
+              <Button text={saveMutation.isPending ? t("Saving") : t("Save")} onClick={() => saveMutation.mutate(form)} variant="danger" />
               <Button text={t("Cancel")} onClick={() => navigate(ROUTES.APP.PRODUCTS_LIST)} />
             </div>
           </>

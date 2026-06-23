@@ -39,6 +39,12 @@ import JournalPage from "../../features/accounting/pages/Journal/JournalPage";
 import Journal from "../../features/accounting/pages/Journal/Journal";
 import StockMovementsPage from "../../features/accounting/pages/Journal/StockMovementsPage";
 import RoleFormPage from "../../features/users/components/pages/admin/Roles/RoleFormPage";
+import SubcontoTypesPage from "../../features/accounting/pages/Accounting/SubcontoTypesPage";
+import OSVPage from "../../features/accounting/pages/Accounting/OSVPage";
+import Employees from "../../features/accounting/pages/Employees/Employees";
+import EmployeesPage from "../../features/accounting/pages/Employees/EmployeesPage";
+import PositionsPage from "../../features/accounting/pages/Employees/PositionsPage";
+import AuditLogPage from "../../features/accounting/pages/Accounting/AuditLogPage";
 
 const AppRouter: React.FC = () => {
   return (
@@ -82,6 +88,9 @@ const AppRouter: React.FC = () => {
             <Route path={ROUTES.APP.ACCOUNTING} element={<Accounting />}>
               <Route index element={<Navigate to="accounts" replace />} />
               <Route path="accounts" element={<AccountPage />} />
+              <Route path="subconto-types" element={<SubcontoTypesPage />} />
+              <Route path="osv" element={<OSVPage />} />
+              <Route path="audit-log" element={<AuditLogPage />} />
             </Route>
           </Route>
 
@@ -122,6 +131,14 @@ const AppRouter: React.FC = () => {
               <Route path="entries" element={<JournalPage />} />
               <Route path="movements" element={<StockMovementsPage />} />
             </Route>
+          </Route>
+        </Route>
+
+        <Route element={<PermissionRoute resource="employee" action="GET" />}>
+          <Route path={ROUTES.APP.EMPLOYEES} element={<Employees />}>
+            <Route index element={<Navigate to="list" replace />} />
+            <Route path="list" element={<EmployeesPage />} />
+            <Route path="positions" element={<PositionsPage />} />
           </Route>
         </Route>
       </Route>

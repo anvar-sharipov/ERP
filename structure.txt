@@ -8,12 +8,29 @@
 │   │   │   ├── 0004_journalentry_created_at_journalentry_created_by_and_more.py
 │   │   │   ├── 0005_closedperiod.py
 │   │   │   ├── 0006_stockmovement_date.py
+│   │   │   ├── 0007_alter_subcontotype_content_type.py
+│   │   │   ├── 0008_position_employee.py
+│   │   │   └── __init__.py
+│   │   ├── models
+│   │   │   ├── __pycache__
+│   │   │   ├── account.py
+│   │   │   ├── audit.py
+│   │   │   ├── company.py
+│   │   │   ├── counterparty.py
+│   │   │   ├── directory.py
+│   │   │   ├── document.py
+│   │   │   ├── employee.py
+│   │   │   ├── product.py
+│   │   │   ├── stock.py
+│   │   │   ├── subconto.py
+│   │   │   ├── transaction.py
 │   │   │   └── __init__.py
 │   │   ├── serializers
 │   │   │   ├── __pycache__
 │   │   │   ├── account_serializers.py
 │   │   │   ├── company_serializers.py
 │   │   │   ├── directory_serializers.py
+│   │   │   ├── employee_serializers.py
 │   │   │   ├── product_serializers.py
 │   │   │   └── transaction_serializers.py
 │   │   ├── tests
@@ -28,6 +45,7 @@
 │   │   │   ├── account_views.py
 │   │   │   ├── company_views.py
 │   │   │   ├── directory_views.py
+│   │   │   ├── employee_views.py
 │   │   │   ├── product_views.py
 │   │   │   ├── transaction_views.py
 │   │   │   └── __init__.py
@@ -35,7 +53,7 @@
 │   │   ├── admin.py
 │   │   ├── apps.py
 │   │   ├── mixins.py
-│   │   ├── models.py
+│   │   ├── models_disabled.py
 │   │   ├── tests.py
 │   │   ├── urls.py
 │   │   ├── utils.py
@@ -152,6 +170,7 @@
 │   │   │       │   ├── ConfirmModal.tsx
 │   │   │       │   └── Modal.tsx
 │   │   │       ├── Table
+│   │   │       │   ├── OSVTable.tsx
 │   │   │       │   └── Table.tsx
 │   │   │       ├── Tabs
 │   │   │       │   ├── GoogleTabs.tsx
@@ -175,6 +194,7 @@
 │   │   │       ├── TablePrintHeader.tsx
 │   │   │       ├── TextArea.tsx
 │   │   │       ├── ThemeToggle.tsx
+│   │   │       ├── UserProfileBlock.tsx
 │   │   │       └── WorkDateWidget.tsx
 │   │   ├── core
 │   │   │   ├── api
@@ -188,9 +208,12 @@
 │   │   │   ├── hooks
 │   │   │   │   ├── useAccess.ts
 │   │   │   │   ├── useClosedPeriod.ts
+│   │   │   │   ├── useHotkeys.ts
 │   │   │   │   ├── usePageAccess.ts
+│   │   │   │   ├── usePageHotkeys.ts
 │   │   │   │   ├── useRBACSocket.ts
 │   │   │   │   ├── useRestoreScroll.ts
+│   │   │   │   ├── useTabHotkeys.ts
 │   │   │   │   └── useTableFilter.ts
 │   │   │   ├── router
 │   │   │   │   ├── AdminRoute.tsx
@@ -221,7 +244,9 @@
 │   │   │   │   │   ├── Accounting
 │   │   │   │   │   │   ├── Accounting.tsx
 │   │   │   │   │   │   ├── AccountingLayout.tsx
-│   │   │   │   │   │   └── AccountPage.tsx
+│   │   │   │   │   │   ├── AccountPage.tsx
+│   │   │   │   │   │   ├── OSVPage.tsx
+│   │   │   │   │   │   └── SubcontoTypesPage.tsx
 │   │   │   │   │   ├── Counterparties
 │   │   │   │   │   │   └── CounterpartiesPage.tsx
 │   │   │   │   │   ├── Directory
@@ -232,6 +257,10 @@
 │   │   │   │   │   │   ├── CreateDirectory.tsx
 │   │   │   │   │   │   ├── Directory.tsx
 │   │   │   │   │   │   └── FieldRenderer.tsx
+│   │   │   │   │   ├── Employees
+│   │   │   │   │   │   ├── Employees.tsx
+│   │   │   │   │   │   ├── EmployeesPage.tsx
+│   │   │   │   │   │   └── PositionsPage.tsx
 │   │   │   │   │   ├── Journal
 │   │   │   │   │   │   ├── Journal.tsx
 │   │   │   │   │   │   ├── JournalEntryForm.tsx
@@ -260,6 +289,7 @@
 │   │   │   │       ├── branchApi.ts
 │   │   │   │       ├── companyApi.ts
 │   │   │   │       ├── directoryApi.ts
+│   │   │   │       ├── employeeApi.ts
 │   │   │   │       ├── productApi.ts
 │   │   │   │       ├── rolesApi.ts
 │   │   │   │       └── transactionApi.ts
@@ -289,6 +319,7 @@
 │   │   │       │           │   │   └── Company.tsx
 │   │   │       │           │   ├── AssignRolesModal.tsx
 │   │   │       │           │   ├── CompanyAdminUser.tsx
+│   │   │       │           │   ├── RoleFormPage.tsx
 │   │   │       │           │   └── Roles.tsx
 │   │   │       │           ├── Users
 │   │   │       │           └── AdminPanel.tsx

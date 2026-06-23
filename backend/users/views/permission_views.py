@@ -6,6 +6,7 @@ from rest_framework.exceptions import PermissionDenied
 
 
 class CheckGlobalAdminView(APIView):
+    pagination_class = None
     permission_classes = [IsAuthenticated]
 
     def get(self, request):

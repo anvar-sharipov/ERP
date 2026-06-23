@@ -195,3 +195,33 @@ class WarehouseStockSerializer(serializers.ModelSerializer):
             "product", "product_name", "product_sku", "unit_short",
             "quantity", "reserved_quantity", "available_quantity",
         ]
+        
+        
+        
+        
+class ProductHistorySerializer(serializers.Serializer):
+    id = serializers.IntegerField()
+    history_id = serializers.IntegerField()
+    history_date = serializers.DateTimeField()
+    history_type = serializers.CharField()
+    history_user = serializers.SerializerMethodField()
+
+    name = serializers.CharField()
+    cost_price = serializers.DecimalField(max_digits=15, decimal_places=2)
+
+    def get_history_user(self, obj):
+        if obj.history_user:
+            return {
+                "id": obj.history_user.id,
+                "name": obj.history_user.get_full_name() or obj.history_user.email
+            }
+        return None
+        
+        
+        
+        
+        
+        
+        
+        
+    

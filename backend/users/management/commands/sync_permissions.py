@@ -1,4 +1,4 @@
-# backend/users/management/commands/sync_permissions.py
+# backend/users/management/commands/sync_permissions.py     
 from django.core.management.base import BaseCommand
 from django.apps import apps
 from django_tenants.utils import get_tenant_model, schema_context

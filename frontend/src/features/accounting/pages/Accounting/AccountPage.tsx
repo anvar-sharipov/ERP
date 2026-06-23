@@ -51,7 +51,34 @@ const AccountPage = () => {
   const [activeFilter, setActiveFilter] = useState<"all" | "active" | "inactive">("all");
   const [highlightedId, setHighlightedId] = useState<number | null>(null);
 
+  const [selectedSubcontoType, setSelectedSubcontoType] = useState<number | null>(null);
+
   const { canView, canPost, canPut, canDelete } = usePageAccess("account");
+
+  const { data: subcontoTypes = [] } = useQuery({
+    queryKey: ["subconto-types"],
+    queryFn: accountApi.getSubcontoTypes,
+  });
+
+  const addSubcontoMutation = useMutation({
+    mutationFn: ({ subconto_type, order }: { subconto_type: number; order: number }) => accountApi.addSubconto(editingAccount!.id, { subconto_type, order }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["accounts"] });
+      notify("success", "Субконто добавлено");
+    },
+    onError: (err: any) => {
+      const msg = err.response?.data?.detail || err.response?.data?.non_field_errors?.[0] || "Ошибка";
+      notify("error", msg);
+    },
+  });
+
+  const removeSubcontoMutation = useMutation({
+    mutationFn: (subcontoId: number) => accountApi.removeSubconto(editingAccount!.id, subcontoId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["accounts"] });
+      notify("success", "Субконто удалено");
+    },
+  });
 
   const {
     data: accounts = [],
@@ -315,6 +342,9 @@ const AccountPage = () => {
     ],
   });
 
+  console.log("editingAccount", editingAccount);
+  
+
   return (
     <RBACGuard isLoading={isLoading} error={error} canView={canView} forbiddenText={t("NoViewRights")}>
       <Table
@@ -381,6 +411,64 @@ const AccountPage = () => {
             />
             {t("IsActive")}
           </label>
+
+          {editingAccount && !formData.is_group && (
+            <div className="border-t border-gray-200 dark:border-slate-600 pt-4">
+              <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Субконто (аналитика)</h4>
+
+              {/* Текущие субконто */}
+              {editingAccount.account_subcontos?.length === 0 ? (
+                <p className="text-xs text-gray-400 mb-3">Субконто не назначены</p>
+              ) : (
+                <div className="space-y-1 mb-3">
+                  {editingAccount.account_subcontos?.map((as) => (
+                    <div key={as.id} className="flex items-center justify-between px-3 py-1.5 rounded-lg bg-gray-50 dark:bg-slate-700/50 text-sm">
+                      <span className="flex items-center gap-2">
+                        <span className="text-xs text-gray-400 w-4">{as.order}.</span>
+                        <span className="font-medium text-gray-700 dark:text-gray-200">{as.subconto_type_detail?.name}</span>
+                        <span className="text-xs text-gray-400 font-mono">{as.subconto_type_detail?.slug}</span>
+                      </span>
+                      <Button variant="1c" icon={<span>🗑️</span>} className="md:h-6 md:w-8 md:!p-0" onClick={() => removeSubcontoMutation.mutate(as.id)} />
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Добавить субконто */}
+              <div className="flex gap-2 items-end">
+                <div className="flex-1">
+                  <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Вид субконто</label>
+                  <select
+                    value={selectedSubcontoType ?? ""}
+                    onChange={(e) => setSelectedSubcontoType(e.target.value ? Number(e.target.value) : null)}
+                    className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  >
+                    <option value="">— выберите —</option>
+                    {subcontoTypes
+                      .filter((st: any) => !editingAccount.account_subcontos?.some((as) => as.subconto_type === st.id))
+                      .map((st: any) => (
+                        <option key={st.id} value={st.id}>
+                          {st.name}
+                        </option>
+                      ))}
+                  </select>
+                </div>
+                <Button
+                  text="+ Добавить"
+                  disabled={!selectedSubcontoType || addSubcontoMutation.isPending}
+                  onClick={() => {
+                    if (!selectedSubcontoType) return;
+                    const nextOrder = (editingAccount.account_subcontos?.length ?? 0) + 1;
+                    addSubcontoMutation.mutate({
+                      subconto_type: selectedSubcontoType,
+                      order: nextOrder,
+                    });
+                    setSelectedSubcontoType(null);
+                  }}
+                />
+              </div>
+            </div>
+          )}
 
           <div className="flex justify-end gap-2 pt-2">
             <Button text={t("Cancel")} onClick={() => setFormModal(false)} />

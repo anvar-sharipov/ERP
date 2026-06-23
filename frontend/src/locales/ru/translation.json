@@ -290,10 +290,180 @@
     "AddField": "Добавить поле",
     "AddRecord": "Добавить запись",
 
-    "Posted": "Проведён",
-    "Draft": "Черновик",
     "Dt": "Дт",
-    "Kt": "Кт"
+    "Kt": "Кт",
+
+    "Employees": "Сотрудники",
+    "Employee": "Сотрудник",
+    "Positions": "Должности",
+
+    "AddEmployee": "Добавить сотрудника",
+    "AddPosition": "Добавить должность",
+
+    "AllEmployees": "Все сотрудники",
+    "AllPositions": "Все должности",
+
+
+
+
+    "PositionFilter": "Фильтр по должности",
+
+    "EmployeeList": "Список сотрудников",
+    "PositionList": "Список должностей",
+
+
+    "Content": "Содержание",
+
+    "DebitCredit": "Дт/Кт",
+    "Amount": "Сумма",
+
+    "Select": "— выбрать —",
+    "SelectAccount": "— выбрать счёт —",
+
+
+    "DayClosed": "День закрыт — операции запрещены",
+    "BalanceOk": "✓ Баланс сходится",
+    "BalanceError": "⚠ Не сходится",
+
+    "AddDebitLine": "+ строка Дт",
+    "AddCreditLine": "+ строка Кт",
+
+    "NewOperation": "Новая операция",
+
+    "Draft": "Черновик",
+    "Posted": "Проведён",
+
+    "Post": "Провести",
+    "Unpost": "Отменить проведение",
+
+    "ConfirmPostTitle": "Провести операцию?",
+    "ConfirmPostMsg": "Операция будет проведена. После этого её нельзя редактировать.",
+
+    "ConfirmUnpostTitle": "Отменить проведение?",
+    "ConfirmUnpostMsg": "Операция вернётся в статус «Черновик».",
+
+    "ConfirmDeleteTitle": "Удалить операцию?",
+    "ConfirmDeleteMsg": "Операция будет удалена безвозвратно.",
+
+    "JournalEntries": "Журнал операций",
+    "StockMovements": "Движения склада",
+
+    "MovementType": "Тип движения",
+    "In": "Приход",
+    "Out": "Расход",
+    "Move": "Перемещение",
+
+    "Product": "Товар",
+    "WarehouseFrom": "Склад (откуда)",
+    "WarehouseTo": "Склад (куда)",
+    "Quantity": "Количество",
+    "CostPrice": "Себестоимость",
+    "Note": "Примечание",
+    "Author": "Автор",
+
+   
+    "Debit": "Дт",
+    "Credit": "Кт",
+    
+    "BalanceMatched": "✓ Баланс сходится",
+    "BalanceNotMatched": "⚠ Не сходится",
+    "DayClosedMessage": "День закрыт — операции запрещены",
+    "SubcontoNotFilled": "не заполнено субконто",
+
+    "Number": "№",
+    "CreatedAt": "Дата создания",
+    "DebitSubconto1": "Дт субконто 1",
+    "DebitSubconto2": "Дт субконто 2",
+    "DebitSubconto3": "Дт субконто 3",
+    "CreditSubconto1": "Кт субконто 1",
+    "CreditSubconto2": "Кт субконто 2",
+    "CreditSubconto3": "Кт субконто 3",
+
+    "PostOperation": "Провести операцию?",
+    "UnpostOperation": "Отменить проведение?",
+    "ConfirmPost": "Операция №{{number}} будет проведена. После этого её нельзя редактировать.",
+    "ConfirmUnpost": "Операция №{{number}} вернётся в статус «Черновик».",
+
+    "Entry": "Операция",
+
+
+    "MovementDirection": "Тип движения",
+    "Incoming": "Приход",
+    "Outgoing": "Расход",
+    "Transfer": "Перемещение",
+
+    "WorkDate": "Рабочая дата",
+    "DayOpen": "День открыт",
+    "Open": "Открыть",
+    "Close": "Закрыть",
+    "ReportPeriod": "Период отчётов",
+    "From": "С",
+    "To": "По",
+    "Today": "Сегодня",
+    "Month": "Месяц",
+    "Year": "Год",
+
+    "OSVSettings": "Настройки ОСВ",
+    "ShowZeroAccounts": "Показать нулевые счета",
+    "PeriodSetAbove": "Период задаётся через «Период отчётов» выше.",
+    "OnlyPostedTransactions": "Только проведённые операции.",
+    "OSVTitle": "Оборотно-сальдовая ведомость",
+    "SpecifyPeriod": "Укажите период в правом сайдбаре",
+    "Loading": "Загрузка...",
+    "NoDataForPeriod": "Нет данных за выбранный период",
+
+
+    "OpeningBalance": "Сальдо начало",
+    "PeriodTurnover": "Обороты за период",
+    "ClosingBalance": "Сальдо конец",
+    "Total": "Итого",
+
+    "AddSubcontoType": "Добавить вид субконто",
+    "SubcontoTypesDescription": "Виды субконто определяют аналитику счетов.",
+    "SubcontoTypesHint": "Привяжите их к счетам в разделе «План счетов».",
+    "Source": "Источник",
+    "DataSource": "Источник данных",
+    "SystemModel": "Системная модель",
+    "SelectModel": "— выберите модель —",
+    "Or": "или",
+    "CustomDirectory": "Пользовательский справочник",
+    "SelectDirectory": "— выберите справочник —",
+    "DeleteSubcontoType": "Удалить вид субконто?",
+    "DeleteSubcontoTypeMessage": "будет удалён. Все привязки к счетам тоже удалятся.",
+    "NamePlaceholder": "Контрагенты",
+    "SlugPlaceholder": "kontragenty",
+    "SubcontoTypes": "Виды субконто",
+    "OSV": "ОСВ",
+  
+    "Journal": "Журнал",
+    "License": "Лицензия",
+    "AddEntry": "Новая операция",
+
+    "Client": "Клиент",
+    "Supplier": "Поставщик",
+    "ClientAndSupplier": "Клиент и поставщик",
+    "TypeFilter": "Фильтр по типу",
+    "Clients": "Клиенты",
+    "Suppliers": "Поставщики",
+    "INN": "ИНН",
+
+    "WarehouseStocks": "Остатки",
+
+    "Main": "Главный",
+    "Branch": "Филиал",
+    "NoBranch": "— без филиала —",
+    "MainWarehouse": "Главный склад",
+
+    "Warehouse": "Склад",
+    "AllWarehouses": "Все склады",
+    "SKU": "Артикул",
+    "Stock": "Остаток",
+    "EditStock": "Редактировать остаток",
+    "AddStock": "Добавить остаток",
+    "SelectWarehouse": "— выберите склад —",
+    "SelectProduct": "— выберите товар —",
+    "DeleteStockMessage": "Удалить остаток \"{{product}}\" на складе \"{{warehouse}}\"?"
+
 
 
 

@@ -358,7 +358,7 @@ const DirectoryFieldsPage = () => {
                 setEditingField(null);
               }}
             />
-            <Button text={saveMutation.isPending ? "Сохранение..." : editingField ? "Сохранить" : "Создать"} onClick={() => saveMutation.mutate(formData)} />
+            <Button text={saveMutation.isPending ? "Сохранение..." : editingField ? "Сохранить" : "Создать"} onClick={() => saveMutation.mutate(formData)} variant="danger" />
           </div>
         </div>
       </Modal>

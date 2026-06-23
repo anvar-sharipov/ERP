@@ -3,7 +3,7 @@
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from django.db.models import Sum, Q
+from django.db.models import Sum, Q, Case, When, DecimalField
 from django.db import transaction
 import datetime
 
@@ -17,11 +17,15 @@ from accounting.serializers.transaction_serializers import (
 from accounting.mixins import AuditMixin
 from users.permissions import _rbac
 
+from decimal import Decimal
+
+
 
 
 
 
 class JournalEntryViewSet(AuditMixin, viewsets.ModelViewSet):
+    pagination_class = None
 
     def get_permissions(self):
         return _rbac(self.action, 'journalentry')
@@ -32,13 +36,21 @@ class JournalEntryViewSet(AuditMixin, viewsets.ModelViewSet):
         return JournalEntrySerializer
 
     def get_queryset(self):
+        # qs = (
+        #     JournalEntry.objects
+        #     .select_related('created_by', 'source_document_type')
+        #     # .prefetch_related('lines__account__subcontos')
+        #     .prefetch_related(
+        #         'lines__account',
+        #         'lines__account__subcontos'
+        #     )
+        # )
+        
         qs = (
             JournalEntry.objects
             .select_related('created_by', 'source_document_type')
-            # .prefetch_related('lines__account__subcontos')
             .prefetch_related(
                 'lines__account',
-                'lines__account__subcontos'
             )
         )
 
@@ -86,9 +98,96 @@ class JournalEntryViewSet(AuditMixin, viewsets.ModelViewSet):
         except Exception as e:
             return Response({'detail': str(e)}, status=status.HTTP_400_BAD_REQUEST)
         return Response({'detail': 'Проведение отменено.'})
+    
+    @action(detail=False, methods=['get'], url_path='osv')
+    def osv(self, request):
+        from decimal import Decimal
+        from accounting.models import Account
 
+        date_from = request.query_params.get('date_from')
+        date_to = request.query_params.get('date_to')
+        show_zero = request.query_params.get('show_zero', 'false') == 'true'
+
+        if not date_from or not date_to:
+            return Response({'detail': 'Укажите date_from и date_to'}, status=400)
+
+        base_filter = Q(transaction_lines__journal_entry__status='posted')
+
+        qs = Account.objects.filter(
+            is_group=False, is_active=True
+        ).annotate(
+            pre_debit=Sum(
+                'transaction_lines__amount',
+                filter=base_filter & Q(
+                    transaction_lines__side='debit',
+                    transaction_lines__journal_entry__date__date__lt=date_from,
+                ),
+                default=Decimal('0'),
+            ),
+            pre_credit=Sum(
+                'transaction_lines__amount',
+                filter=base_filter & Q(
+                    transaction_lines__side='credit',
+                    transaction_lines__journal_entry__date__date__lt=date_from,
+                ),
+                default=Decimal('0'),
+            ),
+            debit_turnover=Sum(
+                'transaction_lines__amount',
+                filter=base_filter & Q(
+                    transaction_lines__side='debit',
+                    transaction_lines__journal_entry__date__date__gte=date_from,
+                    transaction_lines__journal_entry__date__date__lte=date_to,
+                ),
+                default=Decimal('0'),
+            ),
+            credit_turnover=Sum(
+                'transaction_lines__amount',
+                filter=base_filter & Q(
+                    transaction_lines__side='credit',
+                    transaction_lines__journal_entry__date__date__gte=date_from,
+                    transaction_lines__journal_entry__date__date__lte=date_to,
+                ),
+                default=Decimal('0'),
+            ),
+        ).select_related('parent').order_by('code')
+
+        data = []
+        for acc in qs:
+            pre_dt = acc.pre_debit or Decimal('0')
+            pre_kt = acc.pre_credit or Decimal('0')
+            dt = acc.debit_turnover or Decimal('0')
+            kt = acc.credit_turnover or Decimal('0')
+
+            opening_balance = pre_dt - pre_kt
+            opening_debit   = max(opening_balance, Decimal('0'))
+            opening_credit  = max(-opening_balance, Decimal('0'))
+
+            closing_balance = opening_balance + dt - kt
+            closing_debit   = max(closing_balance, Decimal('0'))
+            closing_credit  = max(-closing_balance, Decimal('0'))
+
+            if not show_zero:
+                if dt == 0 and kt == 0 and opening_debit == 0 and opening_credit == 0 and closing_debit == 0 and closing_credit == 0:
+                    continue
+
+            data.append({
+                'id': acc.id,
+                'code': acc.code,
+                'name': acc.name,
+                'account_type': acc.account_type,
+                'opening_debit':  opening_debit,
+                'opening_credit': opening_credit,
+                'debit_turnover':  dt,
+                'credit_turnover': kt,
+                'closing_debit':  closing_debit,
+                'closing_credit': closing_credit,
+            })
+
+        return Response(data)
 
 class StockMovementViewSet(AuditMixin, viewsets.ModelViewSet):
+    pagination_class = None
     serializer_class  = StockMovementSerializer
     http_method_names = ['get', 'post', 'head', 'options']
 
@@ -116,6 +215,7 @@ class StockMovementViewSet(AuditMixin, viewsets.ModelViewSet):
     
 class ClosedPeriodViewSet(viewsets.ModelViewSet):
     serializer_class  = ClosedPeriodSerializer
+    pagination_class  = None
     http_method_names = ['get', 'post', 'delete', 'head', 'options']
 
     def get_permissions(self):

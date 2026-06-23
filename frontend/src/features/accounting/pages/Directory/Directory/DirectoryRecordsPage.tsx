@@ -439,7 +439,7 @@ const DirectoryRecordsPage = () => {
                 setEditingRecord(null);
               }}
             />
-            <Button text={saveMutation.isPending ? "Сохранение..." : editingRecord ? "Сохранить" : "Создать"} onClick={() => saveMutation.mutate(formData)} />
+            <Button text={saveMutation.isPending ? "Сохранение..." : editingRecord ? "Сохранить" : "Создать"} onClick={() => saveMutation.mutate(formData)} variant="danger" />
           </div>
         </div>
       </Modal>

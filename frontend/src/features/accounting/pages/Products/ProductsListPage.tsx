@@ -95,7 +95,7 @@ const ProductsListPage = () => {
           <div className="pt-4 border-t border-indigo-900/30">
             <h4 className="font-bold text-indigo-300 mb-2">Категория</h4>
             <div className="flex flex-col gap-1">
-              <Button text="Все" variant="ghost" dark={true} isActive={categoryFilter === null} className="w-full justify-start" onClick={() => setCategoryFilter(null)} />
+              <Button text={t("All")} variant="ghost" dark={true} isActive={categoryFilter === null} className="w-full justify-start" onClick={() => setCategoryFilter(null)} />
               {(categories as any[]).map((c) => (
                 <Button key={c.id} text={c.name} variant="ghost" dark={true} isActive={categoryFilter === c.id} className="w-full justify-start" onClick={() => setCategoryFilter(c.id)} />
               ))}

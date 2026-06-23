@@ -1,3 +1,4 @@
+// frontend/src/core/types/index.ts
 export interface User {
   id: string | number;
   username: string;
@@ -96,9 +97,11 @@ export interface Account {
   parent_code?: string;
   // Поле children приходит из сериализатора при чтении списка
   children?: Account[];
+  account_subcontos?: AccountSubconto[];
   account_type?: string; 
   account_type_display?: string;
   is_active: boolean;
+  
 }
 
 
@@ -224,3 +227,75 @@ export interface Warehouse {
   is_active: boolean;
   is_main: boolean;
 }
+
+
+interface AccountSubconto {
+  id: number;
+  account: number;
+  subconto_type: number;
+  subconto_type_detail: {
+    id: number;
+    name: string;
+    slug: string;
+    directory: number | null;
+    directory_name: string | null;
+    content_type: number;
+    content_type_detail: { id: number; app_label: string; model: string; label: string };
+  };
+  order: number;
+}
+
+
+
+export interface Position {
+  id: number;
+  name: string;
+  description: string;
+  is_active: boolean;
+}
+
+export interface Employee {
+  id: number;
+  full_name: string;
+  position: number | null;
+  position_name?: string;
+  phone: string;
+  note: string;
+  is_active: boolean;
+}
+
+
+export interface AuditLog {
+  id: number
+  user: number | null
+  user_display: string
+  action: 'create' | 'update' | 'delete' | 'post' | 'unpost'
+  action_display: string
+  model_name: string
+  object_id: number
+  object_repr: string
+  changed_data: Record<string, { before: string; after: string } | string>
+  ip_address: string | null
+  timestamp: string
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

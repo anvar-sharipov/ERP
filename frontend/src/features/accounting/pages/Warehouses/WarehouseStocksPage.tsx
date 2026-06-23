@@ -119,9 +119,9 @@ const WarehouseStocksPage = () => {
           />
         </div>
         <div className="pt-4 border-t border-indigo-900/30">
-          <h4 className="font-bold text-indigo-300 mb-2">Склад</h4>
+          <h4 className="font-bold text-indigo-300 mb-2">{t("Warehouse")}</h4>
           <div className="flex flex-col gap-1">
-            <Button text="Все склады" variant="ghost" dark={true} isActive={warehouseFilter === null} className="w-full justify-start" onClick={() => setWarehouseFilter(null)} />
+            <Button text={t("AllWarehouses")} variant="ghost" dark={true} isActive={warehouseFilter === null} className="w-full justify-start" onClick={() => setWarehouseFilter(null)} />
             {(warehouses as any[]).map((w) => (
               <Button key={w.id} text={w.name} variant="ghost" dark={true} isActive={warehouseFilter === w.id} className="w-full justify-start" onClick={() => setWarehouseFilter(w.id)} />
             ))}
@@ -143,11 +143,11 @@ const WarehouseStocksPage = () => {
 
   const columns: Column<any>[] = [
     { header: t("ID"), accessor: "id", sortable: true, excelWidth: 5 },
-    { header: "Склад", accessor: "warehouse_name", sortable: true, excelWidth: 20 },
-    { header: "Товар", accessor: "product_name", sortable: true, excelWidth: 30 },
-    { header: "Артикул", accessor: "product_sku", sortable: true, excelWidth: 15 },
+    { header: t("Warehouse"), accessor: "warehouse_name", sortable: true, excelWidth: 20 },
+    { header: t("Product"), accessor: "product_name", sortable: true, excelWidth: 30 },
+    { header: t("SKU"), accessor: "product_sku", sortable: true, excelWidth: 15 },
     {
-      header: "Остаток",
+      header: t("Stock"),
       sortable: true,
       excelWidth: 12,
       sortValue: (item) => Number(item.quantity),
@@ -207,16 +207,16 @@ const WarehouseStocksPage = () => {
         }}
       />
 
-      <Modal isOpen={formOpen} onClose={() => setFormOpen(false)} title={editing ? "Редактировать остаток" : "Добавить остаток"} closeOnOutsideClick={false}>
+      <Modal isOpen={formOpen} onClose={() => setFormOpen(false)} title={editing ? t("EditStock") : t("AddStock")} closeOnOutsideClick={false}>
         <div className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Склад *</label>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t("Warehouse")} *</label>
             <select
               value={form.warehouse ?? ""}
               onChange={(e) => setForm((p) => ({ ...p, warehouse: e.target.value ? Number(e.target.value) : null }))}
               className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
             >
-              <option value="">— выберите склад —</option>
+              <option value="">{t("SelectWarehouse")}</option>
               {(warehouses as any[]).map((w) => (
                 <option key={w.id} value={w.id}>
                   {w.name}
@@ -226,13 +226,13 @@ const WarehouseStocksPage = () => {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Товар *</label>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t("Product")} *</label>
             <select
               value={form.product ?? ""}
               onChange={(e) => setForm((p) => ({ ...p, product: e.target.value ? Number(e.target.value) : null }))}
               className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
             >
-              <option value="">— выберите товар —</option>
+              <option value="">{t("SelectProduct")}</option>
               {(products as any[]).map((p) => (
                 <option key={p.id} value={p.id}>
                   {p.name} {p.sku ? `(${p.sku})` : ""}
@@ -241,11 +241,11 @@ const WarehouseStocksPage = () => {
             </select>
           </div>
 
-          <Input label="Количество" type="number" value={form.quantity} onChange={(e) => setForm((p) => ({ ...p, quantity: e.target.value }))} />
+          <Input label={t("Quantity")} type="number" value={form.quantity} onChange={(e) => setForm((p) => ({ ...p, quantity: e.target.value }))} />
 
           <div className="flex justify-end gap-2 pt-2">
             <Button text={t("Cancel")} onClick={() => setFormOpen(false)} />
-            <Button text={saveMutation.isPending ? t("Saving") : editing ? t("Save") : t("Create")} onClick={() => saveMutation.mutate(form)} />
+            <Button text={saveMutation.isPending ? t("Saving") : editing ? t("Save") : t("Create")} onClick={() => saveMutation.mutate(form)} variant="danger" />
           </div>
         </div>
       </Modal>
@@ -254,7 +254,7 @@ const WarehouseStocksPage = () => {
         isOpen={deleteModal}
         type="delete"
         title={`DELETE - ${t("Delete")}`}
-        message={`Удалить остаток "${toDelete?.product_name}" на складе "${toDelete?.warehouse_name}"?`}
+        message={t("DeleteStockMessage", { product: toDelete?.product_name, warehouse: toDelete?.warehouse_name })}
         onClose={() => setDeleteModal(false)}
         onConfirm={() => {
           if (deleteId) {

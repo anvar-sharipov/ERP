@@ -4,6 +4,9 @@ from django.core.exceptions import ValidationError
 from .models import ClosedPeriod, JournalEntry
 from django.utils.timezone import now
 
+from accounting.models.audit import AuditLog
+from django.contrib.contenttypes.models import ContentType
+
 
 
 def check_period_open(date):
@@ -41,3 +44,21 @@ def generate_journal_number():
             seq = 1
 
     return f"JV-{year}-{str(seq).zfill(6)}"
+
+
+
+
+
+def log_audit(request, instance, action: str, changed_data: dict = None):
+    AuditLog.objects.create(
+        content_type=ContentType.objects.get_for_model(instance),
+        object_id=instance.pk,
+        object_repr=str(instance),
+        action=action,
+        user=request.user if request and request.user.is_authenticated else None,
+        ip_address=(
+            request.META.get('HTTP_X_FORWARDED_FOR', '').split(',')[0].strip()
+            or request.META.get('REMOTE_ADDR')
+        ) if request else None,
+        changed_data=changed_data or {},
+    )

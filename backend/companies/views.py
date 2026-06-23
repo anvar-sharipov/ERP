@@ -41,6 +41,7 @@ def create_tenant_system(schema_name):
 
 
 class RegisterCompanyView(APIView):
+    pagination_class = None
     permission_classes = [IsAdminUser]
 
     def post(self, request):
@@ -117,6 +118,7 @@ class RegisterCompanyView(APIView):
     
     
 class CompanyListView(ListAPIView):
+    pagination_class = None
     queryset = Company.objects.all()
     serializer_class = CompanySerializer
     

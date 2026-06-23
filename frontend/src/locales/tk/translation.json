@@ -280,10 +280,178 @@
     "AddField": "Meýdan goşmak",
     "AddRecord": "Ýazgy goşmak",
 
-    "Posted": "Hasaba alnan",
-    "Draft": "Çernowik",
     "Dt": "Dt",
-    "Kt": "Kt"
+    "Kt": "Kt",
+    "Employees": "Işgärler",
+    "Employee": "Işgär",
+    "Positions": "Wezipeler",
+
+    "AddEmployee": "Işgär goşmak",
+    "AddPosition": "Wezipe goşmak",
+
+    "AllEmployees": "Ähli işgärler",
+    "AllPositions": "Ähli wezipeler",
+
+
+
+
+    "PositionFilter": "Wezipe boýunça süzgüç",
+
+    "EmployeeList": "Işgärleriň sanawy",
+    "PositionList": "Wezipeleriň sanawy",
+
+    "Content": "Mazmun",
+
+    "DebitCredit": "Dt/Kt",
+    "Amount": "Mukdar",
+
+    "Select": "Saýlaň",
+    "SelectAccount": "Hasap saýlaň",
+
+    
+
+    "DayClosed": "Gün ýapyk — amallar gadagan",
+    "BalanceOk": "✓ Balans gabat gelýär",
+    "BalanceError": "⚠ Gabat gelenok",
+
+    "AddDebitLine": "+ Dt setir",
+    "AddCreditLine": "+ Kt setir",
+
+    "NewOperation": "Täze amaly",
+
+    "Draft": "Taslama",
+    "Posted": "Geçirilen",
+
+    "Post": "Geçir",
+    "Unpost": "Yza gaýtarmak",
+
+    "ConfirmPostTitle": "Amaly geçirmek?",
+    "ConfirmPostMsg": "Bu amal geçirilýär. Soň üýtgetmek bolmaz.",
+
+    "ConfirmUnpostTitle": "Geçirilişi ýatyrmak?",
+    "ConfirmUnpostMsg": "Amal 'Taslama' ýagdaýyna gaýdyp geler.",
+
+    "ConfirmDeleteTitle": "Amaly öçürmek?",
+    "ConfirmDeleteMsg": "Amal doly ýok ediler.",
+
+    "JournalEntries": "Amallar žurnaly",
+    "StockMovements": "Sklad hereketleri",
+
+    "MovementType": "Hereket görnüşi",
+    "In": "Giriş",
+    "Out": "Çykyş",
+    "Move": "Geçirme",
+
+    "Product": "Haryt",
+    "WarehouseFrom": "Sklad (nireden)",
+    "WarehouseTo": "Sklad (nirede)",
+    "Quantity": "Mukdar",
+    "CostPrice": "Öz gymmaty",
+    "Note": "Bellik",
+    "Author": "Awtor",
+
+    "Debit": "Dt",
+    "Credit": "Kt",
+    "BalanceMatched": "✓ Deňagramlylyk gabat gelýär",
+    "BalanceNotMatched": "⚠ Gabat gelmeýär",
+    "DayClosedMessage": "Gün ýapyk — operasiýalar gadagan",
+    "SubcontoNotFilled": "subkonto doldurylmady",
+
+    "Number": "Belgi",
+    "CreatedAt": "Döredilen senesi",
+    "DebitSubconto1": "Dt subkonto 1",
+    "DebitSubconto2": "Dt subkonto 2",
+    "DebitSubconto3": "Dt subkonto 3",
+    "CreditSubconto1": "Kt subkonto 1",
+    "CreditSubconto2": "Kt subkonto 2",
+    "CreditSubconto3": "Kt subkonto 3",
+
+    "PostOperation": "Operasiýany geçirmek?",
+    "UnpostOperation": "Geçirmegi ýatyrmak?",
+    "ConfirmPost": "{{number}} belgili operasiýa geçiriler. Ondan soň ony redaktirleýip bolmaz.",
+    "ConfirmUnpost": "{{number}} belgili operasiýa «Garalama» ýagdaýyna gaýtarylar.",
+    "Entry": "Operasiýa",
+
+
+    "MovementDirection": "Hereket görnüşi",
+    "Incoming": "Geliş",
+    "Outgoing": "Çykdajy",
+    "Transfer": "Geçiriş",
+
+    "WorkDate": "Iş senesi",
+    "DayOpen": "Gün açyk",
+    "Open": "Açmak",
+    "Close": "Ýapmak",
+    "ReportPeriod": "Hasabat döwri",
+    "From": "Başlan",
+    "To": "Gutarny",
+    "Today": "Şu gün",
+    "Month": "Aý",
+    "Year": "Ýyl",
+
+    "OSVSettings": "OSV sazlamalary",
+    "ShowZeroAccounts": "Nol hasaplary görkez",
+    "PeriodSetAbove": "Döwür ýokardaky «Hasabat döwri» arkaly kesgitlenýär.",
+    "OnlyPostedTransactions": "Diňe geçirilen operasiýalar.",
+    "OSVTitle": "Aýlanym-saldat hasabaty",
+    "SpecifyPeriod": "Sag saýbarda döwri görkeziň",
+    "Loading": "Ýüklenýär...",
+    "NoDataForPeriod": "Saýlanan döwür üçin maglumat ýok",
+
+
+    "OpeningBalance": "Başlangyç saldo",
+    "PeriodTurnover": "Döwür üçin aýlanym",
+    "ClosingBalance": "Ahyryndaky saldo",
+    "Total": "Jemi",
+
+    "AddSubcontoType": "Subkonto görnüşini goşmak",
+    "SubcontoTypesDescription": "Subkonto görnüşleri hasaplaryň analitikasyny kesgitleýär.",
+    "SubcontoTypesHint": "Olary «Hasaplar meýilnamasy» bölüminde hasaplara baglaň.",
+    "Source": "Çeşme",
+    "DataSource": "Maglumat çeşmesi",
+    "SystemModel": "Sistem modeli",
+    "SelectModel": "— model saýlaň —",
+    "Or": "ýa-da",
+    "CustomDirectory": "Ulanyjy gollanmasy",
+    "SelectDirectory": "— gollanma saýlaň —",
+    "DeleteSubcontoType": "Subkonto görnüşini ýok etmek?",
+    "DeleteSubcontoTypeMessage": "ýok ediler. Hasaplar bilen baglanyşyklar hem ýok ediler.",
+    "NamePlaceholder": "Kontragentler",
+    "SlugPlaceholder": "kontragentler",
+
+    "SubcontoTypes": "Subkonto görnüşleri",
+    "OSV": "OSV",
+
+    "Journal": "Žurnal",
+    "License": "Lisenziýa",
+    "AddEntry": "Täze operasiýa",
+    
+    "Client": "Müşderi",
+    "Supplier": "Üpjünçi",
+    "ClientAndSupplier": "Müşderi we üpjünçi",
+    "TypeFilter": "Görnüş boýunça süzgüç",
+    "Clients": "Müşderiler",
+    "Suppliers": "Üpjünçiler",
+    "INN": "STIR",
+
+
+    "WarehouseStocks": "Galyndylar",
+
+    "Main": "Esasy",
+    "Branch": "Şahamça",
+    "NoBranch": "— şahamçasyz —",
+    "MainWarehouse": "Esasy ammar",
+
+    "Warehouse": "Ammar",
+    "AllWarehouses": "Ähli ammarlar",
+    "SKU": "Artikul",
+    "Stock": "Galyndy",
+    "EditStock": "Galyndyny redaktirlemek",
+    "AddStock": "Galyndy goşmak",
+    "SelectWarehouse": "— ammar saýlaň —",
+    "SelectProduct": "— haryt saýlaň —",
+    "DeleteStockMessage": "\"{{warehouse}}\" ammarynda \"{{product}}\" galyndysyny ýok etmek?"
+
 
     
 

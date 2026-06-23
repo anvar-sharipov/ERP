@@ -10,9 +10,10 @@ interface Props {
   items: TreeNode[];
   value: number | null;
   onChange: (id: number | null) => void;
+  label?: string;
 }
 
-export default function CategoryTreeSelect({ items, value, onChange }: Props) {
+export default function CategoryTreeSelect({ items, value, onChange, label }: Props) {
   const { t } = useTranslation();
   const [search, setSearch] = useState("");
 
@@ -38,7 +39,10 @@ export default function CategoryTreeSelect({ items, value, onChange }: Props) {
 
   return (
     <div>
-      <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">{t("Parent")}</label>
+      <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">
+        {label ?? t("Parent")}
+        {/* {t("Parent")} */}
+      </label>
 
       <div className="border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden bg-white dark:bg-slate-800">
         {/* поиск */}

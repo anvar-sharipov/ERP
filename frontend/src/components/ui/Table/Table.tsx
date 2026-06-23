@@ -32,6 +32,18 @@ export interface Column<T> {
   isLoading?: boolean;
 }
 
+// backend pagination
+interface ServerPagination {
+  mode: "server";
+  page: number;
+  pageSize: number;
+  total: number;
+  onPageChange: (page: number) => void;
+  onPageSizeChange: (size: number) => void;
+}
+
+type PaginationConfig = ServerPagination | { mode?: "client" };
+
 interface TableProps<T> {
   selectedRowId?: string | number | null;
   columns: Column<T>[];
@@ -43,6 +55,8 @@ interface TableProps<T> {
   onSearchChange?: (val: string) => void;
   onHighlightConsumed?: () => void;
   isLoading?: boolean;
+  pagination?: PaginationConfig;
+  onFetchAllData?: () => Promise<T[]>;
 }
 
 function usePersistedSet(key: string, defaultIndices: number[]): [Set<number>, (i: number) => void] {
@@ -102,11 +116,25 @@ export const Table = <T extends { id: string | number }>({
   selectedRowId,
   onHighlightConsumed,
   isLoading = false,
+  pagination,
+  onFetchAllData,
 }: TableProps<T>) => {
+  const isServer = pagination?.mode === "server";
   const searchInputRef = useRef<HTMLInputElement>(null);
   const [selectedRow, setSelectedRow] = useState<string | number | null>(null);
   const [selectedCell, setSelectedCell] = useState<{ rowId: string | number; colIndex: number } | null>(null);
-  const [currentPage, setCurrentPage] = useState(1);
+  // const [currentPage, setCurrentPage] = useState(1);
+  const [clientPage, setClientPage] = useState(1);
+
+  const currentPage = isServer ? (pagination as ServerPagination).page : clientPage;
+
+  const setCurrentPage = (page: number) => {
+    if (isServer) {
+      (pagination as ServerPagination).onPageChange(page);
+    } else {
+      setClientPage(page);
+    }
+  };
   const { company: currentCompany } = useCompany();
   const { user: currentUser } = useUser();
   const [sortConfig, setSortConfig] = useState<{ key: keyof T | null; direction: "asc" | "desc" }>(() => {
@@ -146,7 +174,27 @@ export const Table = <T extends { id: string | number }>({
     setSelectedRow(id);
   }, []);
 
-  const [pageSize, setPageSize] = useState<number>(() => {
+  // const [pageSize, setPageSize] = useState<number>(() => {
+  //   if (!tableId) return DEFAULT_PAGE_SIZE;
+  //   try {
+  //     const saved = localStorage.getItem(`table:${tableId}:pageSize`);
+  //     return saved ? Number(saved) : DEFAULT_PAGE_SIZE;
+  //   } catch {
+  //     return DEFAULT_PAGE_SIZE;
+  //   }
+  // });
+
+  // const handlePageSizeChange = (size: number) => {
+  //   setPageSize(size);
+  //   setCurrentPage(1);
+  //   if (tableId) {
+  //     try {
+  //       localStorage.setItem(`table:${tableId}:pageSize`, String(size));
+  //     } catch {}
+  //   }
+  // };
+
+  const [clientPageSize, setClientPageSize] = useState<number>(() => {
     if (!tableId) return DEFAULT_PAGE_SIZE;
     try {
       const saved = localStorage.getItem(`table:${tableId}:pageSize`);
@@ -156,13 +204,20 @@ export const Table = <T extends { id: string | number }>({
     }
   });
 
+  const pageSize = isServer ? (pagination as ServerPagination).pageSize : clientPageSize;
+
   const handlePageSizeChange = (size: number) => {
-    setPageSize(size);
-    setCurrentPage(1);
-    if (tableId) {
-      try {
-        localStorage.setItem(`table:${tableId}:pageSize`, String(size));
-      } catch {}
+    console.log("handlePageSizeChange", size, isServer);
+    if (isServer) {
+      (pagination as ServerPagination).onPageSizeChange(size);
+    } else {
+      setClientPageSize(size);
+      setCurrentPage(1);
+      if (tableId) {
+        try {
+          localStorage.setItem(`table:${tableId}:pageSize`, String(size));
+        } catch {}
+      }
     }
   };
 
@@ -206,6 +261,8 @@ export const Table = <T extends { id: string | number }>({
   }, []);
 
   const sortedData = useMemo(() => {
+    // if (isServer) return data;
+    if (isServer) return data ?? [];
     if (!sortConfig.key) return data;
     return [...data].sort((a, b) => {
       const col = columns.find((c) => c.accessor === sortConfig.key);
@@ -218,17 +275,31 @@ export const Table = <T extends { id: string | number }>({
     });
   }, [data, sortConfig, columns]);
 
+  // useEffect(() => {
+  //   setCurrentPage(1);
+  // }, [sortedData.length, searchQuery]);
   useEffect(() => {
+    if (isServer) return;
     setCurrentPage(1);
   }, [sortedData.length, searchQuery]);
 
-  const totalPages = pageSize ? Math.ceil(sortedData.length / pageSize) : 1;
+  // const totalPages = pageSize ? Math.ceil(sortedData.length / pageSize) : 1;
+
+  // const paginatedData = useMemo(() => {
+  //   if (!pageSize) return sortedData;
+  //   const start = (currentPage - 1) * pageSize;
+  //   return sortedData.slice(start, start + pageSize);
+  // }, [sortedData, currentPage, pageSize]);
+
+  const totalPages = isServer ? Math.ceil((pagination as ServerPagination).total / pageSize) : pageSize ? Math.ceil(sortedData.length / pageSize) : 1;
 
   const paginatedData = useMemo(() => {
+    // if (isServer) return data;
+    if (isServer) return data ?? [];
     if (!pageSize) return sortedData;
     const start = (currentPage - 1) * pageSize;
     return sortedData.slice(start, start + pageSize);
-  }, [sortedData, currentPage, pageSize]);
+  }, [isServer, data, sortedData, currentPage, pageSize]);
 
   const handleSort = (key: keyof T) => {
     setSortConfig((current) => {
@@ -706,6 +777,14 @@ export const Table = <T extends { id: string | number }>({
   // excel
   const handleExcelExport = useCallback(
     async (exportData: T[]) => {
+      let finalData = exportData;
+      if (isServer && onFetchAllData) {
+        try {
+          finalData = await onFetchAllData();
+        } catch {
+          finalData = exportData;
+        }
+      }
       const workbook = new ExcelJS.Workbook();
       const worksheet = workbook.addWorksheet("Данные");
 
@@ -728,8 +807,8 @@ export const Table = <T extends { id: string | number }>({
         cell.alignment = { vertical: "middle", horizontal: "center" };
       });
 
-      for (let index = 0; index < exportData.length; index++) {
-        const item = exportData[index];
+      for (let index = 0; index < finalData.length; index++) {
+        const item = finalData[index];
         const rowData: (string | number)[] = [index + 1];
 
         visibleColumns.forEach((col) => {
@@ -1230,8 +1309,10 @@ export const Table = <T extends { id: string | number }>({
               <span className="text-sm text-gray-500 dark:text-gray-400">
                 {t("ShowingResults", {
                   from: (currentPage - 1) * pageSize + 1,
-                  to: Math.min(currentPage * pageSize, sortedData.length),
-                  total: sortedData.length,
+                  // to: Math.min(currentPage * pageSize, sortedData.length),
+                  // total: sortedData.length,
+                  to: Math.min(currentPage * pageSize, isServer ? (pagination as ServerPagination).total : sortedData.length),
+                  total: isServer ? (pagination as ServerPagination).total : sortedData.length,
                 })}
               </span>
 

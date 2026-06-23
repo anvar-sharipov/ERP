@@ -93,6 +93,7 @@ TENANT_APPS = [
     
     'users',
     'accounting',
+    'django_filters',
     
     
 ]
@@ -106,6 +107,7 @@ MIDDLEWARE = [
     
     # my middlwares
     'companies.middleware.TenantActiveCheckMiddleware',
+ 
     
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
@@ -213,10 +215,18 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 
 
+# REST_FRAMEWORK = {
+#     'DEFAULT_AUTHENTICATION_CLASSES': (
+#         'rest_framework_simplejwt.authentication.JWTAuthentication',
+#     )
+# }
+
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
         'rest_framework_simplejwt.authentication.JWTAuthentication',
-    )
+    ),
+    'DEFAULT_PAGINATION_CLASS': 'config.pagination.StandardPagination',
+    'PAGE_SIZE': 25,
 }
 
 # SIMPLE_JWT = {

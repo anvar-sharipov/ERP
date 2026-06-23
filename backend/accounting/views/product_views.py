@@ -3,6 +3,9 @@ from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.parsers import MultiPartParser, FormParser
+from accounting.mixins import AuditMixin
+# from django.db.models import F
+from django.db import models
 
 from ..models import (
     Unit, Brand, Tag, ProductCategory,
@@ -20,6 +23,7 @@ from users.permissions import _rbac
 
 
 class UnitViewSet(viewsets.ModelViewSet):
+    pagination_class = None
     queryset = Unit.objects.all()
     serializer_class = UnitSerializer
 
@@ -28,6 +32,7 @@ class UnitViewSet(viewsets.ModelViewSet):
 
 
 class BrandViewSet(viewsets.ModelViewSet):
+    pagination_class = None
     queryset = Brand.objects.order_by("name")
     serializer_class = BrandSerializer
 
@@ -36,6 +41,7 @@ class BrandViewSet(viewsets.ModelViewSet):
 
 
 class TagViewSet(viewsets.ModelViewSet):
+    pagination_class = None
     queryset = Tag.objects.order_by("name")
     serializer_class = TagSerializer
 
@@ -44,6 +50,7 @@ class TagViewSet(viewsets.ModelViewSet):
 
 
 class ProductCategoryViewSet(viewsets.ModelViewSet):
+    pagination_class = None
     queryset = ProductCategory.objects.order_by("name")
     serializer_class = ProductCategorySerializer
 
@@ -51,7 +58,8 @@ class ProductCategoryViewSet(viewsets.ModelViewSet):
         return _rbac(self.action, "productcategory")
 
 
-class ProductViewSet(viewsets.ModelViewSet):
+class ProductViewSet(AuditMixin, viewsets.ModelViewSet):
+    pagination_class = None
     serializer_class = ProductSerializer
 
     def get_queryset(self):
@@ -64,9 +72,13 @@ class ProductViewSet(viewsets.ModelViewSet):
 
     def get_permissions(self):
         return _rbac(self.action, "product")
+    
+
+    
 
 
 class ProductImageViewSet(viewsets.ModelViewSet):
+    pagination_class = None
     """
     GET    /product-images/?product=<id>  — список изображений товара
     POST   /product-images/               — загрузка (multipart)
@@ -100,6 +112,7 @@ class ProductImageViewSet(viewsets.ModelViewSet):
 
 
 class PriceTypeViewSet(viewsets.ModelViewSet):
+    pagination_class = None
     queryset = PriceType.objects.order_by("name")
     serializer_class = PriceTypeSerializer
 
@@ -108,6 +121,7 @@ class PriceTypeViewSet(viewsets.ModelViewSet):
 
 
 class ProductPriceViewSet(viewsets.ModelViewSet):
+    pagination_class = None
     serializer_class = ProductPriceSerializer
 
     def get_queryset(self):
@@ -133,6 +147,7 @@ class ProductPriceViewSet(viewsets.ModelViewSet):
 
 
 class CounterpartyViewSet(viewsets.ModelViewSet):
+    pagination_class = None
     queryset = Counterparty.objects.order_by("name")
     serializer_class = CounterpartySerializer
 
@@ -150,6 +165,7 @@ class CounterpartyViewSet(viewsets.ModelViewSet):
 
 
 class WarehouseViewSet(viewsets.ModelViewSet):
+    pagination_class = None
     queryset = Warehouse.objects.select_related("branch").order_by("name")
     serializer_class = WarehouseSerializer
 
@@ -158,21 +174,56 @@ class WarehouseViewSet(viewsets.ModelViewSet):
 
 
 class WarehouseStockViewSet(viewsets.ModelViewSet):
+    pagination_class = None
     serializer_class = WarehouseStockSerializer
 
+    # def get_queryset(self):
+    #     qs = (
+    #         WarehouseStock.objects
+    #         .select_related("warehouse", "product", "product__unit")
+    #         .order_by("warehouse", "product__name")
+    #     )
+    #     warehouse_id = self.request.query_params.get("warehouse")
+    #     product_id = self.request.query_params.get("product")
+    #     if warehouse_id:
+    #         qs = qs.filter(warehouse_id=warehouse_id)
+    #     if product_id:
+    #         qs = qs.filter(product_id=product_id)
+    #     return qs
+    
     def get_queryset(self):
+        # 1. Базовая выборка с оптимизацией связей
         qs = (
             WarehouseStock.objects
             .select_related("warehouse", "product", "product__unit")
-            .order_by("warehouse", "product__name")
         )
+        
+        # 2. Добавляем расчет "на лету" прямо в SQL
+        qs = qs.annotate(
+            available_quantity=models.F('quantity') - models.F('reserved_quantity')
+        )
+        
+        # 3. Фильтрация
         warehouse_id = self.request.query_params.get("warehouse")
         product_id = self.request.query_params.get("product")
         if warehouse_id:
             qs = qs.filter(warehouse_id=warehouse_id)
         if product_id:
             qs = qs.filter(product_id=product_id)
-        return qs
+            
+        return qs.order_by("warehouse", "product__name")
 
     def get_permissions(self):
         return _rbac(self.action, "warehousestock")
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    

@@ -10,6 +10,7 @@ from users.permissions import _rbac
 
 
 class RoleListView(generics.ListCreateAPIView):
+    pagination_class = None
     serializer_class = RoleSerializer
     queryset = Role.objects.all()
     
@@ -19,6 +20,7 @@ class RoleListView(generics.ListCreateAPIView):
 
     
 class PermissionMatrixView(APIView):
+    pagination_class = None
     def get(self, request):
         # Группируем права: { "users": ["GET", "POST"...], "accounting": [...] }
         perms = Permission.objects.all()
@@ -29,6 +31,7 @@ class PermissionMatrixView(APIView):
     
 
 class RoleDetailView(generics.RetrieveUpdateDestroyAPIView):
+    pagination_class = None
     serializer_class = RoleSerializer
     queryset = Role.objects.all()
     
@@ -44,6 +47,7 @@ class RoleDetailView(generics.RetrieveUpdateDestroyAPIView):
 
 
 class AssignRoleView(APIView):
+    pagination_class = None
 
     
     def get_permissions(self):

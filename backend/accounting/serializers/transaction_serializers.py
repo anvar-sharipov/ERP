@@ -192,6 +192,16 @@ class JournalEntryListSerializer(serializers.ModelSerializer):
     debit_accounts = serializers.SerializerMethodField()
     credit_accounts = serializers.SerializerMethodField()
     
+    # debit_subcontos = serializers.SerializerMethodField()
+    # credit_subcontos = serializers.SerializerMethodField()
+    debit_subconto1 = serializers.SerializerMethodField()
+    debit_subconto2 = serializers.SerializerMethodField()
+    debit_subconto3 = serializers.SerializerMethodField()
+
+    credit_subconto1 = serializers.SerializerMethodField()
+    credit_subconto2 = serializers.SerializerMethodField()
+    credit_subconto3 = serializers.SerializerMethodField()
+    
     def get_created_by_name(self, obj):
         user = obj.created_by
         if not user:
@@ -202,27 +212,107 @@ class JournalEntryListSerializer(serializers.ModelSerializer):
         return full_name or user.username
     
     def get_debit_accounts(self, obj):
-        return ", ".join(
-            obj.lines.filter(side='debit')
-            .values_list('account__code', flat=True)
-        )
+        parts = []
+
+        for line in obj.lines.all():
+            if line.side != 'debit':
+                continue
+            parts.append(line.account.code)
+
+        return ", ".join(parts)
 
     def get_credit_accounts(self, obj):
-        return ", ".join(
-            obj.lines.filter(side='credit')
-            .values_list('account__code', flat=True)
-        )
+        parts = []
+
+        for line in obj.lines.all():
+            if line.side != 'credit':
+                continue
+            parts.append(line.account.code)
+
+        return ", ".join(parts)
 
     class Meta:
         model  = JournalEntry
+
+        
+        # fields = [
+        #     'id', 'number', 'date', 
+        #     'debit_accounts', 'debit_subcontos',   # добавить
+        #     'credit_accounts', 'credit_subcontos', # добавить
+        #     'status', 'status_display',
+        #     'description', 'debit_total', 'created_by_name', 'created_at',
+        # ]
+        
         fields = [
-            'id', 'number', 'date', 'debit_accounts', 'credit_accounts', 'status', 'status_display',
-            'description', 'debit_total', 'created_by_name', 'created_at',
+            'id',
+            'number',
+            'date',
+
+            'debit_accounts',
+            'debit_subconto1',
+            'debit_subconto2',
+            'debit_subconto3',
+
+            'credit_accounts',
+            'credit_subconto1',
+            'credit_subconto2',
+            'credit_subconto3',
+
+            'status',
+            'status_display',
+            'description',
+            'debit_total',
+            'created_by_name',
+            'created_at',
         ]
 
     def get_debit_total(self, obj):
         # Считается через annotate в queryset во view — здесь просто читаем
         return getattr(obj, 'debit_total', None)
+    
+
+    
+    def _get_subcontos(self, obj, side):
+        result = []
+
+        for line in obj.lines.all():
+            if line.side != side:
+                continue
+
+            if not line.subcontos:
+                continue
+
+            names = [
+                v.get('name')
+                for v in line.subcontos.values()
+                if v and v.get('name')
+            ]
+
+            result.extend(names)
+
+        while len(result) < 3:
+            result.append("")
+
+        return result[:3]
+    
+    def get_debit_subconto1(self, obj):
+        return self._get_subcontos(obj, 'debit')[0]
+
+    def get_debit_subconto2(self, obj):
+        return self._get_subcontos(obj, 'debit')[1]
+
+    def get_debit_subconto3(self, obj):
+        return self._get_subcontos(obj, 'debit')[2]
+
+
+    def get_credit_subconto1(self, obj):
+        return self._get_subcontos(obj, 'credit')[0]
+
+    def get_credit_subconto2(self, obj):
+        return self._get_subcontos(obj, 'credit')[1]
+
+    def get_credit_subconto3(self, obj):
+        return self._get_subcontos(obj, 'credit')[2]
 
 
 # =====================================================================

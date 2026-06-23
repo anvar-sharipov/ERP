@@ -30,6 +30,15 @@ export interface JournalEntry {
   lines?:           TransactionLine[]
   created_by_name?: string
   created_at:       string
+  // debit_subcontos?: string
+  // credit_subcontos?: string
+  debit_subconto1?: string
+  debit_subconto2?: string
+  debit_subconto3?: string
+
+  credit_subconto1?: string
+  credit_subconto2?: string
+  credit_subconto3?: string
 }
 
 export interface JournalEntryPayload {

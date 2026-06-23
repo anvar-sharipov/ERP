@@ -141,7 +141,7 @@ const WarehousesListPage = () => {
       excelWidth: 25,
       render: (item) => (
         <span className="flex items-center gap-2">
-          {item.is_main && <span className="text-xs bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300 px-1.5 py-0.5 rounded font-medium">Главный</span>}
+          {item.is_main && <span className="text-xs bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300 px-1.5 py-0.5 rounded font-medium">{t("Main")}</span>}
           {item.name}
         </span>
       ),
@@ -149,14 +149,14 @@ const WarehousesListPage = () => {
       excelValue: (item) => item.name,
     },
     {
-      header: "Филиал",
+      header: t("Branch"),
       sortable: true,
       excelWidth: 20,
       render: (item) => <span className="text-gray-500 text-sm">{item.branch_name ?? "—"}</span>,
       sortValue: (item) => item.branch_name ?? "",
       excelValue: (item) => item.branch_name ?? "—",
     },
-    { header: "Адрес", accessor: "address", sortable: true, excelWidth: 25 },
+    { header: t("Address"), accessor: "address", sortable: true, excelWidth: 25 },
     {
       header: t("Status"),
       accessor: "is_active",
@@ -220,13 +220,13 @@ const WarehousesListPage = () => {
           <Input label={t("Name")} value={form.name} onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))} />
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Филиал</label>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t("Branch")}</label>
             <select
               value={form.branch ?? ""}
               onChange={(e) => setForm((p) => ({ ...p, branch: e.target.value ? Number(e.target.value) : null }))}
               className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
             >
-              <option value="">— без филиала —</option>
+              <option value="">{t("NoBranch")}</option>
               {(branches as any[]).map((b) => (
                 <option key={b.id} value={b.id}>
                   {b.name}
@@ -235,7 +235,7 @@ const WarehousesListPage = () => {
             </select>
           </div>
 
-          <TextArea label="Адрес" rows={2} value={form.address} onChange={(e) => setForm((p) => ({ ...p, address: e.target.value }))} />
+          <TextArea label={t("Address")} rows={2} value={form.address} onChange={(e) => setForm((p) => ({ ...p, address: e.target.value }))} />
 
           <label className="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300 cursor-pointer">
             <input
@@ -244,7 +244,7 @@ const WarehousesListPage = () => {
               onChange={(e) => setForm((p) => ({ ...p, is_main: e.target.checked }))}
               className="w-4 h-4 rounded border-gray-300 text-yellow-500 focus:ring-yellow-400"
             />
-            Главный склад
+            {t("MainWarehouse")}
           </label>
 
           <label className="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300 cursor-pointer">
@@ -259,7 +259,7 @@ const WarehousesListPage = () => {
 
           <div className="flex justify-end gap-2 pt-2">
             <Button text={t("Cancel")} onClick={() => setFormOpen(false)} />
-            <Button text={saveMutation.isPending ? t("Saving") : editing ? t("Save") : t("Create")} onClick={() => saveMutation.mutate(form)} />
+            <Button text={saveMutation.isPending ? t("Saving") : editing ? t("Save") : t("Create")} onClick={() => saveMutation.mutate(form)} variant="danger" />
           </div>
         </div>
       </Modal>

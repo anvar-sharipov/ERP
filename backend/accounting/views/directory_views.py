@@ -7,6 +7,7 @@ from users.permissions import _rbac
 
 
 class DirectoryViewSet(viewsets.ModelViewSet):
+    pagination_class = None
     queryset = Directory.objects.order_by("name")
     serializer_class = DirectorySerializer
 
@@ -15,6 +16,7 @@ class DirectoryViewSet(viewsets.ModelViewSet):
 
 
 class DirectoryFieldViewSet(viewsets.ModelViewSet):
+    pagination_class = None
     serializer_class = DirectoryFieldSerializer
 
     def get_queryset(self):
@@ -29,6 +31,7 @@ class DirectoryFieldViewSet(viewsets.ModelViewSet):
 
     
 class DirectoryRecordViewSet(viewsets.ModelViewSet):
+    pagination_class = None
     serializer_class = DirectoryRecordSerializer
 
     def get_queryset(self):
