@@ -1,9 +1,10 @@
 // // frontend/src/components/Layouts/SidebarRight.tsx
 
-import React from "react";
+import React, { useEffect, useRef } from "react";
 import { useSidebar } from "../../core/context/SidebarRightContext";
 import { useCompany } from "../../core/context/CompanyContext";
 import WorkDateWidget from "../ui/WorkDateWidget";
+import { focusManager } from "../../core/utils/focusManager";
 
 interface SidebarRightProps {
   isOpen: boolean;
@@ -13,10 +14,50 @@ interface SidebarRightProps {
 const SidebarRight: React.FC<SidebarRightProps> = ({ isOpen }) => {
   const { sidebarContent } = useSidebar();
   const { company: currentCompany } = useCompany();
+  const sidebarRef = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (focusManager.getRegion() !== "sidebar-right") {
+        return;
+      }
+
+      if (!sidebarRef.current) {
+        return;
+      }
+
+      const focusables = Array.from(
+        sidebarRef.current.querySelectorAll(
+          `
+          input,
+          button,
+          select,
+          textarea,
+          [tabindex="0"]
+        `,
+        ),
+      ).filter((el) => !el.hasAttribute("disabled")) as HTMLElement[];
+
+      if (!focusables.length) {
+        return;
+      }
+
+      if (e.key === "Escape") {
+        e.preventDefault();
+        focusManager.setRegion("table");
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown, { capture: true });
+
+    return () => window.removeEventListener("keydown", handleKeyDown, { capture: true });
+  }, []);
 
   return (
     <div className="relative flex print:hidden">
       <aside
+        ref={sidebarRef}
+        data-region="sidebar-right"
         className={`
         border-l border-slate-500 bg-slate-800 dark:bg-slate-900 transition-all duration-300
         fixed right-0 top-16 h-[calc(100vh-4rem)] z-40

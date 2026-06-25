@@ -3,8 +3,10 @@
 import { api } from "../../../core/api/axiosInstance";
 
 export const employeeApi = {
-  getAll: async () =>
-    (await api.get("/accounting/employees/")).data,
+  // getAll: async () =>
+  //   (await api.get("/accounting/employees/")).data,
+  getAll: async (params?: Record<string, string>) =>
+    (await api.get("/accounting/employees/", { params })).data,
 
   getOne: async (id: number) =>
     (await api.get(`/accounting/employees/${id}/`)).data,

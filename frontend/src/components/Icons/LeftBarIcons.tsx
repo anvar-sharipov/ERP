@@ -12,6 +12,7 @@ import {
   KeyIcon,
   ComputerDesktopIcon,
   IdentificationIcon,
+  DocumentTextIcon,
 } from "@heroicons/react/24/outline";
 
 // Добавляем эффект свечения и чуть более светлые тона для темных тем
@@ -34,3 +35,4 @@ export const DASHBOARD_ICON = <ComputerDesktopIcon className={`${iconClassName} 
 
 // export const EMPLOYEES_ICON = <UserGroupIcon className={`${iconClassName} text-teal-400`} />;
 export const EMPLOYEES_ICON = <IdentificationIcon className={`${iconClassName} text-teal-400`} />;
+export const DOCUMENTS_ICON = <DocumentTextIcon className={`${iconClassName} text-red-500`} />;

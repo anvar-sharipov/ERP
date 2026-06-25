@@ -15,6 +15,7 @@ from utils.validators import validate_image_size
 
 
 
+
 class ProductCategory(models.Model):
     name = models.CharField(max_length=255)
     slug = models.SlugField(unique=True)
@@ -268,3 +269,88 @@ class ProductPrice(models.Model):
 
     def __str__(self):
         return f"{self.product} | {self.warehouse} | {self.price_type} = {self.price}"
+    
+
+class ProductBundle(models.Model):
+    """
+    Комплектующие к товару.
+    Пример: Труба → резина x2 (default_price=0)
+    При добавлении основного товара в документ — комплектующие
+    автоматически добавляются со своим qty_ratio * qty_основного.
+    """
+    product = models.ForeignKey(
+        "Product",
+        on_delete=models.CASCADE,
+        related_name="bundle_items",
+        verbose_name="Основной товар"
+    )
+    bundle_product = models.ForeignKey(
+        "Product",
+        on_delete=models.CASCADE,
+        related_name="bundled_in",
+        verbose_name="Комплектующий товар"
+    )
+    qty_ratio = models.DecimalField(
+        max_digits=10,
+        decimal_places=3,
+        default=1,
+        validators=[MinValueValidator(0.001)],
+        verbose_name="Кол-во на единицу основного товара"
+    )
+    default_price = models.DecimalField(
+        max_digits=15,
+        decimal_places=2,
+        default=0,
+        validators=[MinValueValidator(0)],
+        verbose_name="Цена по умолчанию (0 = бесплатно)"
+    )
+
+    class Meta:
+        verbose_name = "Комплектующий товар"
+        verbose_name_plural = "Комплектующие товары"
+        unique_together = [["product", "bundle_product"]]
+        indexes = [
+            models.Index(fields=["product"], name="bundle_product_idx"),
+        ]
+
+    def __str__(self):
+        return f"{self.product.name} → {self.bundle_product.name} x{self.qty_ratio}"    
+    
+    
+# добавить в accounting/models/product.py
+
+class VolumeDiscount(models.Model):
+    """
+    Скидка по объёму для товара.
+    Например: от 50 до 100 шт — скидка 10%
+    """
+    product    = models.ForeignKey(
+        Product, on_delete=models.CASCADE,
+        related_name='volume_discounts'
+    )
+    price_type = models.ForeignKey(
+        PriceType, on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='volume_discounts',
+        verbose_name="Тип цены (null = для всех)"
+    )
+    min_qty          = models.DecimalField(max_digits=15, decimal_places=3, default=0)
+    max_qty          = models.DecimalField(max_digits=15, decimal_places=3, null=True, blank=True)
+    discount_percent = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+
+    class Meta:
+        verbose_name = "Скидка по объёму"
+        ordering = ['min_qty']
+        constraints = [
+            models.CheckConstraint(
+                check=models.Q(discount_percent__gte=0) & models.Q(discount_percent__lte=100),
+                name='volume_discount_percent_range'
+            )
+        ]
+
+    def __str__(self):
+        max_str = f"до {self.max_qty}" if self.max_qty else "и выше"
+        return f"{self.product.name}: от {self.min_qty} {max_str} → {self.discount_percent}%"
+    
+    
+    

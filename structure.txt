@@ -1,16 +1,35 @@
-﻿├── backend
+﻿├── .pytest_cache
+│   ├── v
+│   │   └── cache
+│   │       └── nodeids
+│   ├── .gitignore
+│   ├── CACHEDIR.TAG
+│   └── README.md
+├── backend
+│   ├── .pytest_cache
+│   │   ├── v
+│   │   │   └── cache
+│   │   │       ├── lastfailed
+│   │   │       └── nodeids
+│   │   ├── .gitignore
+│   │   ├── CACHEDIR.TAG
+│   │   └── README.md
 │   ├── accounting
+│   │   ├── filter
+│   │   │   ├── __pycache__
+│   │   │   └── audit_filter.py
 │   │   ├── migrations
 │   │   │   ├── __pycache__
 │   │   │   ├── 0001_initial.py
-│   │   │   ├── 0002_product_height_product_length_product_volume_m3_and_more.py
-│   │   │   ├── 0003_product_description.py
-│   │   │   ├── 0004_journalentry_created_at_journalentry_created_by_and_more.py
-│   │   │   ├── 0005_closedperiod.py
-│   │   │   ├── 0006_stockmovement_date.py
-│   │   │   ├── 0007_alter_subcontotype_content_type.py
-│   │   │   ├── 0008_position_employee.py
+│   │   │   ├── 0002_initial.py
+│   │   │   ├── 0003_remove_auditlog_audit_changed_data_gin_and_more.py
+│   │   │   ├── 0004_document_documentitem_documentparticipant_and_more.py
+│   │   │   ├── 0005_userscope.py
+│   │   │   ├── 0006_closedperiod_branch_closedperiod_warehouse_and_more.py
+│   │   │   ├── 0007_productbundle.py
 │   │   │   └── __init__.py
+│   │   ├── mixins
+│   │   │   └── audit_mixin.py
 │   │   ├── models
 │   │   │   ├── __pycache__
 │   │   │   ├── account.py
@@ -28,14 +47,17 @@
 │   │   ├── serializers
 │   │   │   ├── __pycache__
 │   │   │   ├── account_serializers.py
+│   │   │   ├── audit_serializers.py
 │   │   │   ├── company_serializers.py
 │   │   │   ├── directory_serializers.py
+│   │   │   ├── document_serializers.py
 │   │   │   ├── employee_serializers.py
 │   │   │   ├── product_serializers.py
 │   │   │   └── transaction_serializers.py
 │   │   ├── tests
 │   │   │   ├── __pycache__
 │   │   │   ├── base.py
+│   │   │   ├── test_audit.py
 │   │   │   ├── test_rbac_all.py
 │   │   │   ├── test_rbac_branches.py
 │   │   │   ├── test_users_permissions.py
@@ -43,8 +65,10 @@
 │   │   ├── views
 │   │   │   ├── __pycache__
 │   │   │   ├── account_views.py
+│   │   │   ├── audit_views.py
 │   │   │   ├── company_views.py
 │   │   │   ├── directory_views.py
+│   │   │   ├── document_views.py
 │   │   │   ├── employee_views.py
 │   │   │   ├── product_views.py
 │   │   │   ├── transaction_views.py
@@ -79,6 +103,7 @@
 │   ├── config
 │   │   ├── __pycache__
 │   │   ├── asgi.py
+│   │   ├── pagination.py
 │   │   ├── settings.py
 │   │   ├── urls.py
 │   │   ├── urls_public.py
@@ -111,10 +136,11 @@
 │   │   ├── models.py
 │   │   ├── permissions.py
 │   │   ├── rbac_events.py
+│   │   ├── scoping.py
 │   │   ├── signals.py
 │   │   ├── tests.py
 │   │   ├── urls.py
-│   │   ├── views.py
+│   │   ├── views_old.py
 │   │   └── __init__.py
 │   ├── utils
 │   │   ├── ws
@@ -190,6 +216,7 @@
 │   │   │       ├── LanguageSwitcher.tsx
 │   │   │       ├── Loader.tsx
 │   │   │       ├── RBACGuard.tsx
+│   │   │       ├── SearchableSelect.tsx
 │   │   │       ├── StatusBadge.tsx
 │   │   │       ├── TablePrintHeader.tsx
 │   │   │       ├── TextArea.tsx
@@ -209,6 +236,7 @@
 │   │   │   │   ├── useAccess.ts
 │   │   │   │   ├── useClosedPeriod.ts
 │   │   │   │   ├── useHotkeys.ts
+│   │   │   │   ├── useInitScope.ts
 │   │   │   │   ├── usePageAccess.ts
 │   │   │   │   ├── usePageHotkeys.ts
 │   │   │   │   ├── useRBACSocket.ts
@@ -245,6 +273,7 @@
 │   │   │   │   │   │   ├── Accounting.tsx
 │   │   │   │   │   │   ├── AccountingLayout.tsx
 │   │   │   │   │   │   ├── AccountPage.tsx
+│   │   │   │   │   │   ├── AuditLogPage.tsx
 │   │   │   │   │   │   ├── OSVPage.tsx
 │   │   │   │   │   │   └── SubcontoTypesPage.tsx
 │   │   │   │   │   ├── Counterparties
@@ -257,6 +286,19 @@
 │   │   │   │   │   │   ├── CreateDirectory.tsx
 │   │   │   │   │   │   ├── Directory.tsx
 │   │   │   │   │   │   └── FieldRenderer.tsx
+│   │   │   │   │   ├── Documents
+│   │   │   │   │   │   ├── Invoice
+│   │   │   │   │   │   │   ├── DocumentFormPage.tsx
+│   │   │   │   │   │   │   ├── HeadDocument.tsx
+│   │   │   │   │   │   │   ├── HeaderPage.tsx
+│   │   │   │   │   │   │   ├── Interface.ts
+│   │   │   │   │   │   │   ├── Participants.tsx
+│   │   │   │   │   │   │   ├── ProductRow.tsx
+│   │   │   │   │   │   │   └── Vars.ts
+│   │   │   │   │   │   ├── Documents.tsx
+│   │   │   │   │   │   ├── InvoicesPage.tsx
+│   │   │   │   │   │   ├── OrdersPage.tsx
+│   │   │   │   │   │   └── ReturnsPage.tsx
 │   │   │   │   │   ├── Employees
 │   │   │   │   │   │   ├── Employees.tsx
 │   │   │   │   │   │   ├── EmployeesPage.tsx
@@ -270,6 +312,7 @@
 │   │   │   │   │   │   ├── Form
 │   │   │   │   │   │   │   ├── Tabs
 │   │   │   │   │   │   │   │   └── MainTabs.tsx
+│   │   │   │   │   │   │   ├── BundlesTab.tsx
 │   │   │   │   │   │   │   └── ProductFormPage.tsx
 │   │   │   │   │   │   ├── BrandsPage.tsx
 │   │   │   │   │   │   ├── CategoriesPage.tsx
@@ -288,7 +331,9 @@
 │   │   │   │       ├── accountingApi.ts
 │   │   │   │       ├── branchApi.ts
 │   │   │   │       ├── companyApi.ts
+│   │   │   │       ├── counterpartyApi.ts
 │   │   │   │       ├── directoryApi.ts
+│   │   │   │       ├── documentApi.ts
 │   │   │   │       ├── employeeApi.ts
 │   │   │   │       ├── productApi.ts
 │   │   │   │       ├── rolesApi.ts
@@ -320,7 +365,8 @@
 │   │   │       │           │   ├── AssignRolesModal.tsx
 │   │   │       │           │   ├── CompanyAdminUser.tsx
 │   │   │       │           │   ├── RoleFormPage.tsx
-│   │   │       │           │   └── Roles.tsx
+│   │   │       │           │   ├── Roles.tsx
+│   │   │       │           │   └── UserScopeModal.tsx
 │   │   │       │           ├── Users
 │   │   │       │           └── AdminPanel.tsx
 │   │   │       └── services

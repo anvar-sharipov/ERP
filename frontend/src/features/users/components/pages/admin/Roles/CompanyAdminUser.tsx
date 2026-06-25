@@ -20,6 +20,7 @@ import { useTranslation } from "react-i18next";
 import { useTableFilter } from "../../../../../../core/hooks/useTableFilter";
 import { PageHeaderText } from "../../../../../../components/ui/Tabs/PageHeaderText";
 import { usePageHotkeys } from "../../../../../../core/hooks/usePageHotkeys";
+import UserScopeModal from "./UserScopeModal";
 
 const CompanyAdminUser = () => {
   const { t } = useTranslation();
@@ -40,6 +41,11 @@ const CompanyAdminUser = () => {
     isOpen: false,
     userId: null,
     roles: [],
+  });
+  const [scopeModal, setScopeModal] = useState<{ isOpen: boolean; userId: number | null; userName: string }>({
+    isOpen: false,
+    userId: null,
+    userName: "",
   });
 
   const [formData, setFormData] = useState({ username: "", first_name: "", last_name: "", phone: "", position: "", is_active: true, password: "" });
@@ -189,7 +195,6 @@ const CompanyAdminUser = () => {
     },
   });
 
-
   const columns: Column<UserInterface>[] = [
     { header: t("Actions"), accessor: "id", sortable: true, excelWidth: 8, excelAlign: "center" },
     { header: t("FullName"), accessor: "full_name", sortable: true, excelWidth: 30 },
@@ -275,6 +280,22 @@ const CompanyAdminUser = () => {
               setAssignModal({ isOpen: true, userId: Number(u.id), roles: u.roles.map((r) => r.id) });
             }}
           />
+
+          <Button
+            title={t("Scope")}
+            disabled={!canPut}
+            variant="1c"
+            icon={<span>🏪</span>}
+            className="md:h-6 md:w-8 md:!p-0"
+            onClick={(e) => {
+              e.stopPropagation();
+              setScopeModal({
+                isOpen: true,
+                userId: Number(u.id),
+                userName: u.full_name || u.username,
+              });
+            }}
+          />
         </div>
       ),
     },
@@ -326,6 +347,8 @@ const CompanyAdminUser = () => {
       <ImagePreview src={selectedImage} onClose={() => setSelectedImage(null)} />
       <AssignRolesModal isOpen={assignModal.isOpen} userId={assignModal.userId} currentRoles={assignModal.roles} onClose={() => setAssignModal({ isOpen: false, userId: null, roles: [] })} />
 
+      <UserScopeModal isOpen={scopeModal.isOpen} userId={scopeModal.userId} userName={scopeModal.userName} onClose={() => setScopeModal({ isOpen: false, userId: null, userName: "" })} />
+        
       <Modal isOpen={deleteModal} onClose={() => setDeleteModal(false)} size="sm">
         <div className="mb-6">
           <p>{t("DeleteConfirm")}</p>

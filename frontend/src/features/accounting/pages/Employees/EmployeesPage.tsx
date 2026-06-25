@@ -1,5 +1,4 @@
 // frontend/src/features/accounting/pages/Employees/EmployeesPage.tsx
-
 import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { employeeApi, positionApi } from "../../services/employeeApi";
@@ -17,13 +16,16 @@ import { Plus } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useTableFilter } from "../../../../core/hooks/useTableFilter";
 import { usePageHotkeys } from "../../../../core/hooks/usePageHotkeys";
-
+import { userScopeApi } from "../../services/transactionApi";
+import { useDateStore } from "../../../../core/store/dateStore";
 
 interface Employee {
   id: number;
   full_name: string;
   position: number | null;
   position_name?: string;
+  branch: number | null;
+  branch_name?: string;
   phone: string;
   note: string;
   is_active: boolean;
@@ -34,9 +36,15 @@ interface Position {
   name: string;
 }
 
+interface Branch {
+  id: number;
+  name: string;
+}
+
 interface EmployeeForm {
   full_name: string;
   position: number | null;
+  branch: number | null;
   phone: string;
   note: string;
   is_active: boolean;
@@ -45,10 +53,16 @@ interface EmployeeForm {
 const EMPTY: EmployeeForm = {
   full_name: "",
   position: null,
+  branch: null,
   phone: "",
   note: "",
   is_active: true,
 };
+
+const selectCls =
+  "w-full px-3 py-2 text-sm border border-gray-300 dark:border-slate-600 rounded-lg " +
+  "bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100 " +
+  "focus:outline-none focus:ring-2 focus:ring-indigo-500";
 
 const EmployeesPage = () => {
   const { t } = useTranslation();
@@ -64,25 +78,42 @@ const EmployeesPage = () => {
   const [deleteModal, setDeleteModal] = useState(false);
   const [deleteId, setDeleteId] = useState<number | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
-
-
   const [positionFilter, setPositionFilter] = useState<number | "all">("all");
+  const [branchFilter, setBranchFilter] = useState<number | "all">("all");
   const [activeFilter, setActiveFilter] = useState<"all" | "active" | "inactive">("all");
+  const { workBranch } = useDateStore();
+
+  const { data: positions = [] } = useQuery<Position[]>({
+    queryKey: ["positions"],
+    queryFn: positionApi.getAll,
+  });
+
+  // const { data: branches = [] } = useQuery<Branch[]>({
+  //   queryKey: ["branches"],
+  //   queryFn: async () => {
+  //     const res = await api.get("/accounting/branches/");
+  //     return Array.isArray(res.data) ? res.data : (res.data.results ?? []);
+  //   },
+  // });
+
+  const { data: scope } = useQuery({
+    queryKey: ["my-scope"],
+    queryFn: () => userScopeApi.getMyScope().then((r) => r.data),
+    staleTime: 60_000,
+  });
+  const branches = scope?.branches ?? [];
+
+  const hasScope = !scope?.is_global;
 
   const {
     data: employees = [],
     isLoading,
     error,
   } = useQuery<Employee[]>({
-    queryKey: ["employees"],
-    queryFn: employeeApi.getAll,
+    queryKey: ["employees", workBranch?.id],
+    queryFn: () => employeeApi.getAll(workBranch?.id ? { branch: String(workBranch.id) } : undefined),
     enabled: canView,
     retry: false,
-  });
-
-  const { data: positions = [] } = useQuery<Position[]>({
-    queryKey: ["positions"],
-    queryFn: positionApi.getAll,
   });
 
   useEffect(() => {
@@ -90,6 +121,7 @@ const EmployeesPage = () => {
       setForm({
         full_name: editing.full_name,
         position: editing.position,
+        branch: editing.branch,
         phone: editing.phone,
         note: editing.note,
         is_active: editing.is_active,
@@ -101,36 +133,24 @@ const EmployeesPage = () => {
 
   const saveMutation = useMutation({
     mutationFn: (data: EmployeeForm) => employeeApi.save(editing?.id ?? null, data),
-
     onSuccess: (res) => {
-      queryClient.invalidateQueries({
-        queryKey: ["employees"],
-      });
-
+      queryClient.invalidateQueries({ queryKey: ["employees"] });
       notify("success", editing ? t("SuccessUpdated") : t("SuccessCreated"));
-
       setHighlightedId(res.data.id);
       setFormOpen(false);
       setEditing(null);
     },
-
     onError: (err: any) => {
       if (err._handled) return;
-
       notify("error", err.response?.data?.detail || t("ErrorSaving"));
     },
   });
 
   const deleteMutation = useMutation({
     mutationFn: (id: number) => employeeApi.delete(id),
-
     onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: ["employees"],
-      });
-
+      queryClient.invalidateQueries({ queryKey: ["employees"] });
       notify("success", t("SuccessDeleted"));
-
       setDeleteId(null);
     },
   });
@@ -139,7 +159,6 @@ const EmployeesPage = () => {
     setSidebarContent(
       <div className="space-y-4">
         <h4 className="font-bold text-indigo-300">{t("Actions")}</h4>
-
         <Button
           disabled={!canPost}
           text={t("AddEmployee")}
@@ -155,10 +174,8 @@ const EmployeesPage = () => {
         {/* Фильтр по должности */}
         <div className="pt-4 border-t border-indigo-900/30">
           <h4 className="font-bold text-indigo-300 mb-2">{t("Position")}</h4>
-
           <div className="flex flex-col gap-1">
             <Button variant="ghost" dark isActive={positionFilter === "all"} text={t("All")} className="w-full justify-start" onClick={() => setPositionFilter("all")} />
-
             {positions.map((p) => (
               <Button key={p.id} variant="ghost" dark isActive={positionFilter === p.id} text={p.name} className="w-full justify-start" onClick={() => setPositionFilter(p.id)} />
             ))}
@@ -168,7 +185,6 @@ const EmployeesPage = () => {
         {/* Фильтр по статусу */}
         <div className="pt-4 border-t border-indigo-900/30">
           <h4 className="font-bold text-indigo-300 mb-2">{t("StatusFilter")}</h4>
-
           <div className="flex flex-col gap-1">
             {(["all", "active", "inactive"] as const).map((status) => (
               <Button
@@ -186,13 +202,17 @@ const EmployeesPage = () => {
         </div>
       </div>,
     );
-  }, [setSidebarContent, canPost, t, positions, positionFilter, activeFilter]);
+  }, [setSidebarContent, canPost, t, positions, positionFilter, branchFilter, activeFilter, branches]);
 
   const filtered = useTableFilter(employees, {
     search: searchQuery,
-    searchFields: ["id", "full_name", "phone", "position_name"],
-    filterKey: `${positionFilter}-${activeFilter}`,
+    searchFields: ["id", "full_name", "phone", "position_name", "branch_name"],
+    filterKey: `${branchFilter}-${positionFilter}-${activeFilter}`,
     filters: [
+      (item) => {
+        if (branchFilter === "all") return true;
+        return item.branch === branchFilter;
+      },
       (item) => {
         if (positionFilter === "all") return true;
         return item.position === positionFilter;
@@ -215,26 +235,16 @@ const EmployeesPage = () => {
   });
 
   const columns: Column<Employee>[] = [
+    { header: t("ID"), accessor: "id", sortable: true },
+    { header: t("FullName"), accessor: "full_name", sortable: true },
+    { header: t("Position"), accessor: "position_name", sortable: true },
     {
-      header: t("ID"),
-      accessor: "id",
+      header: "Филиал",
+      accessor: "branch_name",
       sortable: true,
+      render: (item) => (item.branch_name ? <span>{item.branch_name}</span> : <span className="text-gray-400 text-xs">Общий</span>),
     },
-    {
-      header: t("FullName"),
-      accessor: "full_name",
-      sortable: true,
-    },
-    {
-      header: t("Position"),
-      accessor: "position_name",
-      sortable: true,
-    },
-    {
-      header: t("Phone"),
-      accessor: "phone",
-      sortable: true,
-    },
+    { header: t("Phone"), accessor: "phone", sortable: true },
     {
       header: t("Status"),
       accessor: "is_active",
@@ -256,7 +266,6 @@ const EmployeesPage = () => {
               setFormOpen(true);
             }}
           />
-
           <Button
             disabled={!canDelete}
             variant="1c"
@@ -293,32 +302,12 @@ const EmployeesPage = () => {
 
       <Modal isOpen={formOpen} onClose={() => setFormOpen(false)} title={editing ? t("Edit") : t("AddEmployee")} closeOnOutsideClick={false}>
         <div className="space-y-4">
-          <Input
-            label={t("FullName")}
-            value={form.full_name}
-            onChange={(e) =>
-              setForm((p) => ({
-                ...p,
-                full_name: e.target.value,
-              }))
-            }
-          />
+          <Input label={t("FullName")} value={form.full_name} onChange={(e) => setForm((p) => ({ ...p, full_name: e.target.value }))} />
 
           <div>
             <label className="block mb-1 text-sm font-medium">{t("Position")}</label>
-
-            <select
-              className="w-full border rounded p-2"
-              value={form.position ?? ""}
-              onChange={(e) =>
-                setForm((p) => ({
-                  ...p,
-                  position: e.target.value ? Number(e.target.value) : null,
-                }))
-              }
-            >
+            <select className={selectCls} value={form.position ?? ""} onChange={(e) => setForm((p) => ({ ...p, position: e.target.value ? Number(e.target.value) : null }))}>
               <option value="">{t("Select")}</option>
-
               {positions.map((p) => (
                 <option key={p.id} value={p.id}>
                   {p.name}
@@ -327,45 +316,29 @@ const EmployeesPage = () => {
             </select>
           </div>
 
-          <Input
-            label={t("Phone")}
-            value={form.phone}
-            onChange={(e) =>
-              setForm((p) => ({
-                ...p,
-                phone: e.target.value,
-              }))
-            }
-          />
+          <div>
+            <label className="block mb-1 text-sm font-medium">Филиал</label>
+            <select className={selectCls} value={form.branch ?? ""} onChange={(e) => setForm((p) => ({ ...p, branch: e.target.value ? Number(e.target.value) : null }))}>
+              {!hasScope && <option value="">— Общий (виден всем) —</option>}
+              {branches.map((b) => (
+                <option key={b.id} value={b.id}>
+                  {b.name}
+                </option>
+              ))}
+            </select>
+          </div>
 
-          <Input
-            label={t("Note")}
-            value={form.note}
-            onChange={(e) =>
-              setForm((p) => ({
-                ...p,
-                note: e.target.value,
-              }))
-            }
-          />
+          <Input label={t("Phone")} value={form.phone} onChange={(e) => setForm((p) => ({ ...p, phone: e.target.value }))} />
+
+          <Input label={t("Note")} value={form.note} onChange={(e) => setForm((p) => ({ ...p, note: e.target.value }))} />
 
           <label className="flex items-center gap-2">
-            <input
-              type="checkbox"
-              checked={form.is_active}
-              onChange={(e) =>
-                setForm((p) => ({
-                  ...p,
-                  is_active: e.target.checked,
-                }))
-              }
-            />
+            <input type="checkbox" checked={form.is_active} onChange={(e) => setForm((p) => ({ ...p, is_active: e.target.checked }))} />
             {t("IsActive")}
           </label>
 
           <div className="flex justify-end gap-2">
             <Button text={t("Cancel")} onClick={() => setFormOpen(false)} />
-
             <Button text={saveMutation.isPending ? t("Saving") : editing ? t("Save") : t("Create")} onClick={() => saveMutation.mutate(form)} variant="danger" />
           </div>
         </div>
@@ -375,9 +348,7 @@ const EmployeesPage = () => {
         isOpen={deleteModal}
         type="delete"
         title={`DELETE - ${t("Delete")}`}
-        message={t("Delete", {
-          name: toDelete?.full_name,
-        })}
+        message={t("Delete", { name: toDelete?.full_name })}
         onClose={() => setDeleteModal(false)}
         onConfirm={() => {
           if (deleteId) {

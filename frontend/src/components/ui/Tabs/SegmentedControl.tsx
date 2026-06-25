@@ -1,6 +1,7 @@
 // frontend/src/components/ui/SegmentedControl.tsx
 import { playClickSound } from "../../../core/utils/sound";
 
+
 interface Option<T> {
   value: T;
   label: string;

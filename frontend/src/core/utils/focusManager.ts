@@ -1,4 +1,4 @@
-type FocusRegion = 'sidebar' | 'table' | 'none' | 'pagination' | 'search' | 'action';
+type FocusRegion = 'sidebar' | 'table' | 'none' | 'pagination' | 'search' | 'action' | "sidebar-right";
 type Listener = (region: FocusRegion) => void;
 
 let currentRegion: FocusRegion = 'table';

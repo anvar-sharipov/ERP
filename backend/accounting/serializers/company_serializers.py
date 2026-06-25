@@ -1,6 +1,6 @@
 # backend/accounting/serializers/company_serializers.py
 from rest_framework import serializers
-from ..models import CompanyProfile, Branch
+from ..models import CompanyProfile, Branch, UserScope
 
 
 
@@ -125,20 +125,6 @@ class BranchUserSerializer(serializers.ModelSerializer):
     def get_signature_image_thumbnail(self, obj):
         return obj.signature_image_thumbnail.url if obj.signature_image_thumbnail else None
 
-    # def get_logo_thumbnail(self, obj):
-    #     if obj.logo_thumbnail:
-    #         request = self.context.get('request')
-    #         return request.build_absolute_uri(obj.logo_thumbnail.url) if request else obj.logo_thumbnail.url
-    #     return None
-
-    # def get_signature_image_thumbnail(self, obj):
-    #     if obj.signature_image_thumbnail:
-    #         request = self.context.get('request')
-    #         return request.build_absolute_uri(obj.signature_image_thumbnail.url) if request else obj.signature_image_thumbnail.url
-    #     return None
-    
-    
-    
 
 
 
@@ -198,3 +184,28 @@ class CompanyProfileAdminSerializer(serializers.ModelSerializer):
                 setattr(instance, field, None)
                 validated_data.pop(field, None)
         return super().update(instance, validated_data)
+
+
+
+
+class UserScopeSerializer(serializers.ModelSerializer):
+    branch_name   = serializers.CharField(source='branch.name',   read_only=True)
+    warehouse_name = serializers.CharField(source='warehouse.name', read_only=True)
+ 
+    class Meta:
+        model  = UserScope
+        fields = [
+            'id', 'user',
+            'branch', 'branch_name',
+            'warehouse', 'warehouse_name',
+        ]
+ 
+    def validate(self, attrs):
+        from django.core.exceptions import ValidationError as DjangoValidationError
+        if not attrs.get('branch') and not attrs.get('warehouse'):
+            raise serializers.ValidationError("Укажите хотя бы филиал или склад.")
+        return attrs
+
+
+
+

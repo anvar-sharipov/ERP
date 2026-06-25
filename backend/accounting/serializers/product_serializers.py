@@ -3,8 +3,11 @@ from rest_framework import serializers
 from ..models import (
     Unit, Brand, Tag, ProductCategory,
     Product, ProductImage, PriceType, ProductPrice,
-    Counterparty, Warehouse, WarehouseStock,
+    Counterparty, Warehouse, WarehouseStock, ProductBundle, VolumeDiscount
 )
+
+from rest_framework import serializers
+
 
 
 class UnitSerializer(serializers.ModelSerializer):
@@ -110,6 +113,51 @@ class ProductPriceSerializer(serializers.ModelSerializer):
 
 # ── Product ───────────────────────────────────────────────────────────────────
 
+ 
+class BundleItemSerializer(serializers.ModelSerializer):
+    bundle_product_id = serializers.IntegerField(source="bundle_product.id", read_only=True)
+    bundle_product_name = serializers.CharField(source="bundle_product.name", read_only=True)
+    bundle_product_unit = serializers.IntegerField(source="bundle_product.unit_id", read_only=True)
+    bundle_product_unit_name = serializers.CharField(
+        source="bundle_product.unit.name", read_only=True, default=""
+    )
+ 
+    class Meta:
+        model = ProductBundle
+        fields = [
+            "id",
+            "bundle_product_id",
+            "bundle_product_name",
+            "bundle_product_unit",
+            "bundle_product_unit_name",
+            "qty_ratio",
+            "default_price",
+        ]
+ 
+
+ # ── VolumeDiscount ────────────────────────────────────────────────────────────
+class VolumeDiscountSerializer(serializers.ModelSerializer):
+    price_type_name = serializers.CharField(source="price_type.name", read_only=True)
+
+    class Meta:
+        model  = VolumeDiscount
+        fields = [
+            "id", "product",
+            "price_type", "price_type_name",
+            "min_qty", "max_qty",
+            "discount_percent",
+        ]
+
+    def validate(self, attrs):
+        min_qty = attrs.get("min_qty", 0)
+        max_qty = attrs.get("max_qty")
+        if max_qty is not None and max_qty <= min_qty:
+            raise serializers.ValidationError(
+                {"max_qty": "max_qty должен быть больше min_qty."}
+            )
+        return attrs       
+        
+
 class ProductSerializer(serializers.ModelSerializer):
     category_detail = ProductCategoryShortSerializer(source="category", read_only=True)
     brand_detail = BrandShortSerializer(source="brand", read_only=True)
@@ -125,6 +173,8 @@ class ProductSerializer(serializers.ModelSerializer):
 
     # Цены — read only, управление через отдельный эндпоинт
     prices = ProductPriceSerializer(many=True, read_only=True)
+    bundle_items = BundleItemSerializer(many=True, read_only=True)
+    volume_discounts = VolumeDiscountSerializer(many=True, read_only=True)
 
     class Meta:
         model = Product
@@ -141,7 +191,7 @@ class ProductSerializer(serializers.ModelSerializer):
             "prices",
             "created_at", "updated_at",
             "length", "width", "height", "weight", "volume_m3",
-            "description",
+            "description", 'bundle_items', 'volume_discounts'
         ]
         read_only_fields = ["sku", "created_at", "updated_at"]
 
@@ -154,6 +204,55 @@ class ProductSerializer(serializers.ModelSerializer):
         if main:
             return ProductImageSerializer(main, context=self.context).data
         return None
+
+
+
+
+class ProductBundleSerializer(serializers.ModelSerializer):
+    bundle_product_name = serializers.CharField(
+        source="bundle_product.name", read_only=True
+    )
+    bundle_product_unit_name = serializers.CharField(
+        source="bundle_product.unit.name", read_only=True, default=""
+    )
+ 
+    class Meta:
+        model = ProductBundle
+        fields = [
+            "id",
+            "bundle_product",        # id (write)
+            "bundle_product_name",   # read
+            "bundle_product_unit_name",  # read
+            "qty_ratio",
+            "default_price",
+        ]
+ 
+    def validate_bundle_product(self, value):
+        # Нельзя добавить товар сам в себя
+        product_id = self.context["product_id"]
+        if value.id == product_id:
+            raise serializers.ValidationError("Товар не может быть комплектующим самого себя.")
+        return value
+ 
+    def validate(self, attrs):
+        product_id = self.context["product_id"]
+        bundle_product = attrs.get("bundle_product")
+        # Проверка дубликата (при создании)
+        if self.instance is None and bundle_product:
+            if ProductBundle.objects.filter(
+                product_id=product_id,
+                bundle_product=bundle_product
+            ).exists():
+                raise serializers.ValidationError(
+                    {"bundle_product": "Этот товар уже добавлен как комплектующий."}
+                )
+        return attrs
+ 
+    def create(self, validated_data):
+        validated_data["product_id"] = self.context["product_id"]
+        return super().create(validated_data)
+
+ 
 
 
 # ── Counterparty ─────────────────────────────────────────────────────────────
@@ -219,8 +318,7 @@ class ProductHistorySerializer(serializers.Serializer):
         
         
         
-        
-        
+
         
         
         

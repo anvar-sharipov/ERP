@@ -98,17 +98,26 @@ export const transactionApi = {
 
 
 
-
-
-
 export interface ClosedPeriod {
-  id:              number
-  date:            string
-  closed_by?:      number
+  id:             number
+  date:           string
+  branch:         number | null
+  branch_name:    string | null
+  warehouse:      number | null
+  warehouse_name: string | null
+  scope_display:  string
+  closed_by?:     number
   closed_by_name?: string
-  closed_at:       string
-  note:            string
+  closed_at:      string
+  note:           string
 }
+
+export interface UserScope {
+  is_global:  boolean
+  warehouses: { id: number; name: string }[]
+  branches:   { id: number; name: string }[]
+}
+ 
 
 const J = '/accounting/journal-entries/'
 const M = '/accounting/stock-movements/'
@@ -129,18 +138,39 @@ export const movementApi = {
 }
 
 export const closedPeriodApi = {
-  check: (date: string) =>
-    api.get<{ date: string; is_closed: boolean }>(`${C}check/`, { params: { date } }),
-
+  check: (date: string, params?: { branch?: number | null; warehouse?: number | null }) =>
+    api.get<{ date: string; is_closed: boolean }>(`${C}check/`, {
+      params: { date, ...params },
+    }),
+ 
   list: (params?: Record<string, string>) =>
     api.get<ClosedPeriod[]>(C, { params }),
+ 
+  close: (date: string, options?: { branch?: number | null; warehouse?: number | null; note?: string }) =>
+    api.post<ClosedPeriod>(C, {
+      date,
+      branch:    options?.branch    ?? null,
+      warehouse: options?.warehouse ?? null,
+      note:      options?.note      ?? '',
+    }),
+ 
 
-  close: (date: string, note = '') =>
-    api.post<ClosedPeriod>(C, { date, note }),
 
-  open: async (date: string) => {
-    const res = await api.get<ClosedPeriod[]>(C, { params: { date } })
-    const period = res.data.find(p => p.date === date)
+open: async (date: string, options?: { branch?: number | null; warehouse?: number | null }) => {
+    const params = {
+      date,
+      ...(options?.branch    ? { branch:    options.branch }    : {}),
+      ...(options?.warehouse ? { warehouse: options.warehouse } : {}),
+    }
+    console.log('open params:', params)  // ← что уходит
+    const res = await api.get<ClosedPeriod[]>(C, { params })
+    console.log('open response:', res.data)
+    const period = res.data[0] ?? (res.data as any).results?.[0]
     if (period) await api.delete(`${C}${period.id}/`)
   },
+}
+
+
+export const userScopeApi = {
+  getMyScope: () => api.get<UserScope>('/users/my-scope/'),
 }

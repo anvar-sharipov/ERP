@@ -114,3 +114,18 @@ export const warehouseStockApi = {
       : api.post("/accounting/warehouse-stocks/", data),
   delete: (id: number) => api.delete(`/accounting/warehouse-stocks/${id}/`),
 };
+
+
+
+export const productBundleApi = {
+  getAll: async (productId: number) =>
+    (await api.get(`/accounting/products/${productId}/bundles/`)).data,
+
+  save: (productId: number, id: number | null, data: any) =>
+    id
+      ? api.patch(`/accounting/products/${productId}/bundles/${id}/`, data)
+      : api.post(`/accounting/products/${productId}/bundles/`, data),
+
+  delete: (productId: number, id: number) =>
+    api.delete(`/accounting/products/${productId}/bundles/${id}/`),
+};

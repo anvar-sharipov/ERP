@@ -31,10 +31,16 @@ class AuditLog(models.Model):
         ordering = ['-timestamp']
         verbose_name = "Запись аудита"
         verbose_name_plural = "Журнал аудита"
+        # indexes = [
+        #     models.Index(fields=['content_type', 'object_id']),
+        #     models.Index(fields=['user', 'timestamp']),
+        #     GinIndex(fields=['changed_data'], name='audit_changed_data_gin'),
+        # ]
         indexes = [
-            models.Index(fields=['content_type', 'object_id']),
-            models.Index(fields=['user', 'timestamp']),
-            GinIndex(fields=['changed_data'], name='audit_changed_data_gin'),
+            models.Index(fields=["timestamp"]),
+            models.Index(fields=["user", "timestamp"]),
+            models.Index(fields=["action", "timestamp"]),
+            models.Index(fields=["content_type", "object_id"]),
         ]
 
     def __str__(self):

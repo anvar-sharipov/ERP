@@ -462,7 +462,22 @@
     "AddStock": "Добавить остаток",
     "SelectWarehouse": "— выберите склад —",
     "SelectProduct": "— выберите товар —",
-    "DeleteStockMessage": "Удалить остаток \"{{product}}\" на складе \"{{warehouse}}\"?"
+    "DeleteStockMessage": "Удалить остаток \"{{product}}\" на складе \"{{warehouse}}\"?",
+
+    "ActionFilter": "Фильтр действий",
+    "ActionCreate": "Создание",
+    "ActionUpdate": "Изменение",
+    "ActionDelete": "Удаление",
+    "ActionPost": "Проведение",
+    "ActionUnpost": "Отмена проведения",
+    "Time": "Время",
+    "Action": "Действие",
+    "Object": "Объект",
+    "Record": "Запись",
+    "IP": "IP",
+    "Changes": "Изменения",
+    "System": "Система",
+    "ForbiddenAuditLog": "Нет доступа к журналу аудита"
 
 
 

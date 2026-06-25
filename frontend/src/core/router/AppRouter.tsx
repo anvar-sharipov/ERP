@@ -45,6 +45,11 @@ import Employees from "../../features/accounting/pages/Employees/Employees";
 import EmployeesPage from "../../features/accounting/pages/Employees/EmployeesPage";
 import PositionsPage from "../../features/accounting/pages/Employees/PositionsPage";
 import AuditLogPage from "../../features/accounting/pages/Accounting/AuditLogPage";
+import Documents from "../../features/accounting/pages/Documents/Documents";
+import InvoicesPage from "../../features/accounting/pages/Documents/InvoicesPage";
+import OrdersPage from "../../features/accounting/pages/Documents/OrdersPage";
+import ReturnsPage from "../../features/accounting/pages/Documents/ReturnsPage";
+import DocumentFormPage from "../../features/accounting/pages/Documents/Invoice/DocumentFormPage";
 
 const AppRouter: React.FC = () => {
   return (
@@ -141,6 +146,15 @@ const AppRouter: React.FC = () => {
             <Route path="positions" element={<PositionsPage />} />
           </Route>
         </Route>
+
+        <Route path={ROUTES.APP.DOCUMENTS} element={<Documents />}>
+          <Route index element={<Navigate to="invoices" replace />} />
+          <Route path="invoices" element={<InvoicesPage />} />
+          <Route path="orders" element={<OrdersPage />} />
+          <Route path="returns" element={<ReturnsPage />} />
+        </Route>
+        <Route path={ROUTES.APP.DOCUMENTS_CREATE} element={<DocumentFormPage />} />
+        <Route path={ROUTES.APP.DOCUMENTS_EDIT} element={<DocumentFormPage />} />
       </Route>
 
       {/* ================= FALLBACK ZONE ================= */}

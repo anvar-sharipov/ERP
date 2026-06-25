@@ -105,5 +105,46 @@ class UserRole(models.Model):
     class Meta:
         unique_together = ("user", "role")
         
-        
+   
+   
+   
+# class UserScope(models.Model):
+#     """
+#     Определяет к каким филиалам и складам имеет доступ пользователь.
+#     Если записей нет — пользователь видит всё (директор/админ).
+#     Если записи есть — видит только указанные объекты.
+#     """
+#     user = models.ForeignKey(
+#         User, on_delete=models.CASCADE,
+#         related_name='scopes'
+#     )
+#     branch = models.ForeignKey(
+#         'accounting.Branch', on_delete=models.CASCADE,
+#         null=True, blank=True, related_name='user_scopes'
+#     )
+#     warehouse = models.ForeignKey(
+#         'accounting.Warehouse', on_delete=models.CASCADE,
+#         null=True, blank=True, related_name='user_scopes'
+#     )
+ 
+#     class Meta:
+#         unique_together = ('user', 'branch', 'warehouse')
+#         verbose_name = "Область доступа пользователя"
+#         verbose_name_plural = "Области доступа пользователей"
+ 
+#     def __str__(self):
+#         parts = [str(self.user)]
+#         if self.branch:
+#             parts.append(f"филиал: {self.branch}")
+#         if self.warehouse:
+#             parts.append(f"склад: {self.warehouse}")
+#         return " | ".join(parts)
+ 
+#     def clean(self):
+#         from django.core.exceptions import ValidationError
+#         if not self.branch and not self.warehouse:
+#             raise ValidationError("Укажите хотя бы филиал или склад.")
+ 
+ 
+ 
         

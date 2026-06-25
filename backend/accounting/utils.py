@@ -9,9 +9,9 @@ from django.contrib.contenttypes.models import ContentType
 
 
 
-def check_period_open(date):
+def check_period_open(date, branch_id=None, warehouse_id=None):
     """
-    Принимает date (datetime, date или str).
+    Проверяет что период открыт для данной даты.
     Бросает ValidationError если день закрыт.
     """
     if isinstance(date, datetime.datetime):
@@ -19,11 +19,32 @@ def check_period_open(date):
     elif isinstance(date, str):
         date = datetime.date.fromisoformat(date[:10])
 
-    if ClosedPeriod.objects.filter(date=date).exists():
+    from django.db.models import Q
+    from accounting.models import ClosedPeriod, Warehouse
+
+    # Глобальное закрытие — блокирует всех
+    q = Q(date=date, branch__isnull=True, warehouse__isnull=True)
+
+    if branch_id and warehouse_id:
+        # Точное совпадение branch + warehouse
+        q |= Q(date=date, branch_id=branch_id, warehouse_id=warehouse_id)
+
+    if branch_id:
+        # Весь филиал закрыт
+        q |= Q(date=date, branch_id=branch_id, warehouse__isnull=True)
+
+    if warehouse_id:
+        # Конкретный склад закрыт
+        q |= Q(date=date, warehouse_id=warehouse_id, branch__isnull=True)
+        # Если филиал этого склада закрыт — тоже блокируем
+        wh = Warehouse.objects.filter(pk=warehouse_id).first()
+        if wh and wh.branch_id:
+            q |= Q(date=date, branch_id=wh.branch_id, warehouse__isnull=True)
+
+    if ClosedPeriod.objects.filter(q).exists():
         raise ValidationError(
             f"Период {date.strftime('%d.%m.%Y')} закрыт — операции запрещены."
         )
-        
         
 def generate_journal_number():
     year = now().year

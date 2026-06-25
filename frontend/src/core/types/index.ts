@@ -281,7 +281,28 @@ export interface AuditLog {
 
 
 
-
+ 
+export interface DocumentShort {
+  id: number;
+  name: string;
+}
+ 
+export interface DocumentList {
+  id: number;
+  number: string;
+  document_type: string;
+  document_type_display: string;
+  status: "draft" | "posted";
+  status_display: string;
+  date: string;
+  counterparty: number | null;
+  counterparty_detail: { id: number; name: string } | null;
+  warehouse: number | null;
+  warehouse_detail: { id: number; name: string } | null;
+  total: string;
+  created_at: string;
+}
+ 
 
 
 

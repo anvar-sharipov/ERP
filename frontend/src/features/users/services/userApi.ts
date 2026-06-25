@@ -25,7 +25,12 @@ export const usersApi = {
   assignRole: async (userId: number, roleIds: number[]) => {
     const res = await api.post(`/users/${userId}/assign-role/`, { roles: roleIds });
     return res.data;
-  }
+  },
+
+  getUsersLookup: async () => {
+    const { data } = await api.get("/users/lookup/");
+    return data;
+  },
 };
 
 
@@ -35,4 +40,7 @@ export const updateProfile = (data: FormData) => {
   return api.patch("/users/profile/update/", data, {
     headers: { "Content-Type": "multipart/form-data" }
   });
+
+
+  
 };

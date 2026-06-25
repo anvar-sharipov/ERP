@@ -6,6 +6,7 @@ from rest_framework.response import Response
 from django.contrib.contenttypes.models import ContentType
 from rest_framework.decorators import api_view
 from django.db import models
+from accounting.mixins import AuditMixin
 
 from ..models import Account, SubcontoType, AccountSubconto
 from ..serializers.account_serializers import (
@@ -18,7 +19,7 @@ from users.permissions import HasPermission
 from users.permissions import _rbac
 
 
-class AccountViewSet(viewsets.ModelViewSet):
+class AccountViewSet(AuditMixin, viewsets.ModelViewSet):
     # queryset = Account.objects.select_related('parent').prefetch_related(
     #     'subaccounts', 'account_subcontos__subconto_type__content_type'
     # ).order_by('code')
@@ -98,7 +99,7 @@ class AccountViewSet(viewsets.ModelViewSet):
 
 
 # Новый ViewSet для SubcontoType
-class SubcontoTypeViewSet(viewsets.ModelViewSet):
+class SubcontoTypeViewSet(AuditMixin, viewsets.ModelViewSet):
     pagination_class = None
     queryset = SubcontoType.objects.select_related('content_type', 'directory').all()
     serializer_class = SubcontoTypeSerializer

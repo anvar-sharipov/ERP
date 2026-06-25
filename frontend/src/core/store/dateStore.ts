@@ -2,6 +2,11 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 
+interface WorkScope {
+  id:   number
+  name: string
+}
+
 interface DateStore {
   // Рабочая дата — подставляется во все новые документы
   workDate: string
@@ -10,10 +15,16 @@ interface DateStore {
   periodFrom: string
   periodTo:   string
 
-  setWorkDate:   (date: string) => void
-  setPeriodFrom: (date: string) => void
-  setPeriodTo:   (date: string) => void
-  setPeriod:     (from: string, to: string) => void
+  // Рабочий филиал и склад — подставляются во все новые документы
+  workBranch:    WorkScope | null
+  workWarehouse: WorkScope | null
+
+  setWorkDate:      (date: string) => void
+  setPeriodFrom:    (date: string) => void
+  setPeriodTo:      (date: string) => void
+  setPeriod:        (from: string, to: string) => void
+  setWorkBranch:    (branch: WorkScope | null) => void
+  setWorkWarehouse: (warehouse: WorkScope | null) => void
 
   // Быстрые пресеты периода
   setCurrentMonth: () => void
@@ -36,19 +47,23 @@ const firstDayOfYear = () => {
 export const useDateStore = create<DateStore>()(
   persist(
     (set) => ({
-      workDate:   today(),
-      periodFrom: firstDayOfMonth(),
-      periodTo:   today(),
+      workDate:      today(),
+      periodFrom:    firstDayOfMonth(),
+      periodTo:      today(),
+      workBranch:    null,
+      workWarehouse: null,
 
-      setWorkDate:   (date) => set({ workDate: date }),
-      setPeriodFrom: (date) => set({ periodFrom: date }),
-      setPeriodTo:   (date) => set({ periodTo: date }),
-      setPeriod:     (from, to) => set({ periodFrom: from, periodTo: to }),
+      setWorkDate:      (date)      => set({ workDate: date }),
+      setPeriodFrom:    (date)      => set({ periodFrom: date }),
+      setPeriodTo:      (date)      => set({ periodTo: date }),
+      setPeriod:        (from, to)  => set({ periodFrom: from, periodTo: to }),
+      setWorkBranch:    (branch)    => set({ workBranch: branch, workWarehouse: null }),
+      setWorkWarehouse: (warehouse) => set({ workWarehouse: warehouse }),
 
       setCurrentMonth: () => set({ periodFrom: firstDayOfMonth(), periodTo: today() }),
       setCurrentYear:  () => set({ periodFrom: firstDayOfYear(),  periodTo: today() }),
       setCurrentDay:   () => set({ periodFrom: today(),           periodTo: today() }),
     }),
-    { name: 'erp-dates' }  // сохраняется в localStorage
+    { name: 'erp-dates' }
   )
 )

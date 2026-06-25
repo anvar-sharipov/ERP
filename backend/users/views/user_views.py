@@ -9,6 +9,16 @@ from django.db.models import Prefetch
 from icecream import ic
 from users.permissions import _rbac
 
+
+# users/views/user_views.py
+
+from rest_framework import generics
+from users.models import User
+from ..serializers.user_serializer import (
+    UserLookupSerializer,
+)
+from users.permissions import _rbac
+
 # user update edit for admin
 class UserManagementView(generics.ListCreateAPIView):
     pagination_class = None
@@ -99,4 +109,78 @@ class UserListView(generics.ListAPIView):
                 queryset=UserRole.objects.select_related('role')
             )
         ).all()
-    
+
+
+
+
+class UserLookupView(generics.ListAPIView):
+    pagination_class = None
+    serializer_class = UserLookupSerializer
+
+    def get_permissions(self):
+        return _rbac("list", "user")
+
+    def get_queryset(self):
+        qs = (
+            User.objects
+            .only(
+                "id",
+                "username",
+                "first_name",
+                "last_name",
+                "is_active",
+            )
+            .filter(is_active=True)
+            .order_by("username")
+        )
+
+        search = self.request.query_params.get("search")
+
+        if search:
+            qs = qs.filter(
+                username__icontains=search
+            )
+
+        return qs
+   
+   
+   
+   
+class MyScopeView(APIView):
+    """
+    GET /users/my-scope/
+    Возвращает список складов и филиалов доступных текущему пользователю.
+    Если записей нет — пользователь видит всё (is_global=True).
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        from accounting.models import UserScope, Warehouse, Branch
+
+        scopes = UserScope.objects.filter(
+            user=request.user
+        ).select_related('branch', 'warehouse')
+
+        if not scopes.exists():
+            warehouses = list(Warehouse.objects.filter(is_active=True).values('id', 'name', 'branch'))
+            branches   = list(Branch.objects.filter(is_active=True).values('id', 'name'))
+            return Response({
+                'is_global':  True,
+                'warehouses': warehouses,
+                'branches':   branches,
+            })
+
+        warehouse_ids = scopes.filter(warehouse__isnull=False).values_list('warehouse_id', flat=True)
+        branch_ids    = scopes.filter(branch__isnull=False).values_list('branch_id', flat=True)
+
+        warehouses = list(Warehouse.objects.filter(id__in=warehouse_ids).values('id', 'name', 'branch'))
+        branches   = list(Branch.objects.filter(id__in=branch_ids).values('id', 'name'))
+
+        return Response({
+            'is_global':  False,
+            'warehouses': warehouses,
+            'branches':   branches,
+        })
+ 
+ 
+        

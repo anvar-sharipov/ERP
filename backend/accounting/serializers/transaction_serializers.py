@@ -366,10 +366,30 @@ class StockMovementSerializer(serializers.ModelSerializer):
     
     
 class ClosedPeriodSerializer(serializers.ModelSerializer):
-    closed_by_name = serializers.CharField(
-        source='closed_by.username', read_only=True
-    )
+    closed_by_name   = serializers.CharField(source='closed_by.username', read_only=True)
+    branch_name      = serializers.CharField(source='branch.name', read_only=True)
+    warehouse_name   = serializers.CharField(source='warehouse.name', read_only=True)
+    scope_display    = serializers.SerializerMethodField()
+ 
     class Meta:
         model  = ClosedPeriod
-        fields = ['id', 'date', 'closed_by', 'closed_by_name', 'closed_at', 'note']
+        fields = [
+            'id', 'date',
+            'branch', 'branch_name',
+            'warehouse', 'warehouse_name',
+            'scope_display',
+            'closed_by', 'closed_by_name',
+            'closed_at', 'note',
+        ]
         read_only_fields = ['closed_by', 'closed_at']
+ 
+    def get_scope_display(self, obj):
+        if not obj.branch and not obj.warehouse:
+            return 'Глобально'
+        parts = []
+        if obj.branch:
+            parts.append(f'Филиал: {obj.branch.name}')
+        if obj.warehouse:
+            parts.append(f'Склад: {obj.warehouse.name}')
+        return ' | '.join(parts)
+ 

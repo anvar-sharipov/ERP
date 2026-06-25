@@ -91,7 +91,8 @@ class StockMovement(models.Model):
     def save(self, *args, **kwargs):
         from accounting.utils import check_period_open
         self.full_clean()
-        check_period_open(self.date)
+        # check_period_open(self.date)
+        check_period_open(self.date, warehouse_id=self.warehouse_id)
 
         with transaction.atomic():
             super().save(*args, **kwargs)

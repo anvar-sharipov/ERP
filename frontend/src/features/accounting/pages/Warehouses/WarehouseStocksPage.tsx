@@ -13,6 +13,7 @@ import { ConfirmModal } from "../../../../components/ui/Modal/ConfirmModal";
 import { RBACGuard } from "../../../../components/ui/RBACGuard";
 import { Plus } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import { useDateStore } from "../../../../core/store/dateStore";
 
 interface StockForm {
   warehouse: number | null;
@@ -35,15 +36,16 @@ const WarehouseStocksPage = () => {
   const [deleteModal, setDeleteModal] = useState(false);
   const [deleteId, setDeleteId] = useState<number | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
-  const [warehouseFilter, setWarehouseFilter] = useState<number | null>(null);
+  const { workWarehouse, workBranch } = useDateStore();
 
+  // Запрос с фильтром по складу/филиалу из right bar
   const {
     data: stocks = [],
     isLoading,
     error,
   } = useQuery({
-    queryKey: ["warehouse-stocks"],
-    queryFn: () => warehouseStockApi.getAll(),
+    queryKey: ["warehouse-stocks", workWarehouse?.id, workBranch?.id],
+    queryFn: () => warehouseStockApi.getAll(workWarehouse?.id ?? undefined, undefined),
     enabled: canView,
     retry: false,
   });
@@ -118,28 +120,19 @@ const WarehouseStocksPage = () => {
             }}
           />
         </div>
-        <div className="pt-4 border-t border-indigo-900/30">
-          <h4 className="font-bold text-indigo-300 mb-2">{t("Warehouse")}</h4>
-          <div className="flex flex-col gap-1">
-            <Button text={t("AllWarehouses")} variant="ghost" dark={true} isActive={warehouseFilter === null} className="w-full justify-start" onClick={() => setWarehouseFilter(null)} />
-            {(warehouses as any[]).map((w) => (
-              <Button key={w.id} text={w.name} variant="ghost" dark={true} isActive={warehouseFilter === w.id} className="w-full justify-start" onClick={() => setWarehouseFilter(w.id)} />
-            ))}
-          </div>
-        </div>
+
       </div>,
     );
-  }, [setSidebarContent, canPost, warehouses, warehouseFilter, t]);
+  }, [setSidebarContent, canPost, warehouses, t]);
 
   const filtered = useMemo(() => {
     let result = stocks as any[];
-    if (warehouseFilter !== null) result = result.filter((s) => s.warehouse === warehouseFilter);
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
       result = result.filter((s) => s.product_name?.toLowerCase().includes(q) || s.product_sku?.toLowerCase().includes(q) || s.warehouse_name?.toLowerCase().includes(q));
     }
     return result;
-  }, [stocks, warehouseFilter, searchQuery]);
+  }, [stocks, searchQuery]);
 
   const columns: Column<any>[] = [
     { header: t("ID"), accessor: "id", sortable: true, excelWidth: 5 },

@@ -44,6 +44,13 @@ export const ROUTES = {
 
     ACCOUNTING_AUDIT_LOG: '/accounting/audit-log',
 
+    DOCUMENTS: '/documents',
+    DOCUMENTS_INVOICES: '/documents/invoices',
+    DOCUMENTS_ORDERS: '/documents/orders',
+    DOCUMENTS_RETURNS: '/documents/returns',
+    DOCUMENTS_CREATE: '/documents/create',
+    DOCUMENTS_EDIT: '/documents/:id/edit',
+
   },
   // COMPANY_ADMIN: {
   //   USERS: '/admin/users',

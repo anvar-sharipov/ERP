@@ -32,12 +32,16 @@ from .transaction import JournalEntry, TransactionLine, ClosedPeriod
 from .stock import StockMovement, Warehouse, WarehouseStock
 from .product import (
     Product, ProductCategory, Brand, Tag, Unit,
-    ProductImage, PriceType, ProductPrice,
+    ProductImage, PriceType, ProductPrice, ProductBundle, ProductBundle,
+    VolumeDiscount,
     product_image_path
 )
 from .counterparty import Counterparty
 from .employee import Position, Employee
 from .audit import AuditLog
+from .document import DocumentParticipant, Document, DocumentItem
+from .company import UserScope
+
 
 # ПРОКСИ-ФУНКЦИИ ДЛЯ СОВМЕСТИМОСТИ С МИГРАЦИЯМИ
 # Эти функции перенаправляют вызовы в правильный модуль
@@ -93,4 +97,7 @@ __all__ = [
     'branch_logo_directory_path',
     'branch_signature_directory_path',
     'product_image_path',
+    'DocumentParticipant', 'Document', 'DocumentItem',
+    'UserScope',
+    'ProductBundle', 'ProductBundle', 'VolumeDiscount'
 ]

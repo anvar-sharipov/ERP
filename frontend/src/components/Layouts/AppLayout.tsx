@@ -47,6 +47,21 @@ export const AppLayout: React.FC = () => {
         }, 50);
       }
 
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === "b") {
+        e.preventDefault();
+
+        setIsRightOpen(true);
+        focusManager.setRegion("sidebar-right");
+
+        setTimeout(() => {
+          const sidebar = document.querySelector('[data-region="sidebar-right"]');
+
+          const firstFocusable = sidebar?.querySelector<HTMLElement>('input,button,select,[tabindex="0"]');
+
+          firstFocusable?.focus();
+        }, 50);
+      }
+
       // if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "b") {
       //   e.preventDefault();
       //   setIsLeftOpen((v) => !v);

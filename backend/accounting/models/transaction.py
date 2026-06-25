@@ -135,11 +135,47 @@ class TransactionLine(models.Model):
         return f"{self.get_side_display()} {self.account.code} — {self.amount}"
 
 
+# class ClosedPeriod(models.Model):
+#     """
+#     Закрытый день/период.
+#     """
+#     date = models.DateField(unique=True, verbose_name="Закрытая дата")
+#     closed_by = models.ForeignKey(
+#         'users.User', on_delete=models.SET_NULL,
+#         null=True, blank=True, related_name='closed_periods'
+#     )
+#     closed_at = models.DateTimeField(auto_now_add=True)
+#     note = models.CharField(max_length=255, blank=True)
+
+#     class Meta:
+#         ordering = ['-date']
+#         verbose_name = "Закрытый период"
+#         verbose_name_plural = "Закрытые периоды"
+
+#     def __str__(self):
+#         return f"Закрыт: {self.date}"
+
+
 class ClosedPeriod(models.Model):
     """
     Закрытый день/период.
+    
+    Логика:
+    - branch=None, warehouse=None → закрыто глобально для всей компании (директор)
+    - branch=X, warehouse=None   → закрыто для филиала X
+    - branch=None, warehouse=X   → закрыто для склада X
     """
-    date = models.DateField(unique=True, verbose_name="Закрытая дата")
+    date = models.DateField(verbose_name="Закрытая дата")
+    branch = models.ForeignKey(
+        'Branch', on_delete=models.CASCADE,
+        null=True, blank=True, related_name='closed_periods',
+        verbose_name="Филиал"
+    )
+    warehouse = models.ForeignKey(
+        'Warehouse', on_delete=models.CASCADE,
+        null=True, blank=True, related_name='closed_periods',
+        verbose_name="Склад"
+    )
     closed_by = models.ForeignKey(
         'users.User', on_delete=models.SET_NULL,
         null=True, blank=True, related_name='closed_periods'
@@ -151,6 +187,19 @@ class ClosedPeriod(models.Model):
         ordering = ['-date']
         verbose_name = "Закрытый период"
         verbose_name_plural = "Закрытые периоды"
+        constraints = [
+            models.UniqueConstraint(
+                fields=['date', 'branch', 'warehouse'],
+                name='unique_closed_period'
+            )
+        ]
 
     def __str__(self):
-        return f"Закрыт: {self.date}"
+        parts = [f"Закрыт: {self.date}"]
+        if self.branch:
+            parts.append(f"филиал: {self.branch}")
+        if self.warehouse:
+            parts.append(f"склад: {self.warehouse}")
+        if not self.branch and not self.warehouse:
+            parts.append("глобально")
+        return " | ".join(parts)

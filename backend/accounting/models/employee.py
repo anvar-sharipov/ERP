@@ -1,6 +1,7 @@
 # accounting/models/employee.py
 from django.conf import settings
 from django.db import models
+from .company import Branch
 
 
 class Position(models.Model):
@@ -31,6 +32,14 @@ class Employee(models.Model):
         blank=True,
         related_name="employee",
         verbose_name="Пользователь системы"
+    )
+    branch = models.ForeignKey(
+        Branch,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name='employees',
+        verbose_name="Филиал"
     )
     note = models.TextField(blank=True, verbose_name="Примечание")
     is_active = models.BooleanField(default=True, verbose_name="Активен")

@@ -4,9 +4,10 @@ from rest_framework import viewsets
 from ..models import Directory, DirectoryField, DirectoryRecord
 from ..serializers.directory_serializers import DirectorySerializer, DirectoryFieldSerializer, DirectoryRecordSerializer
 from users.permissions import _rbac
+from accounting.mixins import AuditMixin
 
 
-class DirectoryViewSet(viewsets.ModelViewSet):
+class DirectoryViewSet(AuditMixin, viewsets.ModelViewSet):
     pagination_class = None
     queryset = Directory.objects.order_by("name")
     serializer_class = DirectorySerializer
@@ -15,7 +16,7 @@ class DirectoryViewSet(viewsets.ModelViewSet):
         return _rbac(self.action, "directory")
 
 
-class DirectoryFieldViewSet(viewsets.ModelViewSet):
+class DirectoryFieldViewSet(AuditMixin, viewsets.ModelViewSet):
     pagination_class = None
     serializer_class = DirectoryFieldSerializer
 
@@ -30,7 +31,7 @@ class DirectoryFieldViewSet(viewsets.ModelViewSet):
         return _rbac(self.action, "directoryfield")
 
     
-class DirectoryRecordViewSet(viewsets.ModelViewSet):
+class DirectoryRecordViewSet(AuditMixin, viewsets.ModelViewSet):
     pagination_class = None
     serializer_class = DirectoryRecordSerializer
 

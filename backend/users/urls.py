@@ -2,6 +2,8 @@
 from django.urls import path
 from .views import MeView
 from .views import CheckGlobalAdminView, UserListView, RoleListView, PermissionMatrixView, RoleDetailView, AssignRoleView, UserDetailView, UserManagementView, ProfileUpdateView
+from .views.user_views import UserLookupView
+from .views.user_views import UserLookupView, MyScopeView
 
 
 app_name = 'users'
@@ -28,4 +30,11 @@ urlpatterns = [
     path('<int:user_id>/assign-role/', AssignRoleView.as_view(), name="assign-role"),
     
     path('profile/update/', ProfileUpdateView.as_view(), name='profile-update'),
+    
+    path("lookup/", UserLookupView.as_view(), name="users-lookup"),
+    
+    path('my-scope/', MyScopeView.as_view(), name='my-scope'),
+    
+    
+    
 ]

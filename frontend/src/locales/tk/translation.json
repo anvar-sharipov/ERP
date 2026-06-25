@@ -450,7 +450,22 @@
     "AddStock": "Galyndy goşmak",
     "SelectWarehouse": "— ammar saýlaň —",
     "SelectProduct": "— haryt saýlaň —",
-    "DeleteStockMessage": "\"{{warehouse}}\" ammarynda \"{{product}}\" galyndysyny ýok etmek?"
+    "DeleteStockMessage": "\"{{warehouse}}\" ammarynda \"{{product}}\" galyndysyny ýok etmek?",
+
+    "ActionFilter": "Hereket süzgüji",
+    "ActionCreate": "Döretmek",
+    "ActionUpdate": "Üýtgetmek",
+    "ActionDelete": "Ýok etmek",
+    "ActionPost": "Geçirmek",
+    "ActionUnpost": "Geçirmegi ýatyrmak",
+    "Time": "Wagt",
+    "Action": "Hereket",
+    "Object": "Obýekt",
+    "Record": "Ýazgy",
+    "IP": "IP",
+    "Changes": "Üýtgeşmeler",
+    "System": "Sistema",
+    "ForbiddenAuditLog": "Audit žurnalyna giriş ýok"
 
 
     

@@ -1,5 +1,5 @@
 # backend/accounting/views/product_views.py
-from rest_framework import viewsets, status
+from rest_framework import viewsets, status, mixins
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.parsers import MultiPartParser, FormParser
@@ -10,19 +10,22 @@ from django.db import models
 from ..models import (
     Unit, Brand, Tag, ProductCategory,
     Product, ProductImage, PriceType, ProductPrice,
-    Counterparty, Warehouse, WarehouseStock,
+    Counterparty, Warehouse, WarehouseStock, ProductBundle, VolumeDiscount
 )
 from ..serializers.product_serializers import (
     UnitSerializer, BrandSerializer, TagSerializer, ProductCategorySerializer,
     ProductSerializer,
     ProductImageSerializer, ProductImageUploadSerializer,
     PriceTypeSerializer, ProductPriceSerializer,
-    CounterpartySerializer, WarehouseSerializer, WarehouseStockSerializer,
+    CounterpartySerializer, WarehouseSerializer, WarehouseStockSerializer, ProductBundleSerializer,
+    VolumeDiscountSerializer
 )
 from users.permissions import _rbac
+from rest_framework.permissions import IsAuthenticated
 
 
-class UnitViewSet(viewsets.ModelViewSet):
+
+class UnitViewSet(AuditMixin, viewsets.ModelViewSet):
     pagination_class = None
     queryset = Unit.objects.all()
     serializer_class = UnitSerializer
@@ -31,7 +34,7 @@ class UnitViewSet(viewsets.ModelViewSet):
         return _rbac(self.action, "unit")
 
 
-class BrandViewSet(viewsets.ModelViewSet):
+class BrandViewSet(AuditMixin, viewsets.ModelViewSet):
     pagination_class = None
     queryset = Brand.objects.order_by("name")
     serializer_class = BrandSerializer
@@ -40,7 +43,7 @@ class BrandViewSet(viewsets.ModelViewSet):
         return _rbac(self.action, "brand")
 
 
-class TagViewSet(viewsets.ModelViewSet):
+class TagViewSet(AuditMixin, viewsets.ModelViewSet):
     pagination_class = None
     queryset = Tag.objects.order_by("name")
     serializer_class = TagSerializer
@@ -49,7 +52,7 @@ class TagViewSet(viewsets.ModelViewSet):
         return _rbac(self.action, "tag")
 
 
-class ProductCategoryViewSet(viewsets.ModelViewSet):
+class ProductCategoryViewSet(AuditMixin, viewsets.ModelViewSet):
     pagination_class = None
     queryset = ProductCategory.objects.order_by("name")
     serializer_class = ProductCategorySerializer
@@ -66,7 +69,7 @@ class ProductViewSet(AuditMixin, viewsets.ModelViewSet):
         return (
             Product.objects
             .select_related("category", "brand", "unit")
-            .prefetch_related("tags", "images", "prices__price_type", "prices__warehouse")
+            .prefetch_related("tags", "images", "prices__price_type", "prices__warehouse", "bundle_items__bundle_product__unit")
             .order_by("name")
         )
 
@@ -77,7 +80,7 @@ class ProductViewSet(AuditMixin, viewsets.ModelViewSet):
     
 
 
-class ProductImageViewSet(viewsets.ModelViewSet):
+class ProductImageViewSet(AuditMixin, viewsets.ModelViewSet):
     pagination_class = None
     """
     GET    /product-images/?product=<id>  — список изображений товара
@@ -111,7 +114,7 @@ class ProductImageViewSet(viewsets.ModelViewSet):
         return Response(ProductImageSerializer(image, context={"request": request}).data)
 
 
-class PriceTypeViewSet(viewsets.ModelViewSet):
+class PriceTypeViewSet(AuditMixin, viewsets.ModelViewSet):
     pagination_class = None
     queryset = PriceType.objects.order_by("name")
     serializer_class = PriceTypeSerializer
@@ -120,7 +123,7 @@ class PriceTypeViewSet(viewsets.ModelViewSet):
         return _rbac(self.action, "pricetype")
 
 
-class ProductPriceViewSet(viewsets.ModelViewSet):
+class ProductPriceViewSet(AuditMixin, viewsets.ModelViewSet):
     pagination_class = None
     serializer_class = ProductPriceSerializer
 
@@ -146,7 +149,7 @@ class ProductPriceViewSet(viewsets.ModelViewSet):
         return _rbac(self.action, "productprice")
 
 
-class CounterpartyViewSet(viewsets.ModelViewSet):
+class CounterpartyViewSet(AuditMixin, viewsets.ModelViewSet):
     pagination_class = None
     queryset = Counterparty.objects.order_by("name")
     serializer_class = CounterpartySerializer
@@ -155,16 +158,16 @@ class CounterpartyViewSet(viewsets.ModelViewSet):
         return _rbac(self.action, "counterparty")
 
     def get_queryset(self):
-        qs = super().get_queryset()
         ctype = self.request.query_params.get("type")
         if ctype == "client":
-            return qs.clients()
+            return Counterparty.objects.clients().order_by("name")
         if ctype == "supplier":
-            return qs.suppliers()
-        return qs
+            return Counterparty.objects.suppliers().order_by("name")
+        return Counterparty.objects.order_by("name")
+    
 
 
-class WarehouseViewSet(viewsets.ModelViewSet):
+class WarehouseViewSet(AuditMixin, viewsets.ModelViewSet):
     pagination_class = None
     queryset = Warehouse.objects.select_related("branch").order_by("name")
     serializer_class = WarehouseSerializer
@@ -218,10 +221,63 @@ class WarehouseStockViewSet(viewsets.ModelViewSet):
     
     
     
+
+
+class ProductBundleViewSet(
+    mixins.ListModelMixin,
+    mixins.CreateModelMixin,
+    mixins.UpdateModelMixin,
+    mixins.DestroyModelMixin,
+    viewsets.GenericViewSet,
+):
+    """
+    GET    /api/accounting/products/{product_id}/bundles/        — список
+    POST   /api/accounting/products/{product_id}/bundles/        — создать
+    PATCH  /api/accounting/products/{product_id}/bundles/{id}/   — обновить
+    DELETE /api/accounting/products/{product_id}/bundles/{id}/   — удалить
+    """
+    serializer_class = ProductBundleSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        return ProductBundle.objects.filter(
+            product_id=self.kwargs["product_pk"]
+        ).select_related("bundle_product__unit").order_by("id")
+
+    def get_serializer_context(self):
+        ctx = super().get_serializer_context()
+        ctx["product_id"] = int(self.kwargs["product_pk"])
+        return ctx
     
     
     
-    
+class VolumeDiscountViewSet(
+    mixins.ListModelMixin,
+    mixins.CreateModelMixin,
+    mixins.UpdateModelMixin,
+    mixins.DestroyModelMixin,
+    viewsets.GenericViewSet,
+):
+    """
+    GET    /api/accounting/products/{product_pk}/volume-discounts/
+    POST   /api/accounting/products/{product_pk}/volume-discounts/
+    PATCH  /api/accounting/products/{product_pk}/volume-discounts/{id}/
+    DELETE /api/accounting/products/{product_pk}/volume-discounts/{id}/
+    """
+    serializer_class = VolumeDiscountSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        return VolumeDiscount.objects.filter(
+            product_id=self.kwargs["product_pk"]
+        ).select_related("price_type").order_by("price_type", "min_qty")
+
+    def perform_create(self, serializer):
+        serializer.save(product_id=int(self.kwargs["product_pk"]))
+        
+        
+        
+            
     
     
     
