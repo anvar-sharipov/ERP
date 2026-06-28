@@ -21,7 +21,7 @@ const Employees = () => {
     <div className="h-full flex flex-col">
       <GoogleTabs items={tabs} />
 
-      <div className="flex-1 p-4 md:p-6 overflow-auto">
+      <div className="flex-1 md:p-6 overflow-auto">
         <Outlet />
       </div>
     </div>

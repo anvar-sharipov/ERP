@@ -50,6 +50,7 @@ import InvoicesPage from "../../features/accounting/pages/Documents/InvoicesPage
 import OrdersPage from "../../features/accounting/pages/Documents/OrdersPage";
 import ReturnsPage from "../../features/accounting/pages/Documents/ReturnsPage";
 import DocumentFormPage from "../../features/accounting/pages/Documents/Invoice/DocumentFormPage";
+import ChatPage from "../../features/chat/pages/ChatPage";
 
 const AppRouter: React.FC = () => {
   return (
@@ -137,6 +138,9 @@ const AppRouter: React.FC = () => {
               <Route path="movements" element={<StockMovementsPage />} />
             </Route>
           </Route>
+
+
+          <Route path={ROUTES.APP.CHAT} element={<ChatPage />} />
         </Route>
 
         <Route element={<PermissionRoute resource="employee" action="GET" />}>

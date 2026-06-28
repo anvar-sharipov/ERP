@@ -51,13 +51,10 @@ export const ROUTES = {
     DOCUMENTS_CREATE: '/documents/create',
     DOCUMENTS_EDIT: '/documents/:id/edit',
 
+    CHAT: '/chat',
+
   },
-  // COMPANY_ADMIN: {
-  //   USERS: '/admin/users',
-  //   ROLES: '/admin/roles',
-  //   COMPANIES: '/admin/companies',
-  //   BRANCHS: '/admin/branchs'
-  // },
+
   COMPANY_ADMIN: {
     USERS:      '/admin/users',
     ROLES:      '/admin/roles',

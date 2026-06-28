@@ -36,10 +36,10 @@ interface Position {
   name: string;
 }
 
-interface Branch {
-  id: number;
-  name: string;
-}
+// interface Branch {
+//   id: number;
+//   name: string;
+// }
 
 interface EmployeeForm {
   full_name: string;
@@ -79,7 +79,7 @@ const EmployeesPage = () => {
   const [deleteId, setDeleteId] = useState<number | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [positionFilter, setPositionFilter] = useState<number | "all">("all");
-  const [branchFilter, setBranchFilter] = useState<number | "all">("all");
+  const [branchFilter] = useState<number | "all">("all");
   const [activeFilter, setActiveFilter] = useState<"all" | "active" | "inactive">("all");
   const { workBranch } = useDateStore();
 
@@ -239,7 +239,7 @@ const EmployeesPage = () => {
     { header: t("FullName"), accessor: "full_name", sortable: true },
     { header: t("Position"), accessor: "position_name", sortable: true },
     {
-      header: "Филиал",
+      header: t("Branchs"),
       accessor: "branch_name",
       sortable: true,
       render: (item) => (item.branch_name ? <span>{item.branch_name}</span> : <span className="text-gray-400 text-xs">Общий</span>),
@@ -317,7 +317,7 @@ const EmployeesPage = () => {
           </div>
 
           <div>
-            <label className="block mb-1 text-sm font-medium">Филиал</label>
+            <label className="block mb-1 text-sm font-medium">{t("Branch")}</label>
             <select className={selectCls} value={form.branch ?? ""} onChange={(e) => setForm((p) => ({ ...p, branch: e.target.value ? Number(e.target.value) : null }))}>
               {!hasScope && <option value="">— Общий (виден всем) —</option>}
               {branches.map((b) => (

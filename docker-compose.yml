@@ -82,7 +82,8 @@ services:
 
   # Генерация SSL сертификата (запускается один раз)
   ssl-gen:
-    image: alpine/openssl
+    # image: alpine/openssl
+    image: alpine/openssl:3.3.1
     volumes:
       - ./nginx/ssl:/ssl
     command: >
@@ -99,13 +100,48 @@ services:
         fi
       "
 
+  # dns:
+  #   image: jpillora/dnsmasq
+  #   restart: always
+  #   ports:
+  #     - "53:53/udp"
+  #     - "53:53/tcp"
+  #   environment:
+  #     DNSMASQ_CONF: |
+  #       address=/erp.local/192.168.43.13
+  #       server=8.8.8.8
+  #       no-resolv
+  #   cap_add:
+  #     - NET_ADMIN
+  # dns:
+  #   image: alpine:3.20
+  #   restart: always
+  #   ports:
+  #     - "53:53/udp"
+  #     - "53:53/tcp"
+  #   volumes:
+  #     - ./dnsmasq.conf:/etc/dnsmasq.conf
+  #   cap_add:
+  #     - NET_ADMIN
+  #   command: sh -c "apk add --no-cache dnsmasq && dnsmasq --no-daemon --conf-file=/etc/dnsmasq.conf"
+  dns:
+    image: jpillora/dnsmasq
+    restart: always
+    ports:
+      - "53:53/udp"
+      - "53:53/tcp"
+    volumes:
+      - ./dnsmasq.conf:/etc/dnsmasq.conf:ro
+    cap_add:
+      - NET_ADMIN
+
   # 4. Фронтенд + Маршрутизатор Nginx
   nginx:
     build: ./frontend
     restart: always
     ports:
-      - "80:80"
-      - "443:443"
+      - "8100:80"
+      - "8101:443"
     volumes:
       # Прокидываем конфиг Nginx
       - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro

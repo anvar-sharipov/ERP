@@ -129,3 +129,19 @@ export const productBundleApi = {
   delete: (productId: number, id: number) =>
     api.delete(`/accounting/products/${productId}/bundles/${id}/`),
 };
+
+
+
+export const volumeDiscountApi = {
+  getAll: async (productId: number) =>
+    (await api.get(`/accounting/products/${productId}/volume-discounts/`)).data,
+
+  create: (productId: number, data: any) =>
+    api.post(`/accounting/products/${productId}/volume-discounts/`, data),
+
+  update: (productId: number, id: number, data: any) =>
+    api.patch(`/accounting/products/${productId}/volume-discounts/${id}/`, data),
+
+  delete: (productId: number, id: number) =>
+    api.delete(`/accounting/products/${productId}/volume-discounts/${id}/`),
+};

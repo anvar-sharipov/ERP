@@ -24,7 +24,7 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **kwargs):
-        target_apps = ['accounting', 'users']
+        target_apps = ['accounting', 'users', 'chat']
         specific_schema = kwargs.get('schema')
 
         # Собираем список схем

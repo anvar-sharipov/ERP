@@ -197,7 +197,7 @@ const SubcontoTypesPage = () => {
   ];
 
   // Источник данных — либо directory либо content_type (не оба)
-  const sourceMode = form.directory ? "directory" : "model";
+  // const sourceMode = form.directory ? "directory" : "model";
 
   return (
     <RBACGuard isLoading={isLoading} error={error} canView={canView} forbiddenText={t("ForbiddenText")}>

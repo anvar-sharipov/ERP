@@ -6,6 +6,7 @@ import { useCompany } from "../../core/context/CompanyContext";
 import WorkDateWidget from "../ui/WorkDateWidget";
 import { focusManager } from "../../core/utils/focusManager";
 
+
 interface SidebarRightProps {
   isOpen: boolean;
   setIsOpen: (open: boolean) => void;
@@ -15,6 +16,7 @@ const SidebarRight: React.FC<SidebarRightProps> = ({ isOpen }) => {
   const { sidebarContent } = useSidebar();
   const { company: currentCompany } = useCompany();
   const sidebarRef = useRef<HTMLElement>(null);
+ 
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -67,6 +69,7 @@ const SidebarRight: React.FC<SidebarRightProps> = ({ isOpen }) => {
       `}
       >
         <div className="p-3 border-b border-indigo-900/30">
+
           <WorkDateWidget />
         </div>
         <div className={`flex-1 overflow-y-auto p-4 ${isOpen ? "block" : "hidden"}`}>

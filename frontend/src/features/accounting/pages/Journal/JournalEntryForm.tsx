@@ -48,10 +48,10 @@ export default function JournalEntryForm({ initial, onSuccess, onCancel }: Props
     })) ?? [emptyLine("debit"), emptyLine("credit")],
   );
 
-  const { data: subcontoTypes = [] } = useQuery({
-    queryKey: ["subconto-types"],
-    queryFn: accountApi.getSubcontoTypes,
-  });
+  // const { data: subcontoTypes = [] } = useQuery({
+  //   queryKey: ["subconto-types"],
+  //   queryFn: accountApi.getSubcontoTypes,
+  // });
 
   function useSubcontoRecords(subcontoTypeId: number | null) {
     return useQuery({

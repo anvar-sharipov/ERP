@@ -21,6 +21,9 @@ import type { DocumentList } from "../../../../core/types";
 import { useNavigate } from "react-router-dom";
 import { ROUTES } from "../../../../core/router/routes";
 import { useDateStore } from "../../../../core/store/dateStore";
+import { useRestoreScroll } from "../../../../core/hooks/useRestoreScroll";
+import { DOC_TYPE_ICONS } from "./Invoice/Interface";
+import { shortDocumentNumber } from "../../../../core/utils/documentNumber";
 
 // Приходная = "in", Расходная = "out"
 // Эта страница показывает оба типа (накладные)
@@ -34,6 +37,7 @@ const InvoicesPage = () => {
   const { canView, canPost, canDelete } = usePageAccess("document");
 
   const [highlightedId, setHighlightedId] = useState<number | null>(null);
+  const {} = useRestoreScroll("selectedDocumentId", setHighlightedId);
   const [searchQuery, setSearchQuery] = useState("");
   const [typeFilter, setTypeFilter] = useState<"all" | "in" | "out" | "move" | "return_in" | "return_out">("all");
   const [statusFilter, setStatusFilter] = useState<"all" | "draft" | "posted">("all");
@@ -177,12 +181,41 @@ const InvoicesPage = () => {
   const toDelete = invoices.find((d) => d.id === deleteId);
 
   const columns: Column<DocumentList>[] = [
-    { header: "№", accessor: "number", sortable: true, excelWidth: 14 },
+    // { header: t("Number"), accessor: "number", sortable: true, excelWidth: 14 },
+    // {
+    //   header: t("Number"),
+    //   accessor: "number",
+    //   sortable: true,
+    //   excelWidth: 14,
+    //   render: (item) => (
+    //     <div className="flex items-center gap-2">
+    //       {/* <span className={`w-2 h-2 rounded-full ${item.status === "posted" ? "bg-green-500" : "bg-red-500"}`} /> */}
+    //       <StatusBadge isActive={item.status === "posted"} activeLabel={t("Posted")} inactiveLabel={t("Draft")} onlyIcon={true} />
+    //       <span>{item.number}</span>
+    //     </div>
+    //   ),
+    // },
+    {
+      header: t("Number"),
+      accessor: "number",
+      sortable: true,
+      excelWidth: 14,
+      render: (item) => (
+        <div className="flex items-center gap-2">
+          <StatusBadge isActive={item.status === "posted"} onlyIcon />
+
+          {DOC_TYPE_ICONS[item.document_type]}
+
+          <span>{shortDocumentNumber(item.number)}</span>
+        </div>
+      ),
+    },
     {
       header: t("Type"),
       accessor: "document_type_display",
       sortable: true,
       excelWidth: 20,
+      render: (item) => `${t(item.document_type)}`,
     },
     { header: t("Date"), accessor: "date", sortable: true, excelWidth: 12 },
     {
@@ -198,6 +231,7 @@ const InvoicesPage = () => {
       accessor: "warehouse_detail",
       sortable: true,
       excelWidth: 20,
+      excelValue: (item) => item.warehouse_detail?.name ?? "",
       sortValue: (item) => item.warehouse_detail?.name ?? "",
       render: (item) => item.warehouse_detail?.name ?? "—",
     },
@@ -220,7 +254,8 @@ const InvoicesPage = () => {
       sortable: true,
       excelWidth: 10,
       sortValue: (item) => item.status,
-      excelValue: (item) => item.status_display,
+      excelValue: (item) => (item.status === "posted" ? t("Posted") : t("Draft")),
+      // (i.is_active ? "+" : ""),
       render: (item) => <StatusBadge isActive={item.status === "posted"} activeLabel={t("Posted")} inactiveLabel={t("Draft")} />,
     },
     {

@@ -1,16 +1,14 @@
-import { type ItemRow, type ParticipantRow } from "./Interface";
+// frontend/src/features/accounting/pages/Documents/Invoice/Vars.ts
+import { type ItemRow, type ParticipantRow, type Product } from "./Interface";
 
 
 export const DOC_TYPES = [
-  { value: "in", label: "Приходная накладная" },
-  { value: "out", label: "Расходная накладная" },
-  { value: "move", label: "Перемещение" },
-  { value: "return_in", label: "Возврат от покупателя" },
-  { value: "return_out", label: "Возврат поставщику" },
+  { value: "in", label: "IncomingInvoice" },
+  { value: "out", label: "OutgoingInvoice" },
+  { value: "move", label: "Move" },
+  { value: "return_in", label: "ReturnIn" },
+  { value: "return_out", label: "ReturnOut" },
 ];
-
-
-
 
 export const newItemRow = (): ItemRow => ({
   id: null,
@@ -23,6 +21,7 @@ export const newItemRow = (): ItemRow => ({
   price: "0",
   discount_percent: "0",
   cost_price: "0",
+  discount_manual: false,
 });
 
 
@@ -45,4 +44,35 @@ export const lineTotal = (row: ItemRow): number => {
   const price = parseFloat(row.price) || 0;
   const disc = parseFloat(row.discount_percent) || 0;
   return qty * price * (1 - disc / 100);
+};
+
+
+
+/**
+ * Подобрать скидку по объёму для строки.
+ * Возвращает discount_percent строкой или null если скидки нет.
+ */
+export const resolveVolumeDiscount = (
+  product: Product | undefined,
+  qty: number,
+  priceTypeId: number | null,
+): string | null => {
+  if (!product?.volume_discounts?.length) return null;
+
+  // Фильтруем: подходят скидки без price_type (для всех) или с совпадающим
+  const matches = product.volume_discounts.filter((vd) => {
+    const typeMatch = vd.price_type === null || vd.price_type === priceTypeId;
+    const minOk = qty >= Number(vd.min_qty);
+    const maxOk = vd.max_qty === null || qty <= Number(vd.max_qty);
+    return typeMatch && minOk && maxOk;
+  });
+
+  if (!matches.length) return null;
+
+  // Если несколько подходят — берём с максимальной скидкой
+  const best = matches.reduce((a, b) =>
+    Number(a.discount_percent) >= Number(b.discount_percent) ? a : b,
+  );
+
+  return String(best.discount_percent);
 };

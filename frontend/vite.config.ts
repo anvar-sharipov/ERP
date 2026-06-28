@@ -40,6 +40,21 @@ export default defineConfig(({ mode }) => {
           changeOrigin: false,
           secure: false,
         },
+         '/ws': {
+          target: 'ws://127.0.0.1:8000',
+          changeOrigin: false,
+          secure: false,
+          ws: true,
+          configure: (proxy, _options) => {
+            proxy.on('proxyReq', (proxyReq, req, _res) => {
+              const host = req.headers.host;
+              if (host) {
+                proxyReq.setHeader('X-Forwarded-Host', host);
+                proxyReq.setHeader('Host', host.replace('5173', '8000'));
+              }
+            });
+          },
+        },
       },
     },
   };

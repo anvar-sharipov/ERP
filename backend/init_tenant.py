@@ -16,11 +16,54 @@ from accounting.models import Account, CompanyProfile, Branch
 
 
 
+# def initialize_system():
+#     domain_name = os.environ.get('PROJECT_DOMAIN', '192.168.43.13.nip.io')
+
+#     # ------------------------------------------------------------------
+#     # 1. Создание публичной схемы
+#     # ------------------------------------------------------------------
+#     if not Company.objects.filter(schema_name='public').exists():
+#         print(f"--- Создаем публичную схему для {domain_name} ---")
+#         public_tenant = Company.objects.create(schema_name='public', name='ERP Platform Root')
+#         Domain.objects.create(domain=domain_name, tenant=public_tenant, is_primary=True)
+#         print("--- Схема public создана ---")
+#     else:
+#         print("--- Схема public уже существует ---")
+#         public_tenant = Company.objects.get(schema_name='public')
+
+#     # ------------------------------------------------------------------
+#     # 1.5. SaaS суперпользователь (public схема)
+#     # ------------------------------------------------------------------
+#     with tenant_context(public_tenant):
+#         User = get_user_model()
+#         saas_username = os.environ.get('DJANGO_SAAS_SUPERUSER_LOGIN')
+#         saas_email = os.environ.get('DJANGO_SAAS_SUPERUSER_EMAIL')
+#         saas_password = os.environ.get('DJANGO_SAAS_SUPERUSER_PASSWORD')
+
+#         if saas_password and saas_username and not User.objects.filter(username=saas_username).exists():
+#             User.objects.create_superuser(username=saas_username, email=saas_email, password=saas_password)
+#             print(f"--- SaaS суперпользователь '{saas_username}' создан ---")
+
+#     # ------------------------------------------------------------------
+#     # 2. Создание тенанта
+#     # ------------------------------------------------------------------
+#     company_schema = os.environ.get('COMPANY_SCHEME')
+#     company_domain = f"{company_schema}.{domain_name}"
+
+#     if not Company.objects.filter(schema_name=company_schema).exists():
+#         print(f"--- Создаем тенант '{company_schema}' ---")
+#         tenant_company = Company.objects.create(schema_name=company_schema, name=f'Компания {company_schema}')
+#         Domain.objects.create(domain=company_domain, tenant=tenant_company, is_primary=True)
+#         print(f"--- Тенант '{company_schema}' создан на домене {company_domain} ---")
+#     else:
+#         print(f"--- Тенант '{company_schema}' уже существует ---")
+#         tenant_company = Company.objects.get(schema_name=company_schema)
+
 def initialize_system():
-    domain_name = os.environ.get('PROJECT_DOMAIN', '192.168.43.13.nip.io')
+    domain_name = os.environ.get('PROJECT_DOMAIN', 'erp.local')
 
     # ------------------------------------------------------------------
-    # 1. Создание публичной схемы
+    # 1. Публичная схема
     # ------------------------------------------------------------------
     if not Company.objects.filter(schema_name='public').exists():
         print(f"--- Создаем публичную схему для {domain_name} ---")
@@ -30,8 +73,16 @@ def initialize_system():
     else:
         print("--- Схема public уже существует ---")
         public_tenant = Company.objects.get(schema_name='public')
-
-    # ------------------------------------------------------------------
+        
+        # ✅ Обновляем домен если изменился
+        existing_domain = Domain.objects.filter(tenant=public_tenant, is_primary=True).first()
+        if existing_domain and existing_domain.domain != domain_name:
+            print(f"--- Обновляем домен public: {existing_domain.domain} → {domain_name} ---")
+            existing_domain.domain = domain_name
+            existing_domain.save()
+            
+            
+        # ------------------------------------------------------------------
     # 1.5. SaaS суперпользователь (public схема)
     # ------------------------------------------------------------------
     with tenant_context(public_tenant):
@@ -45,7 +96,7 @@ def initialize_system():
             print(f"--- SaaS суперпользователь '{saas_username}' создан ---")
 
     # ------------------------------------------------------------------
-    # 2. Создание тенанта
+    # 2. Тенант
     # ------------------------------------------------------------------
     company_schema = os.environ.get('COMPANY_SCHEME')
     company_domain = f"{company_schema}.{domain_name}"
@@ -58,6 +109,13 @@ def initialize_system():
     else:
         print(f"--- Тенант '{company_schema}' уже существует ---")
         tenant_company = Company.objects.get(schema_name=company_schema)
+
+        # ✅ Обновляем домен тенанта если изменился
+        existing_tenant_domain = Domain.objects.filter(tenant=tenant_company, is_primary=True).first()
+        if existing_tenant_domain and existing_tenant_domain.domain != company_domain:
+            print(f"--- Обновляем домен тенанта: {existing_tenant_domain.domain} → {company_domain} ---")
+            existing_tenant_domain.domain = company_domain
+            existing_tenant_domain.save()
 
     # ------------------------------------------------------------------
     # 3. Всё внутри тенанта

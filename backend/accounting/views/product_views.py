@@ -76,6 +76,40 @@ class ProductViewSet(AuditMixin, viewsets.ModelViewSet):
     def get_permissions(self):
         return _rbac(self.action, "product")
     
+    @action(detail=False, methods=["get"], url_path="stocks-map")
+    def stocks_map(self, request):
+        """
+        GET /accounting/products/stocks-map/?warehouse=<id>
+        Возвращает dict: { product_id: { quantity, reserved, available } }
+        Один запрос вместо N.
+        """
+        warehouse_id = request.query_params.get("warehouse")
+        if not warehouse_id:
+            return Response(
+                {"detail": "warehouse query param required"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        stocks = (
+            WarehouseStock.objects
+            .filter(warehouse_id=warehouse_id)
+            .annotate(
+                available=models.F("quantity") - models.F("reserved_quantity")
+            )
+            .values("product_id", "quantity", "reserved_quantity", "available")
+        )
+
+        result = {
+            s["product_id"]: {
+                "quantity":  float(s["quantity"]),
+                "reserved":  float(s["reserved_quantity"]),
+                "available": float(s["available"]),
+            }
+            for s in stocks
+        }
+
+        return Response(result)
+    
 
     
 

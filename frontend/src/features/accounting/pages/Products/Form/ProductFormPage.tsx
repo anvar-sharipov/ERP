@@ -20,9 +20,9 @@ import { MainTab } from "./MainTab";
 import SpecsTab from "./SpecsTab";
 import ImagesTab from "./ImagesTab";
 import PricesTab from "./PricesTab";
+import DiscountsTab from "./DiscountsTab";
 
-// const TABS = ["Основное", "Характеристики", "Изображения", "Цены"] as const;
-const TABS = ["Основное", "Характеристики", "Изображения", "Цены", "Комплектующие"] as const;
+const TABS = ["Основное", "Характеристики", "Изображения", "Цены", "Комплектующие", "Скидки"] as const;
 type Tab = (typeof TABS)[number];
 
 const ProductFormPage = () => {
@@ -198,8 +198,10 @@ const ProductFormPage = () => {
         {activeTab === "Цены" && isEdit && product && (
           <PricesTab productId={product.id} prices={product.prices} priceTypes={priceTypes as PriceType[]} warehouses={warehouses} onRefresh={refreshProduct} />
         )}
-        
+
         {activeTab === "Комплектующие" && isEdit && product && <BundlesTab productId={product.id} />}
+
+        {activeTab === "Скидки" && isEdit && product && <DiscountsTab productId={product.id} priceTypes={priceTypes as PriceType[]} />}
       </div>
     </RBACGuard>
   );

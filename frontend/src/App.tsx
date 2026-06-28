@@ -9,6 +9,8 @@ import { CompanyProvider } from "./core/context/CompanyContext";
 import { SidebarProvider } from "./core/context/SidebarRightContext";
 import { NotificationProvider, useNotify } from "./core/context/NotificationContext";
 import { useHotkeys } from "./core/hooks/useHotkeys";
+import { ChatProvider } from "./features/chat/context/ChatContext";
+import { MiniChat } from "./features/chat/components/MiniChat";
 
 const queryClient = new QueryClient();
 
@@ -39,6 +41,7 @@ const AppContent = () => {
   return (
     <div className="App min-h-screen bg-gray-50 dark:bg-gray-950">
       <AppRouter />
+       <MiniChat />
     </div>
   );
 };
@@ -51,10 +54,11 @@ function App() {
         <CompanyProvider>
           <SidebarProvider>
             <NotificationProvider>
-              {/* Оборачиваем здесь, чтобы все дочерние компоненты (включая AppContent) 
-                имели доступ к хукам React Router (useNavigate и т.д.) */}
-
-              <AppContent />
+              <ChatProvider>
+                {" "}
+                {/* ← внутри NotificationProvider */}
+                <AppContent />
+              </ChatProvider>
             </NotificationProvider>
           </SidebarProvider>
         </CompanyProvider>
@@ -62,5 +66,4 @@ function App() {
     </QueryClientProvider>
   );
 }
-
 export default App;

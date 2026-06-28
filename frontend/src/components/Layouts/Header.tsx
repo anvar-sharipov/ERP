@@ -5,10 +5,70 @@ import { playAside2Sound } from "../../core/utils/sound";
 import { useCompany } from "../../core/context/CompanyContext";
 import { UserProfileBlock } from "../ui/UserProfileBlock";
 
+import { useChat } from "../../features/chat/context/ChatContext";
+// import { useNavigate } from "react-router-dom";
+// import { ROUTES } from "../../core/router/routes";
+// import { MessageSquare } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+
 interface HeaderProps {
   onToggleSidebar?: () => void;
   onToggleSidebarRight?: () => void;
 }
+
+const ChatButton = () => {
+  const { unreadCount, toggleMiniChat } = useChat();
+
+  return (
+    <button
+      onClick={toggleMiniChat} // ✅ было navigate
+      className="relative p-2 text-gray-400 hover:text-white transition-colors rounded hover:bg-slate-700"
+      title="Сообщения"
+    >
+      <motion.div
+        animate={
+          unreadCount > 0
+            ? {
+                rotate: [0, -10, 10, -8, 8, 0],
+                y: [0, -2, 0, -1, 0],
+              }
+            : { rotate: 0 }
+        }
+        transition={
+          unreadCount > 0
+            ? {
+                duration: 0.6,
+                repeat: Infinity,
+                repeatDelay: 2.5,
+                ease: "easeInOut",
+              }
+            : {}
+        }
+      >
+        <svg width="22" height="18" viewBox="0 0 22 18" fill="none">
+          <rect x="1" y="1" width="20" height="16" rx="2" fill="#6366f1" />
+          <path d="M1 1L11 10L21 1" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+          <path d="M1 17L7.5 9.5" stroke="white" strokeWidth="1" strokeLinecap="round" opacity="0.5" />
+          <path d="M21 17L14.5 9.5" stroke="white" strokeWidth="1" strokeLinecap="round" opacity="0.5" />
+        </svg>
+      </motion.div>
+
+      <AnimatePresence>
+        {unreadCount > 0 && (
+          <motion.span
+            initial={{ scale: 0, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            exit={{ scale: 0, opacity: 0 }}
+            transition={{ type: "spring", stiffness: 500, damping: 25 }}
+            className="absolute -top-1 -right-1 min-w-[17px] h-[17px] px-1 rounded-full text-white text-[10px] font-bold flex items-center justify-center bg-pink-500 shadow-lg"
+          >
+            {unreadCount > 99 ? "99+" : unreadCount}
+          </motion.span>
+        )}
+      </AnimatePresence>
+    </button>
+  );
+};
 
 const Header: React.FC<HeaderProps> = ({ onToggleSidebar, onToggleSidebarRight }) => {
   const { company: currentCompany } = useCompany();
@@ -48,6 +108,9 @@ const Header: React.FC<HeaderProps> = ({ onToggleSidebar, onToggleSidebarRight }
       <div className="hidden lg:flex items-center gap-3">
         <LanguageSwitcher />
         <ThemeToggle />
+        {/* ✅ Иконка чата с бейджем */}
+        <ChatButton />
+        <div className="w-[1px] h-6 bg-gray-700" />
         <div className="w-[1px] h-6 bg-gray-700" />
         {/* <UserProfileBlock variant="dropdown" showName={false} /> */}
         <UserProfileBlock variant="header-inline" />

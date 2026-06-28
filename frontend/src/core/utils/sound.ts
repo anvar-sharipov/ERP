@@ -24,3 +24,10 @@ export const playAside2Sound = () => {
   audio.volume = 0.5;
   audio.play().catch(() => {});
 };
+
+
+export const playInfoSound = () => {
+  const audio = new Audio("/sounds/info.mp3");
+  audio.volume = 0.5;
+  audio.play().catch(() => {});
+};

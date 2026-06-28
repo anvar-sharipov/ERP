@@ -13,6 +13,13 @@ import {
   ComputerDesktopIcon,
   IdentificationIcon,
   DocumentTextIcon,
+  ArrowDownTrayIcon,
+  ArrowUpTrayIcon,
+  ArrowsRightLeftIcon,
+  ArrowUturnLeftIcon,
+  ArrowUturnRightIcon,
+  ChatBubbleLeftRightIcon,
+  // ChatBubbleLeftIcon,
 } from "@heroicons/react/24/outline";
 
 // Добавляем эффект свечения и чуть более светлые тона для темных тем
@@ -36,3 +43,12 @@ export const DASHBOARD_ICON = <ComputerDesktopIcon className={`${iconClassName} 
 // export const EMPLOYEES_ICON = <UserGroupIcon className={`${iconClassName} text-teal-400`} />;
 export const EMPLOYEES_ICON = <IdentificationIcon className={`${iconClassName} text-teal-400`} />;
 export const DOCUMENTS_ICON = <DocumentTextIcon className={`${iconClassName} text-red-500`} />;
+
+export const DOC_IN_ICON = <ArrowDownTrayIcon className={`${iconClassName} text-green-400`} />;
+export const DOC_OUT_ICON = <ArrowUpTrayIcon className={`${iconClassName} text-red-400`} />;
+export const DOC_MOVE_ICON = <ArrowsRightLeftIcon className={`${iconClassName} text-blue-400`} />;
+export const DOC_RETURN_IN_ICON = <ArrowUturnLeftIcon className={`${iconClassName} text-emerald-400`} />;
+export const DOC_RETURN_OUT_ICON = <ArrowUturnRightIcon className={`${iconClassName} text-orange-400`} />;
+
+export const CHAT_ICON = <ChatBubbleLeftRightIcon className={`${iconClassName} text-sky-400`} />;
+// export const CHAT_ICON = <ChatBubbleLeftIcon className={`${iconClassName} text-sky-400`} />;

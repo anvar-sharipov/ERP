@@ -6,6 +6,7 @@ import { Modal } from "../../../../../../components/ui/Modal/Modal";
 import { Button } from "../../../../../../components/ui/Button";
 import { useNotify } from "../../../../../../core/context/NotificationContext";
 import { useTranslation } from "react-i18next";
+import { CheckboxCard } from "../../../../../../components/ui/CheckBox/CheckboxCard";
 
 export const AssignRolesModal = ({ userId, isOpen, onClose, currentRoles }: any) => {
   const { t } = useTranslation();
@@ -41,16 +42,16 @@ export const AssignRolesModal = ({ userId, isOpen, onClose, currentRoles }: any)
   return (
     <Modal isOpen={isOpen} onClose={onClose} title={t("Title")}>
       <div className="space-y-4">
-        {allRoles?.map((role: any) => (
-          <label key={role.id} className="flex items-center gap-2 p-2 border rounded hover:bg-slate-50 cursor-pointer">
-            <input
-              type="checkbox"
+        <div className="space-y-2">
+          {allRoles?.map((role: any) => (
+            <CheckboxCard
+              key={role.id}
+              label={role.name}
               checked={selectedRoles.includes(role.id)}
               onChange={() => setSelectedRoles((prev) => (prev.includes(role.id) ? prev.filter((r) => r !== role.id) : [...prev, role.id]))}
             />
-            {role.name}
-          </label>
-        ))}
+          ))}
+        </div>
         <div className="flex justify-end gap-2 mt-4">
           <Button text={t("Cancel")} onClick={onClose} />
           <Button text={t("Save")} onClick={() => assignMutation.mutate(selectedRoles)} variant="danger" />

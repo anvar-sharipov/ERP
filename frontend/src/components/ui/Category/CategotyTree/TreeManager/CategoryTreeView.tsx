@@ -3,7 +3,7 @@ import { useState } from "react";
 import { FolderOpen } from "lucide-react";
 import CategoryTreeNode from "./CategoryTreeNode";
 import { type TreeNode } from "../types";
-import { getDescendantIds } from "../TreeFilter/CategoryTree";
+// import { getDescendantIds } from "../TreeFilter/CategoryTree";
 
 interface Props {
   items: TreeNode[];
@@ -34,7 +34,7 @@ export default function CategoryTreeView({ items, onEdit, onDelete, onMove }: Pr
           setRootDragOver(false);
         }
       }}
-      onDrop={(e) => {
+      onDrop={() => {
         // дроп на сам контейнер (не перехвачен узлом) = в корень
         setRootDragOver(false);
         if (canDropToRoot) onMove(draggedId!, null);

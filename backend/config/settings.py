@@ -94,6 +94,7 @@ TENANT_APPS = [
     'users',
     'accounting',
     'django_filters',
+    "chat",
     
     
 ]

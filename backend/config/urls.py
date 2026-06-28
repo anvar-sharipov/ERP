@@ -14,6 +14,7 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/accounting/', include('accounting.urls')),
     path('api/users/', include('users.urls')),
+    path("api/chat/", include("chat.urls")),
     
     # JWT эндпоинты
     path('api/auth/token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),

@@ -35,14 +35,23 @@ export const getTenantInfo = (): TenantInfo => {
  * Возвращает базовый WebSocket URL (ws:// или wss://) с текущим хостом и портом backend.
  * Использует тот же хост, что и текущая страница, чтобы тенант определился по поддомену.
  */
+// export const getTenantWsBaseUrl = (): string => {
+//   const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
+//   const hostname = window.location.hostname;
+
+//   // Порт backend - берём из env, по умолчанию 8000
+//   const backendPort = import.meta.env.VITE_BACKEND_PORT || '8000';
+
+//   return `${protocol}://${hostname}:${backendPort}`;
+// };
+
 export const getTenantWsBaseUrl = (): string => {
   const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
   const hostname = window.location.hostname;
+  const port = window.location.port; // пустой если 443/80
 
-  // Порт backend - берём из env, по умолчанию 8000
-  const backendPort = import.meta.env.VITE_BACKEND_PORT || '8000';
-
-  return `${protocol}://${hostname}:${backendPort}`;
+  const portStr = port ? `:${port}` : '';
+  return `${protocol}://${hostname}${portStr}`;
 };
 
 

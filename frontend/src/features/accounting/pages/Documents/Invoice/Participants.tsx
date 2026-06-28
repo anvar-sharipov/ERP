@@ -1,8 +1,10 @@
+// frontend/src/features/accounting/pages/Documents/Invoice/Participants.tsx
 import { Button } from "../../../../../components/ui/Button";
 import { Plus, Trash2 } from "lucide-react";
 import { newParticipantRow } from "./Vars";
 import { type ParticipantRow } from "./Interface";
 import SearchableSelect from "../../../../../components/ui/SearchableSelect";
+import { useTranslation } from "react-i18next";
 
 interface ParticipantsProps {
   setParticipants: React.Dispatch<React.SetStateAction<ParticipantRow[]>>;
@@ -13,6 +15,8 @@ interface ParticipantsProps {
 }
 
 const Participants = ({ setParticipants, participants, isPosted, employees, removeParticipant }: ParticipantsProps) => {
+  const { t } = useTranslation();
+
   const handleEmployeeChange = (key: string, employeeId: number | null) => {
     setParticipants((prev) =>
       prev.map((r) => {
@@ -34,12 +38,12 @@ const Participants = ({ setParticipants, participants, isPosted, employees, remo
   return (
     <div className="border border-gray-200 dark:border-slate-600 rounded-lg p-4">
       <div className="flex items-center justify-between mb-3">
-        <h2 className="text-sm font-semibold text-gray-600 dark:text-gray-400">Участники</h2>
-        {!isPosted && <Button text="Добавить" variant="ghost" icon={<Plus className="w-4 h-4" />} onClick={() => setParticipants((prev) => [...prev, newParticipantRow()])} />}
+        <h2 className="text-sm font-semibold text-gray-600 dark:text-gray-400 print:hidden">{t("Participants")}</h2>
+        {!isPosted && <Button text={t("Add")} icon={<Plus className="w-4 h-4" />} onClick={() => setParticipants((prev) => [...prev, newParticipantRow()])} />}
       </div>
 
       {participants.length === 0 ? (
-        <p className="text-xs text-gray-400">Нет участников</p>
+        <p className="text-xs text-gray-400">{t("NoParticipants")}</p>
       ) : (
         <div className="flex flex-wrap gap-2">
           {participants.map((p) => {
@@ -59,7 +63,7 @@ const Participants = ({ setParticipants, participants, isPosted, employees, remo
                     options={employeeOptions}
                     value={p.employee}
                     onChange={(id) => handleEmployeeChange(p._key, id)}
-                    placeholder="— сотрудник —"
+                    placeholder={t("SelectEmployee")}
                     className="min-w-[160px]"
                     clearable={false}
                   />

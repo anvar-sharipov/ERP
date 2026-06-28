@@ -15,6 +15,7 @@ import { RBACGuard } from "../../../../../../components/ui/RBACGuard";
 import { BackButton } from "../../../../../../components/ui/BackButton";
 import { SegmentedControl } from "../../../../../../components/ui/Tabs/SegmentedControl";
 import { useRestoreScroll } from "../../../../../../core/hooks/useRestoreScroll";
+import { PermissionCheckbox } from "../../../../../../components/ui/CheckBox/PermissionCheckbox";
 
 type Tab = "Основное" | "Права";
 const TABS: Tab[] = ["Основное", "Права"];
@@ -47,19 +48,34 @@ const PermissionsTab = ({ matrix, matrixLoading, selectedPerms, onToggle, onTogg
         {Object.entries(matrix || {}).map(([resource, actions]) => {
           const allSelected = actions.every((p: any) => selectedPerms.includes(p.id));
           return (
-            <div key={resource} className="border-b border-slate-200 dark:border-slate-700 pb-3">
-              <div className="flex items-center gap-3 mb-2">
-                <Button variant="1c" size="sm" text={allSelected ? t("DeselectAllResource") : t("SelectAllResource")} onClick={() => onToggleResource(actions, !allSelected)} />
-                <h4 className="font-bold capitalize text-indigo-400 text-sm">
-                  {t(resource)} <span className="text-xs font-normal text-gray-400">({resource})</span>
-                </h4>
+            <div
+              key={resource}
+              className="
+    rounded-2xl
+    border border-slate-200
+    dark:border-slate-700
+    p-4
+    bg-white
+    dark:bg-slate-800
+    shadow-sm
+  "
+            >
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h4 className="font-semibold text-indigo-500">
+                    {t(resource)}
+                    <span className="ml-2 text-xs text-slate-400">({resource})</span>
+                  </h4>
+
+                  <p className="text-xs text-slate-400">{actions.length} permissions</p>
+                </div>
+
+                <Button size="sm" variant="1c" text={allSelected ? t("DeselectAllResource") : t("SelectAllResource")} onClick={() => onToggleResource(actions, !allSelected)} />
               </div>
-              <div className="flex flex-wrap gap-4">
+
+              <div className="flex flex-wrap gap-2">
                 {actions.map((perm: any) => (
-                  <label key={perm.id} className="flex items-center gap-2 cursor-pointer text-sm">
-                    <input type="checkbox" checked={selectedPerms.includes(perm.id)} onChange={() => onToggle(perm.id)} className="w-4 h-4 rounded border-gray-300 text-indigo-600" />
-                    <span>{t(perm.action)}</span>
-                  </label>
+                  <PermissionCheckbox key={perm.id} checked={selectedPerms.includes(perm.id)} label={t(perm.action)} onChange={() => onToggle(perm.id)} />
                 ))}
               </div>
             </div>
@@ -181,37 +197,49 @@ const RoleFormPage = () => {
 
   return (
     <RBACGuard isLoading={isEdit ? roleLoading : false} error={isEdit ? roleError : null} canView={isEdit ? canPut : canPost} forbiddenText={t("ForbiddenText")}>
-      {/* Шапка */}
-      <div className="flex items-center gap-3 mb-4">
-        <BackButton id={roleId ?? 0} getBackProps={getBackProps} className="!px-2" />
-        <h1 className="text-xl font-bold">{isEdit ? `Роль: ${role?.name ?? "..."}` : "Новая роль"}</h1>
-      </div>
+      <div className="space-y-6">
+        {/* Шапка */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <BackButton id={roleId ?? 0} getBackProps={getBackProps} className="!px-2" />
 
-      {/* Табы */}
-      <SegmentedControl options={TABS.map((s) => ({ value: s, label: s }))} value={activeTab} onChange={(v) => setActiveTab(v as Tab)} />
+            <div>
+              <h1 className="text-2xl font-bold">{isEdit ? role?.name : t("NewRole")}</h1>
 
-      <div className="mt-4 max-w-3xl">
-        {/* Таб: Основное */}
-        {activeTab === "Основное" && (
-          <div className="space-y-4">
-            <Input label={t("RoleName")} value={roleName} onChange={(e) => setRoleName(e.target.value)} />
-            <div className="flex gap-2 mt-4">
-              <Button text={saveMutation.isPending ? t("Saving") : isEdit ? t("Save") : t("Create")} onClick={() => saveMutation.mutate()} disabled={!roleName.trim() || saveMutation.isPending} variant="danger" />
-              <Button text={t("Cancel")} variant="ghost" onClick={() => navigate(ROUTES.COMPANY_ADMIN.ROLES)} />
+              <p className="text-sm text-slate-500">
+                {selectedPerms.length} {t("PermissionsSelected")}
+              </p>
             </div>
           </div>
-        )}
 
-        {/* Таб: Права */}
-        {activeTab === "Права" && (
-          <div className="space-y-4">
+          <div className="flex gap-2">
+            <Button text={t("Cancel")} onClick={() => navigate(ROUTES.COMPANY_ADMIN.ROLES)} />
+
+            <Button text={saveMutation.isPending ? t("Saving") : t("Save")} variant="danger" onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending} />
+          </div>
+        </div>
+
+        <SegmentedControl
+          options={TABS.map((s) => ({
+            value: s,
+            label: s,
+          }))}
+          value={activeTab}
+          onChange={(v) => setActiveTab(v as Tab)}
+        />
+
+        {/* Контент */}
+        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-700 p-6 shadow-sm">
+          {activeTab === "Основное" && (
+            <div className="max-w-xl space-y-6">
+              <Input label={t("RoleName")} value={roleName} onChange={(e) => setRoleName(e.target.value)} />
+            </div>
+          )}
+
+          {activeTab === "Права" && (
             <PermissionsTab matrix={matrix} matrixLoading={matrixLoading} selectedPerms={selectedPerms} onToggle={togglePerm} onToggleResource={toggleResource} onToggleAll={toggleAll} />
-            <div className="flex gap-2 pt-2">
-              <Button text={saveMutation.isPending ? t("Saving") : t("Save")} onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending} variant="danger" />
-              <Button text={t("Cancel")} variant="ghost" onClick={() => navigate(ROUTES.COMPANY_ADMIN.ROLES)} />
-            </div>
-          </div>
-        )}
+          )}
+        </div>
       </div>
     </RBACGuard>
   );

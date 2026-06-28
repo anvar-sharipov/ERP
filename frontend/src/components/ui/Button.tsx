@@ -71,7 +71,7 @@ export const Button: React.FC<ButtonProps> = ({
     <button
       // className={`${baseClass} ${variants[variant]} ${className}`}
 
-      className={`${baseClass} ${sizes[size]} ${variant === "ghost" && isActive ? "" : variants[variant]} ${isActive ? activeClasses : ""} ${className}`}
+      className={`${baseClass} ${sizes[size]} ${variant === "ghost" && isActive ? "" : variants[variant]} ${isActive ? activeClasses : ""} ${className} print:hidden`}
 
       disabled={disabled || isLoading}
       onClick={handleClick}

@@ -27,6 +27,8 @@
 │   │   │   ├── 0005_userscope.py
 │   │   │   ├── 0006_closedperiod_branch_closedperiod_warehouse_and_more.py
 │   │   │   ├── 0007_productbundle.py
+│   │   │   ├── 0008_employee_branch.py
+│   │   │   ├── 0009_volumediscount.py
 │   │   │   └── __init__.py
 │   │   ├── mixins
 │   │   │   └── audit_mixin.py
@@ -83,6 +85,22 @@
 │   │   ├── utils.py
 │   │   ├── views.py
 │   │   └── __init__.py
+│   ├── chat
+│   │   ├── migrations
+│   │   │   ├── __pycache__
+│   │   │   ├── 0001_initial.py
+│   │   │   └── __init__.py
+│   │   ├── __pycache__
+│   │   ├── admin.py
+│   │   ├── apps.py
+│   │   ├── consumers.py
+│   │   ├── models.py
+│   │   ├── notification_consumer.py
+│   │   ├── serializers.py
+│   │   ├── tests.py
+│   │   ├── urls.py
+│   │   ├── views.py
+│   │   └── __init__.py
 │   ├── companies
 │   │   ├── migrations
 │   │   │   ├── __pycache__
@@ -136,6 +154,7 @@
 │   │   ├── models.py
 │   │   ├── permissions.py
 │   │   ├── rbac_events.py
+│   │   ├── scope_events.py
 │   │   ├── scoping.py
 │   │   ├── signals.py
 │   │   ├── tests.py
@@ -148,7 +167,8 @@
 │   │   │   ├── consumers.py
 │   │   │   ├── jwt_auth_middleware.py
 │   │   │   ├── rbac_consumer.py
-│   │   │   └── routing.py
+│   │   │   ├── routing.py
+│   │   │   └── scope_consumer.py
 │   │   ├── __pycache__
 │   │   ├── storage.py
 │   │   └── validators.py
@@ -186,15 +206,22 @@
 │   │   │       │       │   ├── CategoryTreeSelect.tsx
 │   │   │       │       │   └── CategoryTreeSelectNode.tsx
 │   │   │       │       └── types.ts
+│   │   │       ├── CheckBox
+│   │   │       │   ├── CheckboxCard.tsx
+│   │   │       │   └── PermissionCheckbox.tsx
 │   │   │       ├── ErrorMessage
 │   │   │       │   └── ErrorMsg.tsx
 │   │   │       ├── Icon
 │   │   │       │   ├── ColorPicker.tsx
 │   │   │       │   ├── iconFileName.ts
 │   │   │       │   └── IconPicker.tsx
+│   │   │       ├── Invoice
+│   │   │       │   └── Dropdown.tsx
 │   │   │       ├── Modal
 │   │   │       │   ├── ConfirmModal.tsx
 │   │   │       │   └── Modal.tsx
+│   │   │       ├── Select
+│   │   │       │   └── Select.tsx
 │   │   │       ├── Table
 │   │   │       │   ├── OSVTable.tsx
 │   │   │       │   └── Table.tsx
@@ -241,6 +268,7 @@
 │   │   │   │   ├── usePageHotkeys.ts
 │   │   │   │   ├── useRBACSocket.ts
 │   │   │   │   ├── useRestoreScroll.ts
+│   │   │   │   ├── useScopeSocket.ts
 │   │   │   │   ├── useTabHotkeys.ts
 │   │   │   │   └── useTableFilter.ts
 │   │   │   ├── router
@@ -257,6 +285,7 @@
 │   │   │   │   └── index.ts
 │   │   │   └── utils
 │   │   │       ├── directoryIcons.ts
+│   │   │       ├── documentNumber.ts
 │   │   │       ├── excelHelpers.ts
 │   │   │       ├── focusManager.ts
 │   │   │       ├── icons.ts
@@ -288,12 +317,16 @@
 │   │   │   │   │   │   └── FieldRenderer.tsx
 │   │   │   │   │   ├── Documents
 │   │   │   │   │   │   ├── Invoice
+│   │   │   │   │   │   │   ├── ProductRow
+│   │   │   │   │   │   │   │   ├── Bundlerows.tsx
+│   │   │   │   │   │   │   │   ├── Mainrows.tsx
+│   │   │   │   │   │   │   │   ├── ProductRow.tsx
+│   │   │   │   │   │   │   │   └── Tablefooter.tsx
 │   │   │   │   │   │   │   ├── DocumentFormPage.tsx
 │   │   │   │   │   │   │   ├── HeadDocument.tsx
 │   │   │   │   │   │   │   ├── HeaderPage.tsx
 │   │   │   │   │   │   │   ├── Interface.ts
 │   │   │   │   │   │   │   ├── Participants.tsx
-│   │   │   │   │   │   │   ├── ProductRow.tsx
 │   │   │   │   │   │   │   └── Vars.ts
 │   │   │   │   │   │   ├── Documents.tsx
 │   │   │   │   │   │   ├── InvoicesPage.tsx
@@ -310,10 +343,14 @@
 │   │   │   │   │   │   └── StockMovementsPage.tsx
 │   │   │   │   │   ├── Products
 │   │   │   │   │   │   ├── Form
-│   │   │   │   │   │   │   ├── Tabs
-│   │   │   │   │   │   │   │   └── MainTabs.tsx
 │   │   │   │   │   │   │   ├── BundlesTab.tsx
-│   │   │   │   │   │   │   └── ProductFormPage.tsx
+│   │   │   │   │   │   │   ├── DiscountsTab.tsx
+│   │   │   │   │   │   │   ├── ImagesTab.tsx
+│   │   │   │   │   │   │   ├── Interface.ts
+│   │   │   │   │   │   │   ├── MainTab.tsx
+│   │   │   │   │   │   │   ├── PricesTab.tsx
+│   │   │   │   │   │   │   ├── ProductFormPage.tsx
+│   │   │   │   │   │   │   └── SpecsTab.tsx
 │   │   │   │   │   │   ├── BrandsPage.tsx
 │   │   │   │   │   │   ├── CategoriesPage.tsx
 │   │   │   │   │   │   ├── PriceTypesPage.tsx
@@ -350,6 +387,22 @@
 │   │   │   │   ├── services
 │   │   │   │   │   └── authApi.ts
 │   │   │   │   └── index.ts
+│   │   │   ├── chat
+│   │   │   │   ├── components
+│   │   │   │   │   ├── ConversationList.tsx
+│   │   │   │   │   ├── ConversationWindow.tsx
+│   │   │   │   │   ├── MessageInput.tsx
+│   │   │   │   │   ├── MessageItem.tsx
+│   │   │   │   │   └── NewChatModal.tsx
+│   │   │   │   ├── context
+│   │   │   │   │   └── ChatContext.tsx
+│   │   │   │   ├── hooks
+│   │   │   │   │   ├── useChatNotificationSocket.ts
+│   │   │   │   │   └── useChatSocket.ts
+│   │   │   │   ├── pages
+│   │   │   │   │   └── ChatPage.tsx
+│   │   │   │   └── services
+│   │   │   │       └── chatApi.ts
 │   │   │   ├── companies
 │   │   │   │   ├── components
 │   │   │   │   └── pages
@@ -408,6 +461,7 @@
 ├── .env.example
 ├── .gitignore
 ├── code.txt
+├── dnsmasq.conf
 ├── docker-compose.yml
 ├── README.en.md
 ├── README.md

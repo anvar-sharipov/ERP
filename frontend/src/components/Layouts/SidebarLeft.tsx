@@ -18,6 +18,7 @@ import {
   DASHBOARD_ICON,
   EMPLOYEES_ICON,
   DOCUMENTS_ICON,
+  CHAT_ICON,
 } from "../Icons/LeftBarIcons";
 import { playClick2Sound, playAside2Sound } from "../../core/utils/sound";
 import { useAccess } from "../../core/hooks/useAccess";
@@ -26,6 +27,7 @@ import { focusManager } from "../../core/utils/focusManager";
 
 import { LanguageSwitcher } from "../ui/LanguageSwitcher";
 import { ThemeToggle } from "../ui/ThemeToggle";
+import { useChat } from "../../features/chat/context/ChatContext";
 
 import { UserProfileBlock } from "../ui/UserProfileBlock";
 interface SidebarLeftProps {
@@ -39,13 +41,14 @@ const NAV_ITEMS = {
     { name: "Admin", path: ROUTES.COMPANY_ADMIN.USERS, icon: ADMIN_ICON, permission: ["user", "GET"] },
     { name: "Desktop", path: ROUTES.APP.DASHBOARD, icon: DASHBOARD_ICON },
     { name: "Accounting", path: ROUTES.APP.ACCOUNTING, icon: ACCOUNT_ICON, permission: ["account", "GET"] },
-    { name: "Journal", path: ROUTES.APP.JOURNAL, icon: JOURNAL_ICON, permission: ["journalentry", "GET"] },
+    { name: "Transaction", path: ROUTES.APP.JOURNAL, icon: JOURNAL_ICON, permission: ["journalentry", "GET"] },
     { name: "Directoryes", path: ROUTES.APP.DIRECTORY, icon: DIRECTORY_ICON, permission: ["directory", "GET"] },
     { name: "Products", path: ROUTES.APP.PRODUCTS, icon: PRODUCT_ICON, permission: ["product", "GET"] },
     { name: "Counterparties", path: ROUTES.APP.COUNTERPARTIES, icon: COUNTERPARTY_ICON, permission: ["counterparty", "GET"] },
     { name: "Warehouses", path: ROUTES.APP.WAREHOUSES, icon: WAREHOUSE_ICON, permission: ["warehouse", "GET"] },
     { name: "Employees", path: ROUTES.APP.EMPLOYEES, icon: EMPLOYEES_ICON, permission: ["employee", "GET"] },
-    { name: "Documents", path: ROUTES.APP.DOCUMENTS, icon: DOCUMENTS_ICON, permission: ["document", "GET"] },
+    { name: "Invoices", path: ROUTES.APP.DOCUMENTS, icon: DOCUMENTS_ICON, permission: ["document", "GET"] },
+    { name: "Chat", path: ROUTES.APP.CHAT, icon: CHAT_ICON },
   ],
   admin: [
     { name: "Users", path: ROUTES.COMPANY_ADMIN.USERS, icon: USERS_ICON },
@@ -61,6 +64,7 @@ const SidebarLeft: React.FC<SidebarLeftProps> = ({ isOpen }) => {
   const isAdminSection = location.pathname.startsWith("/admin");
   const { t } = useTranslation();
   const sidebarRef = useRef<HTMLElement>(null);
+  const { unreadCount } = useChat();
 
   const backButtonRef = useRef<HTMLAnchorElement | null>(null);
 
@@ -140,7 +144,7 @@ const SidebarLeft: React.FC<SidebarLeftProps> = ({ isOpen }) => {
         border-r border-slate-500 bg-slate-800 dark:bg-slate-900 p-2 flex flex-col transition-all duration-300 print:hidden
         fixed left-0 top-16 h-[calc(100vh-4rem)] z-40
         lg:relative lg:top-0 lg:h-full
-        ${isOpen ? "w-64" : "w-10 md:w-16"}
+        ${isOpen ? "w-64" : "w-14 md:w-16"}
       `}
     >
       {/* Скроллируемая навигация */}
@@ -204,6 +208,20 @@ const SidebarLeft: React.FC<SidebarLeftProps> = ({ isOpen }) => {
                   >
                     {t(item.name)}
                   </span>
+                  {/* Badge непрочитанных — только для чата */}
+                  {item.path === ROUTES.APP.CHAT && unreadCount > 0 && (
+                    <span
+                      className={`
+          ml-auto min-w-[18px] h-[18px] px-1 rounded-full
+          bg-indigo-500 text-white text-[10px] font-bold
+          flex items-center justify-center shrink-0
+          transition-all duration-300
+          ${isOpen ? "opacity-100" : "absolute top-1 right-1 opacity-100"}
+        `}
+                    >
+                      {unreadCount > 99 ? "99+" : unreadCount}
+                    </span>
+                  )}
                   <span
                     className={`
               absolute inset-0 rounded-lg opacity-0 group-hover:opacity-100

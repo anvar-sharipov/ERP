@@ -477,8 +477,117 @@
     "IP": "IP",
     "Changes": "Изменения",
     "System": "Система",
-    "ForbiddenAuditLog": "Нет доступа к журналу аудита"
+    "ForbiddenAuditLog": "Нет доступа к журналу аудита",
 
+    "Documents": "Документы",
+
+    
+    "Invoices": "Фактуры",
+    "Orders": "Заказы",
+    "Returns": "Возвраты",
+
+    "AddInvoice": "Добавить накладную",
+    "DocumentPosted": "Документ проведён",
+    "DocumentUnposted": "Проведение документа отменено",
+    "ErrorPosting": "Ошибка проведения",
+    "ErrorUnposting": "Ошибка отмены проведения",
+    "ReturnIn": "Возврат от покупателя",
+    "ReturnOut": "Возврат поставщику",
+    "DeleteDocument": "Удалить документ №{{number}}?",
+
+
+    "Subtotal": "Сумма",
+    "Discount": "Скидка",
+    "TotalPayable": "К оплате",
+    "CounterpartyBalance": "Сальдо контрагента",
+    "Info": "Информация",
+    "PostedAt": "Проведён",
+    "PostDocument": "Провести документ?",
+    "PostDocumentConfirm": "После проведения документ нельзя редактировать. Продолжить?",
+    "UnpostDocument": "Отменить проведение?",
+    "UnpostDocumentConfirm": "Складские движения будут отменены. Продолжить?",
+    "ErrorDeletingRow": "Ошибка удаления строки",
+    "ErrorDeletingParticipant": "Ошибка удаления участника",
+
+    "Requisites": "Реквизиты",
+    "SourceWarehouse": "Склад-источник",
+    "DestinationWarehouse": "Склад-получатель",
+    "Balance": "сальдо",
+    "PriceType": "Тип цены",
+    "NotSet": "— не задан —",
+    "DiscountPercent": "Скидка %",
+    "Optional": "Необязательно",
+    "SelectCounterparty": "— выберите контрагента —",
+
+    "Document": "Документ",
+    "NewDocument": "Новый документ",
+    "PostedBadge": "🟢 Проведён",
+    "DraftBadge": "🟡 Черновик",
+
+    "Participants": "Участники",
+    "NoParticipants": "Нет участников",
+    "SelectEmployee": "— сотрудник —",
+
+    "Counterparty": "Контрагенты",
+
+    "SelectBranchAndWarehouse": "Выберите филиал и склад в правой панели для добавления товаров",
+    "EnterInPrice": "Enter в цене → новая строка",
+    "Unit": "Ед.",
+    "Price": "Цена",
+    "NoRows": "Нет строк",
+    "BundleComponents": "Комплектующие (суммарно)",
+    "BundleQuantityTooltip": "Суммарное кол-во (можно изменить вручную)",
+    "RemoveBundle": "Удалить комплектующую",
+
+    "Clear": "Очистить",
+    "SearchNavigationHelp": "↑↓ навигация · Enter выбрать · Esc закрыть",
+    "NotFound": "Ничего не найдено",
+    "Found": "Найдено: {{count}}",
+    "Transaction": "Проводки",
+
+    "IncomingInvoice": "Приходная накладная",
+    "OutgoingInvoice": "Расходная накладная",
+
+    "in": "Приходная накладная",
+    "out": "Расходная накладная",
+    "move": "Перемещение",
+    "rin": "Возврат от покупателя",
+    "rout": "Возврат поставщику",
+
+    "ScopeAdded": "Доступ добавлен",
+    "ScopeRemoved": "Доступ удалён",
+    "Access": "Доступ",
+    "ScopeHint": "Если у пользователя нет записей — он видит все данные (директор). Добавьте записи чтобы ограничить доступ к конкретным складам/филиалам.",
+    "CurrentAccess": "Текущий доступ",
+    "GlobalAccess": "Глобальный доступ — видит всё",
+    "AddAccess": "Добавить доступ",
+    "NotSelected": "— не выбрано —",
+    "Adding": "Добавление...",
+    "SelectBranchOrWarehouse": "Выберите филиал или склад",
+
+    "transactionline": "Строка операции",
+    "closedperiod": "Закрытый период",
+    "warehousestock": "Остаток на складе",
+    "stockmovement": "Движение склада",
+    "productcategory": "Категория товара",
+    "brand": "Бренд",
+    "tag": "Тег",
+    "unit": "Единица измерения",
+    "productimage": "Изображение товара",
+    "pricetype": "Тип цены",
+    "productprice": "Цена товара",
+    "position": "Должность",
+    "employee": "Сотрудник",
+    "auditlog": "Журнал аудита",
+    "documentparticipant": "Участник документа",
+    "document": "Документ",
+    "documentitem": "Строка документа",
+    "userscope": "Область доступа пользователя",
+    "productbundle": "Комплект товара",
+    "volumediscount": "Скидка за количество",
+    "NoPermissionToModify": "Нет прав на изменение"
+
+ 
 
 
 
