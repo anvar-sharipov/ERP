@@ -9,7 +9,7 @@ from users.views import SuperuserTokenObtainView
 
 
 urlpatterns = [
-    path('admin/', admin.site.urls), # Доступ к управлению компаниями (тенантами)
+    path('anvar-secret-admin-panel/', admin.site.urls), # Доступ к управлению компаниями (тенантами)
     path('api/companies/', include('companies.urls')),
     path('api/users/', include('users.urls')),
     
@@ -29,6 +29,6 @@ urlpatterns = [
     
     
     path('api/companies/register/', RegisterCompanyView.as_view(), name='register-company'),
-    path('api/companies/list/', CompanyListView.as_view(), name='company-list'),
+    # path('api/companies/list/', CompanyListView.as_view(), name='company-list'),
     
 ]

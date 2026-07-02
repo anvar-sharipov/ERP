@@ -13,6 +13,10 @@ import { useTranslation } from "react-i18next";
 import { focusManager } from "../../core/utils/focusManager";
 import { playAsideSound } from "../../core/utils/sound";
 
+import { useQuery } from "@tanstack/react-query";
+import { branchApi } from "../../features/accounting/services/branchApi";
+import { useDateStore } from "../../core/store/dateStore";
+
 const fullWidthPages: string[] = [];
 
 export const AppLayout: React.FC = () => {
@@ -22,6 +26,16 @@ export const AppLayout: React.FC = () => {
   const { user: currentUser } = useUser();
   const location = useLocation();
   const { t } = useTranslation();
+  const { workBranch } = useDateStore();
+
+  const { data: branches = [] } = useQuery({
+    queryKey: ["branches"],
+    queryFn: branchApi.getBranches,
+    staleTime: 60_000,
+    enabled: isSubdomain,
+  });
+
+  const activeBranch = workBranch?.id ? (branches as any[]).find((b) => b.id === workBranch.id) : null;
 
   // console.log("currentUser", currentUser);
   // const navItemsRef = useRef<(HTMLAnchorElement | null)[]>([]);
@@ -138,7 +152,23 @@ export const AppLayout: React.FC = () => {
           >
             {/* Шапка для печати */}
             <div className="hidden print:flex print:items-center print:justify-between print:mb-4 print:pb-2 print:border-b print:border-gray-300">
-              <CompanyHeaderInfo logoUrl={currentCompany?.logo ?? currentCompany?.logo2} name={currentCompany?.name} />
+              {/* <CompanyHeaderInfo logoUrl={currentCompany?.logo ?? currentCompany?.logo2} name={currentCompany?.name} /> */}
+              <CompanyHeaderInfo
+                logoUrl={currentCompany?.logo ?? currentCompany?.logo2}
+                name={currentCompany?.name}
+                branch={
+                  activeBranch
+                    ? {
+                        name: activeBranch.name,
+                        logo: activeBranch.logo,
+                        address: activeBranch.address,
+                        phone: activeBranch.phone,
+                        email: activeBranch.email,
+                        manager_name: activeBranch.manager_name,
+                      }
+                    : null
+                }
+              />
               <div className="text-right text-xs text-gray-500">
                 <div>
                   {t("Printed")}: {currentUser?.full_name}

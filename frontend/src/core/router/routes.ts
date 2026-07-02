@@ -52,6 +52,9 @@ export const ROUTES = {
     DOCUMENTS_EDIT: '/documents/:id/edit',
 
     CHAT: '/chat',
+    EXCHANGE_RATES: '/exchange-rates', 
+    EXCHANGE_RATES_RATES: '/exchange-rates/rates',
+    EXCHANGE_RATES_CURRENCIES: '/exchange-rates/currencies',
 
   },
 

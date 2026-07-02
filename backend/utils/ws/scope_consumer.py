@@ -1,3 +1,4 @@
+# backend/utils/ws/scope_consumer.py
 import json
 from channels.generic.websocket import AsyncWebsocketConsumer
 

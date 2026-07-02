@@ -272,7 +272,8 @@
 
     "AllBrands": "Ähli brendler",
 
-    "ShowingResults": "Showing {{from}}–{{to}} of {{total}}",
+    "ShowingResults": "{{total}} sany netijeden {{from}}–{{to}} görkezilýär",
+    
 
     "ExcelCurrentPage": "Häzirki sahypa",
     "ExcelAllData": "Ähli maglumatlar",
@@ -570,7 +571,64 @@
     "userscope": "Ulanyjynyň giriş meýdany",
     "productbundle": "Haryt komplekti",
     "volumediscount": "Mukdar üçin arzanladyş",
-    "NoPermissionToModify": "Üýtgetmek hukugy ýok"
+    "NoPermissionToModify": "Üýtgetmek hukugy ýok",
+
+    "BranchRequired": "Filial hökmany",
+    "SelectBranch": "Filialy saýlaň",
+
+    "PlatformAdministratorContacts": "Platforma dolandyryjysynyň aragatnaşyk maglumatlary",
+    "PlatformAdministratorContactsDescription": "Tenant gulplama ekranynda we goldaw sahypasynda görkezilýär.",
+    "ChangePhoto": "Suraty üýtget",
+    "PhotoRequirements": "JPG, PNG 5 MB-a çenli",
+    "FullNamePlaceholder": "Ivan Iwanow",
+    "Phone2": "Telefon 2",
+    "Telegram": "Telegram",
+    "AddressPlaceholder": "Aşgabat ş., ... köçesi",
+    "ShowContactsOnLockScreen": "Aragatnaşyk maglumatlaryny gulplama ekranynda görkez",
+
+    "AccessRestricted": "Giriş çäklendirildi",
+    "LicenseExpiredMessage": "Lisenziýanyň möhleti gutardy. Girişi uzaltmak üçin ulgam dolandyryjysy bilen habarlaşyň.",
+    "AdministratorContacts": "Dolandyryjynyň aragatnaşyk maglumatlary",
+    "RefreshPage": "Sahypany täzele",
+
+    "AuditLog": "Audit žurnaly",
+    
+    "Messages": "Habarlar",
+    "NewConversation": "Täze söhbetdeşlik",
+    "SelectConversationOrCreateNew": "Söhbetdeşligi saýlaň ýa-da täzesini dörediň",
+
+    "NoConversations": "Söhbetdeşlik ýok",
+    "You": "Siz",
+    "NoMessages": "Habar ýok",
+
+
+    "OnlineStatus": "onlaýn",
+    "typing": "ýazýar...",
+    "typing_plural": "ýazýarlar...",
+
+    "ChatPlaceholder": "Habar ýazmak... (Enter — ibermek)",
+
+
+    
+
+    "Direct": "💬 Şahsy",
+    "GroupName": "Toparyň ady",
+    "SelectUser": "Ulanyjyny saýlaň",
+    "AddParticipants": "Gatnaşyjylary goş",
+    "NoUsersFound": "Ulanyjy tapylmady",
+    "Selected": "Saýlandy: {count} gatnaşyjy",
+    "Creating": "Döredilýär...",
+
+    "SelectChat": "Söhbetdeşlik saýlaň ýa-da täzesini dörediň",
+
+    "Chat": "Çat",
+
+    "TypingSingle": "ýazýar...",
+    "TypingMultiple": "ýazýarlar...",
+    "Online": "onlaýn",
+    "Offline": "oflaýn",
+    "NoMessagesYet": "Habar ýok. Ilkinji bolup ýazyň!"
+
 
 
     

@@ -30,6 +30,7 @@ import { ThemeToggle } from "../ui/ThemeToggle";
 import { useChat } from "../../features/chat/context/ChatContext";
 
 import { UserProfileBlock } from "../ui/UserProfileBlock";
+import { ExchangeRateWidget } from "../ui/ExchangeRateWidget";
 interface SidebarLeftProps {
   isOpen: boolean;
   setIsOpen: (open: boolean) => void;
@@ -252,6 +253,7 @@ const SidebarLeft: React.FC<SidebarLeftProps> = ({ isOpen }) => {
             <div className="flex items-center gap-2 px-1">
               <LanguageSwitcher />
               <ThemeToggle />
+              <ExchangeRateWidget />
             </div>
           </>
         </div>

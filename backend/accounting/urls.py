@@ -16,6 +16,7 @@ from .views.audit_views import AuditLogViewSet
 from .views.employee_views import PositionViewSet, EmployeeViewSet
 from .views.transaction_views import JournalEntryViewSet, StockMovementViewSet, ClosedPeriodViewSet
 from .views.document_views import DocumentViewSet, DocumentItemViewSet, DocumentParticipantViewSet
+from .views.currency_views import CurrencyViewSet, ExchangeRateViewSet
 
 
 
@@ -64,6 +65,10 @@ router.register(r'subconto-types', SubcontoTypeViewSet, basename='subconto-type'
 router.register(r'positions', PositionViewSet, basename='position')
 router.register(r'employees', EmployeeViewSet, basename='employee')
 
+# Currency
+router.register(r'currencies', CurrencyViewSet, basename='currency')
+router.register(r'exchange-rates', ExchangeRateViewSet, basename='exchange-rate')
+
 # Audit
 router.register(r'audit-logs', AuditLogViewSet, basename='audit-log')
 
@@ -85,29 +90,10 @@ documents_router.register(r'participants', DocumentParticipantViewSet, basename=
 
 
 
- 
-
 # Вложенный роутер: /products/{product_pk}/bundles/
 products_router = nested_routers.NestedDefaultRouter(router, r"products", lookup="product")
 products_router.register(r"bundles", ProductBundleViewSet, basename="product-bundles")
 products_router.register(r'volume-discounts', VolumeDiscountViewSet, basename='product-volume-discounts')
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 

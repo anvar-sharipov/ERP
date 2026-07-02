@@ -1,7 +1,8 @@
 // frontend/src/features/accounting/pages/Products/ProductsListPage.tsx
 import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { productApi, productCategoryApi } from "../../services/productApi";
+import { productApi, productCategoryApi, priceTypeApi, productPriceApi } from "../../services/productApi";
+import { useDateStore } from "../../../../core/store/dateStore";
 import { useNotify } from "../../../../core/context/NotificationContext";
 import { usePageAccess } from "../../../../core/hooks/usePageAccess";
 import { useSidebar } from "../../../../core/context/SidebarRightContext";
@@ -37,8 +38,20 @@ const ProductsListPage = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [categoryFilter, setCategoryFilter] = useState<number | null>(null);
   const [activeFilter, setActiveFilter] = useState<"all" | "active" | "inactive">("all");
+  const { workBranch, workWarehouse } = useDateStore();
 
   // ── запросы ─────────────────────────────────────────────────────────────────
+
+  const { data: priceTypes = [] } = useQuery({
+    queryKey: ["price-types"],
+    queryFn: priceTypeApi.getAll,
+  });
+
+  const { data: pricesMap = {} } = useQuery({
+    queryKey: ["products-prices-map", workWarehouse?.id, workBranch?.id],
+    queryFn: () => productPriceApi.getPricesMap(workWarehouse?.id ? { warehouse: workWarehouse.id } : workBranch?.id ? { branch: workBranch.id } : {}),
+    enabled: !!(workWarehouse?.id || workBranch?.id),
+  });
 
   const {
     data: products = [],
@@ -131,6 +144,18 @@ const ProductsListPage = () => {
     },
   });
 
+  const priceColumns: Column<any>[] = (priceTypes as any[]).map((pt) => ({
+    header: pt.name,
+    sortable: true,
+    excelWidth: 12,
+    sortValue: (item: any) => pricesMap[item.id]?.[pt.id] ?? -1,
+    render: (item: any) => {
+      const price = pricesMap[item.id]?.[pt.id];
+      return <span className="font-medium">{price !== undefined ? Number(price).toLocaleString() : <span className="text-gray-300">—</span>}</span>;
+    },
+    excelValue: (item: any) => pricesMap[item.id]?.[pt.id] ?? "",
+  }));
+
   const columns: Column<any>[] = [
     { header: t("ID"), accessor: "id", sortable: true, excelWidth: 5 },
     { header: t("Name"), accessor: "name", sortable: true, excelWidth: 30 },
@@ -159,22 +184,29 @@ const ProductsListPage = () => {
       render: (item) => <span className="text-sm">{item.unit_detail?.short_name ?? "—"}</span>,
       excelValue: (item) => item.unit_detail?.short_name ?? "—",
     },
+    ...priceColumns,
     {
-      header: "Цена розн.",
+      header: "Цена Приход.",
       sortable: true,
-      excelWidth: 12,
-      sortValue: (item) => Number(item.price_retail),
-      render: (item) => <span className="font-medium">{Number(item.price_retail).toLocaleString()}</span>,
-      excelValue: (item) => item.price_retail,
+      accessor: "cost_price",
+      excelWidth: 10,
     },
-    {
-      header: "Цена опт",
-      sortable: true,
-      excelWidth: 12,
-      sortValue: (item) => Number(item.price_wholesale),
-      render: (item) => <span>{Number(item.price_wholesale).toLocaleString()}</span>,
-      excelValue: (item) => item.price_wholesale,
-    },
+    // {
+    //   header: "Цена розн.",
+    //   sortable: true,
+    //   excelWidth: 12,
+    //   sortValue: (item) => Number(item.price_retail),
+    //   render: (item) => <span className="font-medium">{Number(item.price_retail).toLocaleString()}</span>,
+    //   excelValue: (item) => item.price_retail,
+    // },
+    // {
+    //   header: "Цена опт",
+    //   sortable: true,
+    //   excelWidth: 12,
+    //   sortValue: (item) => Number(item.price_wholesale),
+    //   render: (item) => <span>{Number(item.price_wholesale).toLocaleString()}</span>,
+    //   excelValue: (item) => item.price_wholesale,
+    // },
     {
       header: t("Status"),
       accessor: "is_active",
@@ -222,6 +254,11 @@ const ProductsListPage = () => {
 
   return (
     <RBACGuard isLoading={isLoading} error={error} canView={canView} forbiddenText={t("ForbiddenText")}>
+      {!workWarehouse?.id && !workBranch?.id && (
+        <div className="mb-2 px-3 py-2 text-sm bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 rounded-lg">
+          Выберите филиал или склад в правой панели, чтобы увидеть цены товаров.
+        </div>
+      )}
       <Table
         columns={columns}
         data={filtered}

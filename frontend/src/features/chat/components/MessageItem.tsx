@@ -53,7 +53,7 @@ export const MessageItem: React.FC<Props> = ({ message, onVisible }) => {
   const isRead = message.reads.length > 0;
   const elRef = useRef<HTMLDivElement>(null);
   // Временно для отладки
-  console.log("photo_thumbnail value:", JSON.stringify(message.sender.photo_thumbnail));
+  // console.log("photo_thumbnail value:", JSON.stringify(message.sender.photo_thumbnail));
 
   //   console.log("message sender:", message.sender);
 

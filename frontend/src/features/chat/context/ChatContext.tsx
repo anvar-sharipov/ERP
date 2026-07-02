@@ -3,6 +3,7 @@ import React, { createContext, useContext, useState, useCallback, useRef, type R
 import { useChatNotificationSocket } from "../hooks/useChatNotificationSocket";
 import { ChatToast, type ChatToastItem } from "../components/ChatToast";
 import { playInfoSound } from "../../../core/utils/sound";
+import { useTranslation } from "react-i18next";
 
 interface ChatContextType {
   unreadCount: number;
@@ -19,6 +20,7 @@ export const ChatProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [unreadCount, setUnreadCount] = useState(0);
   const [activeConvId, setActiveConvId] = useState<number | null>(null);
   const [toasts, setToasts] = useState<ChatToastItem[]>([]); // ✅
+  const {t} = useTranslation();
 
   const [isMiniChatOpen, setIsMiniChatOpen] = useState(false);
   const toggleMiniChat = useCallback(() => setIsMiniChatOpen((v) => !v), []);
@@ -31,11 +33,11 @@ export const ChatProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, []);
 
   const handleNewMessage = useCallback((msg: any) => {
-    if (activeConvIdRef.current === msg.conversation_id) return;
+    // if (activeConvIdRef.current === msg.conversation_id) return;
 
-    const senderName = `${msg.sender_first_name ?? ""} ${msg.sender_last_name ?? ""}`.trim() || msg.sender_username || "Новое сообщение";
+    const senderName = `${msg.sender_first_name ?? ""} ${msg.sender_last_name ?? ""}`.trim() || msg.sender_username || t("NewMessage");
 
-    console.log("msg", msg);
+    // console.log("msg", msg);
 
     // ✅ Добавляем тост
     const id = Date.now();

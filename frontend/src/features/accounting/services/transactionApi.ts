@@ -162,9 +162,9 @@ open: async (date: string, options?: { branch?: number | null; warehouse?: numbe
       ...(options?.branch    ? { branch:    options.branch }    : {}),
       ...(options?.warehouse ? { warehouse: options.warehouse } : {}),
     }
-    console.log('open params:', params)  // ← что уходит
+    // console.log('open params:', params)  // ← что уходит
     const res = await api.get<ClosedPeriod[]>(C, { params })
-    console.log('open response:', res.data)
+    // console.log('open response:', res.data)
     const period = res.data[0] ?? (res.data as any).results?.[0]
     if (period) await api.delete(`${C}${period.id}/`)
   },

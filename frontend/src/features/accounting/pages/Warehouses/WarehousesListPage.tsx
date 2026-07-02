@@ -220,13 +220,17 @@ const WarehousesListPage = () => {
           <Input label={t("Name")} value={form.name} onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))} />
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t("Branch")}</label>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              {t("Branch")} <span className="text-red-500">*</span>
+            </label>
             <select
               value={form.branch ?? ""}
               onChange={(e) => setForm((p) => ({ ...p, branch: e.target.value ? Number(e.target.value) : null }))}
               className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
             >
-              <option value="">{t("NoBranch")}</option>
+              <option value="" disabled>
+                {t("SelectBranch")}
+              </option>
               {(branches as any[]).map((b) => (
                 <option key={b.id} value={b.id}>
                   {b.name}
@@ -259,7 +263,18 @@ const WarehousesListPage = () => {
 
           <div className="flex justify-end gap-2 pt-2">
             <Button text={t("Cancel")} onClick={() => setFormOpen(false)} />
-            <Button text={saveMutation.isPending ? t("Saving") : editing ? t("Save") : t("Create")} onClick={() => saveMutation.mutate(form)} variant="danger" />
+            {/* <Button text={saveMutation.isPending ? t("Saving") : editing ? t("Save") : t("Create")} onClick={() => saveMutation.mutate(form)} variant="danger" /> */}
+            <Button
+              text={saveMutation.isPending ? t("Saving") : editing ? t("Save") : t("Create")}
+              onClick={() => {
+                if (!form.branch) {
+                  notify("error", t("BranchRequired"));
+                  return;
+                }
+                saveMutation.mutate(form);
+              }}
+              variant="danger"
+            />
           </div>
         </div>
       </Modal>

@@ -21,6 +21,7 @@ from users.scoping import apply_scope
 from decimal import Decimal
 from users.scoping import get_user_scope
 from django.core.exceptions import ValidationError
+from ..models import AuditLog
 
 
 class JournalEntryViewSet(AuditMixin, viewsets.ModelViewSet):
@@ -257,6 +258,8 @@ class ClosedPeriodViewSet(AuditMixin, viewsets.ModelViewSet):
                 raise ValidationError("Нет доступа к этому складу.")
         
         serializer.save(closed_by=self.request.user)
+        instance = serializer.save(closed_by=self.request.user)
+        self._write_log(self.request, instance, AuditLog.Action.CREATE)
  
     # GET /closed-periods/check/?date=2026-01-01&branch=1&warehouse=2
     @action(detail=False, methods=['get'], url_path='check')

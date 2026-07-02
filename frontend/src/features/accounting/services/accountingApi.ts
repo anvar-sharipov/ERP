@@ -72,7 +72,44 @@ export const accountApi = {
     const res = await api.get('/accounting/audit-logs/', { params })
     return res.data
   },
+
+
+  getCurrencies: async () => {
+    const res = await api.get('/accounting/currencies/');
+    return res.data;
+  },
+
+  getExchangeRates: async (params?: Record<string, any>) => {
+    const res = await api.get('/accounting/exchange-rates/', { params });
+    return res.data;
+  },
+
+  addExchangeRate: async (data: { currency: number; rate: string; date: string }) => {
+    const res = await api.post('/accounting/exchange-rates/', data);
+    return res.data;
+  },
+
+  getLatestRates: async () => {
+    const res = await api.get('/accounting/exchange-rates/', {
+      params: { latest: 'true' }
+    });
+    // если pagination включена — res.data.results, иначе res.data
+    return Array.isArray(res.data) ? res.data : (res.data.results ?? []);
+  },
+
+  saveCurrency: async (id: number | null, data: any) => {
+    if (id) return api.put(`/accounting/currencies/${id}/`, data);
+    return api.post("/accounting/currencies/", data);
+  },
+  deleteCurrency: async (id: number) => {
+    return api.delete(`/accounting/currencies/${id}/`);
+  },
+
 };
+
+
+
+
 
 
 

@@ -7,8 +7,10 @@ export const AdminSidebarLeft: React.FC = () => {
     { name: "Company list", path: "/admin-panel", icon: "📊" },
     { name: "Create company", path: "/create-company", icon: "📊" },
     { name: "Компании (Тенанты)", path: "/admin/companies", icon: "🏢" },
-    { name: "Тарифы и Лицензии", path: "/admin/billing", icon: "💳" },
-    { name: "Логи и Мониторинг", path: "/admin/logs", icon: "🛠️" },
+    { name: "Контакты платформы", path: "/admin-panel/platform-contact", icon: "👤" },
+    // { name: "Тарифы и Лицензии", path: "/admin/billing", icon: "💳" },
+    // { name: "Логи и Мониторинг", path: "/admin/logs", icon: "🛠️" },
+
   ];
 
   return (

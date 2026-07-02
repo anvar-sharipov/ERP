@@ -72,15 +72,15 @@ export const priceTypeApi = {
   delete: (id: number) => api.delete(`/accounting/price-types/${id}/`),
 };
 
-export const productPriceApi = {
-  getByProduct: async (productId: number) =>
-    (await api.get(`/accounting/product-prices/?product=${productId}`)).data,
-  save: (id: number | null, data: any) =>
-    id
-      ? api.put(`/accounting/product-prices/${id}/`, data)
-      : api.post("/accounting/product-prices/", data),
-  delete: (id: number) => api.delete(`/accounting/product-prices/${id}/`),
-};
+// export const productPriceApi = {
+//   getByProduct: async (productId: number) =>
+//     (await api.get(`/accounting/product-prices/?product=${productId}`)).data,
+//   save: (id: number | null, data: any) =>
+//     id
+//       ? api.put(`/accounting/product-prices/${id}/`, data)
+//       : api.post("/accounting/product-prices/", data),
+//   delete: (id: number) => api.delete(`/accounting/product-prices/${id}/`),
+// };
 
 export const counterpartyApi = {
   getAll: async (type?: "client" | "supplier") => {
@@ -144,4 +144,21 @@ export const volumeDiscountApi = {
 
   delete: (productId: number, id: number) =>
     api.delete(`/accounting/products/${productId}/volume-discounts/${id}/`),
+};
+
+
+export const productPriceApi = {
+  getByProduct: async (productId: number) =>
+    (await api.get(`/accounting/product-prices/?product=${productId}`)).data,
+  getPricesMap: async (params: { warehouse?: number; branch?: number }) => {
+    const qs = new URLSearchParams();
+    if (params.warehouse) qs.append("warehouse", String(params.warehouse));
+    else if (params.branch) qs.append("branch", String(params.branch));
+    return (await api.get(`/accounting/product-prices/prices-map/?${qs}`)).data;
+  },
+  save: (id: number | null, data: any) =>
+    id
+      ? api.put(`/accounting/product-prices/${id}/`, data)
+      : api.post("/accounting/product-prices/", data),
+  delete: (id: number) => api.delete(`/accounting/product-prices/${id}/`),
 };

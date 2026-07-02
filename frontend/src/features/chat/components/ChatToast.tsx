@@ -28,17 +28,15 @@ const getInitials = (name: string) =>
 
 export const ChatToast: React.FC<Props> = ({ toasts, onClose }) => {
   return (
-    <div className="fixed top-5 right-5 z-[110] flex flex-col gap-2 print:hidden">
+    <div className="fixed top-5 right-5 md:top-auto md:right-auto md:bottom-5 md:left-5 z-[110] flex flex-col gap-2 print:hidden">
       <AnimatePresence>
         {toasts.map((t) => {
-          console.log("t", t);
-
           return (
             <motion.div
               key={t.id}
-              initial={{ opacity: 0, y: -20, scale: 0.9 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: -20, scale: 0.9 }}
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.9 }}
               transition={{ type: "spring", stiffness: 500, damping: 30 }}
               className="relative w-80 rounded-2xl overflow-hidden shadow-2xl"
               style={{ background: "linear-gradient(135deg, #1e1b4b 0%, #312e81 50%, #1e1b4b 100%)" }}
@@ -51,20 +49,12 @@ export const ChatToast: React.FC<Props> = ({ toasts, onClose }) => {
                 <div className="relative shrink-0">
                   <div className="w-11 h-11 rounded-full overflow-hidden ring-2 ring-indigo-400/60">
                     {(() => {
-                    //   const other = conv.participants.find((p: any) => p.id !== user?.id);
                       return isValidMediaUrl(t?.photo) ? (
                         <img src={t.photo!} className="w-full h-full object-cover" />
                       ) : (
                         <div className={`w-full h-full flex items-center justify-center text-sm font-bold bg-slate-600`}>{getInitials(t.senderName)}</div>
                       );
                     })()}
-                    {/* {t.photo ? (
-                      <img src={t.photo} alt={t.senderName} className="w-full h-full object-cover" />
-                    ) : (
-                      <div className="w-full h-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white text-sm font-bold">
-                        {t.senderName.slice(0, 2).toUpperCase()}
-                      </div>
-                    )} */}
                   </div>
                   {/* Иконка сообщения */}
                   <div className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full bg-indigo-500 flex items-center justify-center ring-2 ring-indigo-900">
@@ -102,3 +92,108 @@ export const ChatToast: React.FC<Props> = ({ toasts, onClose }) => {
 };
 
 export type { ChatToastItem };
+
+// // frontend/src/features/chat/components/ChatToast.tsx
+// import { motion, AnimatePresence } from "framer-motion";
+// import { MessageSquare, X } from "lucide-react";
+// import { isValidMediaUrl } from "../../../core/utils/media";
+
+// interface ChatToastItem {
+//   id: number;
+//   senderName: string;
+//   convName?: string;
+//   text: string;
+//   username: string;
+//   photo?: string | null;
+// }
+
+// interface Props {
+//   toasts: ChatToastItem[];
+//   onClose: (id: number) => void;
+// }
+
+// const getInitials = (name: string) =>
+//   name
+//     .trim()
+//     .split(/\s+/)
+//     .map((n) => n[0])
+//     .join("")
+//     .toUpperCase()
+//     .slice(0, 2);
+
+// export const ChatToast: React.FC<Props> = ({ toasts, onClose }) => {
+//   return (
+//     <div className="fixed top-5 right-5 z-[110] flex flex-col gap-2 print:hidden">
+//       <AnimatePresence>
+//         {toasts.map((t) => {
+//           console.log("t", t);
+
+//           return (
+//             <motion.div
+//               key={t.id}
+//               initial={{ opacity: 0, y: -20, scale: 0.9 }}
+//               animate={{ opacity: 1, y: 0, scale: 1 }}
+//               exit={{ opacity: 0, y: -20, scale: 0.9 }}
+//               transition={{ type: "spring", stiffness: 500, damping: 30 }}
+//               className="relative w-80 rounded-2xl overflow-hidden shadow-2xl"
+//               style={{ background: "linear-gradient(135deg, #1e1b4b 0%, #312e81 50%, #1e1b4b 100%)" }}
+//             >
+//               {/* Верхняя полоска */}
+//               <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-transparent via-indigo-400 to-transparent" />
+
+//               <div className="flex items-center gap-3 px-4 py-3">
+//                 {/* Аватар */}
+//                 <div className="relative shrink-0">
+//                   <div className="w-11 h-11 rounded-full overflow-hidden ring-2 ring-indigo-400/60">
+//                     {(() => {
+//                     //   const other = conv.participants.find((p: any) => p.id !== user?.id);
+//                       return isValidMediaUrl(t?.photo) ? (
+//                         <img src={t.photo!} className="w-full h-full object-cover" />
+//                       ) : (
+//                         <div className={`w-full h-full flex items-center justify-center text-sm font-bold bg-slate-600`}>{getInitials(t.senderName)}</div>
+//                       );
+//                     })()}
+//                     {/* {t.photo ? (
+//                       <img src={t.photo} alt={t.senderName} className="w-full h-full object-cover" />
+//                     ) : (
+//                       <div className="w-full h-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white text-sm font-bold">
+//                         {t.senderName.slice(0, 2).toUpperCase()}
+//                       </div>
+//                     )} */}
+//                   </div>
+//                   {/* Иконка сообщения */}
+//                   <div className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full bg-indigo-500 flex items-center justify-center ring-2 ring-indigo-900">
+//                     <MessageSquare className="w-2.5 h-2.5 text-white" />
+//                   </div>
+//                 </div>
+
+//                 {/* Текст */}
+//                 <div className="flex-1 min-w-0">
+//                   {t.convName && <div className="text-indigo-300 text-[10px] font-medium truncate mb-0.5 uppercase tracking-wider">{t.username}</div>}
+//                   <div className="text-white text-sm font-semibold truncate leading-tight">{t.senderName}</div>
+//                   <div className="text-indigo-200/70 text-xs truncate mt-0.5">{t.text}</div>
+//                 </div>
+
+//                 {/* Закрыть */}
+//                 <button onClick={() => onClose(t.id)} className="shrink-0 w-6 h-6 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors">
+//                   <X className="w-3 h-3 text-white/70" />
+//                 </button>
+//               </div>
+
+//               {/* Прогресс бар автозакрытия */}
+//               <motion.div
+//                 initial={{ scaleX: 1 }}
+//                 animate={{ scaleX: 0 }}
+//                 transition={{ duration: 5, ease: "linear" }}
+//                 style={{ transformOrigin: "left" }}
+//                 className="h-0.5 bg-gradient-to-r from-indigo-400 to-purple-400"
+//               />
+//             </motion.div>
+//           );
+//         })}
+//       </AnimatePresence>
+//     </div>
+//   );
+// };
+
+// export type { ChatToastItem };

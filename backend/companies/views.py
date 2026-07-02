@@ -3,22 +3,30 @@ from django.shortcuts import render
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.generics import ListAPIView
-from rest_framework.permissions import IsAdminUser  # Пускает только is_staff/is_superuser
+from rest_framework.permissions import IsAdminUser, AllowAny  # Пускает только is_staff/is_superuser
 from rest_framework import status
-from .models import Company, Domain
+from .models import Company, Domain, PlatformContact
 from users.models import User, Role, Permission, RolePermission, UserRole
-from .serializers.CompanySerializer import CompanySerializer
+from .serializers.CompanySerializer import CompanySerializer, CompanyUpdateSerializer
 from icecream import ic
 
-from django.db import connection
-from users.models import User
+from rest_framework.parsers import MultiPartParser, FormParser
+
+
+from .serializers.PlatformContactSerializer import PlatformContactSerializer
+
+
+
+
 
 from django.conf import settings
 import os
 
 
 from django.core.management import call_command
-from django.db import connection
+
+from rest_framework.generics import RetrieveUpdateAPIView
+
 
 
         
@@ -121,4 +129,54 @@ class CompanyListView(ListAPIView):
     pagination_class = None
     queryset = Company.objects.all()
     serializer_class = CompanySerializer
-    
+ 
+ 
+
+
+
+class CompanyUpdateView(RetrieveUpdateAPIView):
+    """
+    GET  /companies/<id>/  — детали компании
+    PATCH/PUT /companies/<id>/  — обновление name / is_active
+    """
+    pagination_class = None
+    permission_classes = [IsAdminUser]
+    queryset = Company.objects.all()
+    http_method_names = ["get", "patch", "put"]
+
+    def get_serializer_class(self):
+        if self.request.method in ("PATCH", "PUT"):
+            return CompanyUpdateSerializer
+        return CompanySerializer 
+
+
+
+
+class PlatformContactView(APIView):
+    """
+    GET  — публичный (для TenantBlockedScreen и заблокированных тенантов)
+    PUT  — только superuser (редактирование через global-admin UI)
+    """
+    pagination_class = None
+    parser_classes = [MultiPartParser, FormParser]
+
+    def get_permissions(self):
+        if self.request.method == 'GET':
+            return [AllowAny()]
+        return [IsAdminUser()]
+
+    def get(self, request):
+        contact = PlatformContact.objects.filter(is_active=True).first()
+        if not contact:
+            return Response({})
+        return Response(PlatformContactSerializer(contact).data)
+
+    def put(self, request):
+        contact = PlatformContact.objects.first()
+        if not contact:
+            contact = PlatformContact()
+        serializer = PlatformContactSerializer(contact, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data)
+        return Response(serializer.errors, status=400)

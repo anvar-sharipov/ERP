@@ -29,7 +29,7 @@ export default function JournalEntryForm({ initial, onSuccess, onCancel }: Props
   const notify = useNotify();
   const isEdit = !!initial;
 
-  console.log("initialLL", initial);
+  // console.log("initialLL", initial);
 
   const workDate = useDateStore((s) => s.workDate);
   const { isClosed } = useClosedPeriod();

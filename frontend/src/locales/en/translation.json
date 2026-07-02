@@ -3,5 +3,5 @@
     "username": "Username",
     "password": "Password",
 
-    "ShowingResults": "{{total}} ýazgydan {{from}}–{{to}} görkezilýär"
+    "ShowingResults": "Showing {{from}}–{{to}} of {{total}}"
 }

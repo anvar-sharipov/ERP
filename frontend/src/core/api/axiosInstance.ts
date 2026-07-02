@@ -39,6 +39,15 @@ api.interceptors.response.use(
   async (error) => {
     const originalRequest = error.config;
 
+    // Лицензия тенанта истекла / компания заблокирована
+    if (error.response?.status === 403 && error.response?.data?.code === "tenant_inactive") {
+      error._handled = true;
+      window.dispatchEvent(new CustomEvent("tenant:inactive", {
+        detail: { message: error.response.data.detail }
+      }));
+      return Promise.reject(error);
+    }
+
     // Глобальный обработчик 403 RBAC forbidden
     if (error.response?.status === 403) {
       // ПРОВЕРКА МЕТОДА: уведомляем, только если это НЕ GET запрос

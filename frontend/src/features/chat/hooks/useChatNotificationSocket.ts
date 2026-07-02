@@ -2,6 +2,9 @@
 import { useEffect, useRef } from "react";
 import { getTenantWsBaseUrl } from "../../../core/utils/tenant";
 
+
+import { getTenantInfo } from "../../../core/utils/tenant";
+
 interface NotificationMessage {
   type: "unread_count" | "new_message";
   count?: number;
@@ -35,6 +38,10 @@ export const useChatNotificationSocket = ({ onUnreadCount, onNewMessage }: Optio
 
       const token = localStorage.getItem("access_token");
       if (!token) return;
+
+      // ✅ В public-зоне (без поддомена тенанта) чата нет — не подключаемся
+      const { isSubdomain } = getTenantInfo();
+      if (!isSubdomain) return;
 
       const wsBase = getTenantWsBaseUrl();
       const ws = new WebSocket(`${wsBase}/ws/chat/notifications/?token=${token}`);

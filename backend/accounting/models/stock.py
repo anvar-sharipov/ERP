@@ -9,7 +9,7 @@ from django.db import models, transaction
 
 class Warehouse(models.Model):
     name = models.CharField(max_length=255)
-    branch = models.ForeignKey('Branch', null=True, blank=True, on_delete=models.SET_NULL, related_name='warehouses')
+    branch = models.ForeignKey('Branch', on_delete=models.PROTECT, related_name='warehouses')
     address = models.TextField(blank=True)
     is_active = models.BooleanField(default=True)
     is_main = models.BooleanField(default=False, verbose_name="Основной склад")

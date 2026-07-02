@@ -135,26 +135,6 @@ class TransactionLine(models.Model):
         return f"{self.get_side_display()} {self.account.code} — {self.amount}"
 
 
-# class ClosedPeriod(models.Model):
-#     """
-#     Закрытый день/период.
-#     """
-#     date = models.DateField(unique=True, verbose_name="Закрытая дата")
-#     closed_by = models.ForeignKey(
-#         'users.User', on_delete=models.SET_NULL,
-#         null=True, blank=True, related_name='closed_periods'
-#     )
-#     closed_at = models.DateTimeField(auto_now_add=True)
-#     note = models.CharField(max_length=255, blank=True)
-
-#     class Meta:
-#         ordering = ['-date']
-#         verbose_name = "Закрытый период"
-#         verbose_name_plural = "Закрытые периоды"
-
-#     def __str__(self):
-#         return f"Закрыт: {self.date}"
-
 
 class ClosedPeriod(models.Model):
     """

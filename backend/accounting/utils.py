@@ -83,3 +83,38 @@ def log_audit(request, instance, action: str, changed_data: dict = None):
         ) if request else None,
         changed_data=changed_data or {},
     )
+    
+    
+def resolve_product_price(product_id, warehouse_id, price_type_id):
+    """
+    Резолвит актуальную цену товара для склада по цепочке приоритетов:
+    warehouse -> branch (склада) -> global
+    Возвращает ProductPrice или None.
+    """
+    from .models import ProductPrice, Warehouse
+
+    warehouse = Warehouse.objects.select_related("branch").filter(pk=warehouse_id).first()
+    branch_id = warehouse.branch_id if warehouse else None
+
+    qs = ProductPrice.objects.filter(
+        product_id=product_id,
+        price_type_id=price_type_id,
+        is_active=True,
+    )
+
+    # 1. цена конкретного склада
+    price = qs.filter(warehouse_id=warehouse_id).first()
+    if price:
+        return price
+
+    # 2. цена филиала (если склад принадлежит филиалу)
+    if branch_id:
+        price = qs.filter(warehouse__isnull=True, branch_id=branch_id).first()
+        if price:
+            return price
+
+    # 3. глобальная цена
+    price = qs.filter(warehouse__isnull=True, branch__isnull=True).first()
+    return price
+    
+    

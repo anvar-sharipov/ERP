@@ -1,3 +1,4 @@
+// frontend/src/features/users/components/pages/admin/AdminPanel.tsx
 import { useEffect, useState } from "react";
 import { useSidebar } from "../../../../../core/context/SidebarRightContext";
 

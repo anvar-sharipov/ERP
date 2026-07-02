@@ -4,12 +4,17 @@ import { ThemeToggle } from "../ui/ThemeToggle";
 import { playAside2Sound } from "../../core/utils/sound";
 import { useCompany } from "../../core/context/CompanyContext";
 import { UserProfileBlock } from "../ui/UserProfileBlock";
+import { ExchangeRateWidget } from "../ui/ExchangeRateWidget";
 
 import { useChat } from "../../features/chat/context/ChatContext";
 // import { useNavigate } from "react-router-dom";
 // import { ROUTES } from "../../core/router/routes";
 // import { MessageSquare } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+
+import { useQuery } from "@tanstack/react-query";
+import { branchApi } from "../../features/accounting/services/branchApi";
+import { useDateStore } from "../../core/store/dateStore";
 
 interface HeaderProps {
   onToggleSidebar?: () => void;
@@ -73,6 +78,17 @@ const ChatButton = () => {
 const Header: React.FC<HeaderProps> = ({ onToggleSidebar, onToggleSidebarRight }) => {
   const { company: currentCompany } = useCompany();
 
+  const { workBranch } = useDateStore();
+  const { data: branches = [] } = useQuery({
+    queryKey: ["branches"],
+    queryFn: branchApi.getBranches,
+    staleTime: 60_000,
+  });
+  const activeBranch = workBranch?.id ? (branches as any[]).find((b) => b.id === workBranch.id) : null;
+
+  const displayLogo = activeBranch?.logo ?? currentCompany?.logo ?? currentCompany?.logo2;
+  const displayName = activeBranch?.name ?? currentCompany?.name;
+
   return (
     <header className="relative h-16 border-b border-slate-500 bg-slate-800 dark:bg-slate-900 px-3 md:px-6 flex items-center justify-between print:hidden">
       {/* Левая часть: гамбургер + лого */}
@@ -90,7 +106,18 @@ const Header: React.FC<HeaderProps> = ({ onToggleSidebar, onToggleSidebarRight }
           </svg>
         </button>
 
-        {currentCompany?.logo ? (
+        {displayLogo ? (
+          <img src={displayLogo} alt={displayName} className="h-8 w-8 md:h-10 md:w-10 object-contain rounded" />
+        ) : (
+          <div className="h-8 w-8 md:h-10 md:w-10 bg-slate-700 rounded flex items-center justify-center text-yellow-500 font-bold">{displayName?.charAt(0) || "H"}</div>
+        )}
+
+        <div className="flex-col hidden md:flex">
+          <span className="font-bold text-sm md:text-lg text-white leading-tight">{displayName || "Hasap.Pro"}</span>
+          {currentCompany?.name && <span className="text-[10px] text-yellow-500 uppercase tracking-wider">{activeBranch ? currentCompany.name : "Hasap.Pro"}</span>}
+        </div>
+
+        {/* {currentCompany?.logo ? (
           <img src={currentCompany.logo} alt={currentCompany.name} className="h-8 w-8 md:h-10 md:w-10 object-contain rounded" />
         ) : currentCompany?.logo2 ? (
           <img src={currentCompany.logo2} alt={currentCompany.name} className="h-8 w-8 md:h-10 md:w-10 object-contain rounded" />
@@ -101,15 +128,16 @@ const Header: React.FC<HeaderProps> = ({ onToggleSidebar, onToggleSidebarRight }
         <div className="flex-col hidden md:flex">
           <span className="font-bold text-sm md:text-lg text-white leading-tight">{currentCompany?.name || "Hasap.Pro"}</span>
           {currentCompany?.name && <span className="text-[10px] text-yellow-500 uppercase tracking-wider">Hasap.Pro</span>}
-        </div>
+        </div> */}
       </div>
 
       {/* Правая часть: только десктоп */}
       <div className="hidden lg:flex items-center gap-3">
-        <LanguageSwitcher />
-        <ThemeToggle />
         {/* ✅ Иконка чата с бейджем */}
         <ChatButton />
+        <ExchangeRateWidget />
+        <LanguageSwitcher />
+        <ThemeToggle />
         <div className="w-[1px] h-6 bg-gray-700" />
         <div className="w-[1px] h-6 bg-gray-700" />
         {/* <UserProfileBlock variant="dropdown" showName={false} /> */}

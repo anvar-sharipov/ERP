@@ -29,6 +29,8 @@
 │   │   │   ├── 0007_productbundle.py
 │   │   │   ├── 0008_employee_branch.py
 │   │   │   ├── 0009_volumediscount.py
+│   │   │   ├── 0010_alter_warehouse_branch.py
+│   │   │   ├── 0011_remove_productprice_unique_active_product_price_and_more.py
 │   │   │   └── __init__.py
 │   │   ├── mixins
 │   │   │   └── audit_mixin.py
@@ -57,7 +59,6 @@
 │   │   │   ├── product_serializers.py
 │   │   │   └── transaction_serializers.py
 │   │   ├── tests
-│   │   │   ├── __pycache__
 │   │   │   ├── base.py
 │   │   │   ├── test_audit.py
 │   │   │   ├── test_rbac_all.py
@@ -105,10 +106,12 @@
 │   │   ├── migrations
 │   │   │   ├── __pycache__
 │   │   │   ├── 0001_initial.py
+│   │   │   ├── 0002_platformcontact.py
 │   │   │   └── __init__.py
 │   │   ├── serializers
 │   │   │   ├── __pycache__
-│   │   │   └── CompanySerializer.py
+│   │   │   ├── CompanySerializer.py
+│   │   │   └── PlatformContactSerializer.py
 │   │   ├── __pycache__
 │   │   ├── admin.py
 │   │   ├── apps.py
@@ -246,6 +249,7 @@
 │   │   │       ├── SearchableSelect.tsx
 │   │   │       ├── StatusBadge.tsx
 │   │   │       ├── TablePrintHeader.tsx
+│   │   │       ├── TenantBlockedScreen.tsx
 │   │   │       ├── TextArea.tsx
 │   │   │       ├── ThemeToggle.tsx
 │   │   │       ├── UserProfileBlock.tsx
@@ -322,11 +326,14 @@
 │   │   │   │   │   │   │   │   ├── Mainrows.tsx
 │   │   │   │   │   │   │   │   ├── ProductRow.tsx
 │   │   │   │   │   │   │   │   └── Tablefooter.tsx
+│   │   │   │   │   │   │   ├── ColumnToggleDropdown.tsx
 │   │   │   │   │   │   │   ├── DocumentFormPage.tsx
 │   │   │   │   │   │   │   ├── HeadDocument.tsx
 │   │   │   │   │   │   │   ├── HeaderPage.tsx
 │   │   │   │   │   │   │   ├── Interface.ts
 │   │   │   │   │   │   │   ├── Participants.tsx
+│   │   │   │   │   │   │   ├── useColumnVisibility.ts
+│   │   │   │   │   │   │   ├── useWarehouseStocks.ts
 │   │   │   │   │   │   │   └── Vars.ts
 │   │   │   │   │   │   ├── Documents.tsx
 │   │   │   │   │   │   ├── InvoicesPage.tsx
@@ -376,9 +383,13 @@
 │   │   │   │       ├── rolesApi.ts
 │   │   │   │       └── transactionApi.ts
 │   │   │   ├── admin
-│   │   │   │   └── components
-│   │   │   │       ├── AdminPanel.tsx
-│   │   │   │       └── CreateCompany.tsx
+│   │   │   │   ├── components
+│   │   │   │   │   ├── AdminPanel.tsx
+│   │   │   │   │   ├── CreateCompany.tsx
+│   │   │   │   │   └── PlatformContactPage.tsx
+│   │   │   │   └── services
+│   │   │   │       ├── adminCompanyApi.ts
+│   │   │   │       └── platformContactApi.ts
 │   │   │   ├── auth
 │   │   │   │   ├── components
 │   │   │   │   │   ├── Login.tsx
@@ -389,10 +400,12 @@
 │   │   │   │   └── index.ts
 │   │   │   ├── chat
 │   │   │   │   ├── components
+│   │   │   │   │   ├── ChatToast.tsx
 │   │   │   │   │   ├── ConversationList.tsx
 │   │   │   │   │   ├── ConversationWindow.tsx
 │   │   │   │   │   ├── MessageInput.tsx
 │   │   │   │   │   ├── MessageItem.tsx
+│   │   │   │   │   ├── MiniChat.tsx
 │   │   │   │   │   └── NewChatModal.tsx
 │   │   │   │   ├── context
 │   │   │   │   │   └── ChatContext.tsx

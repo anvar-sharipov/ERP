@@ -1,14 +1,17 @@
 // frontend/src/features/chat/components/MessageInput.tsx
 import { useState, useRef, type KeyboardEvent } from "react";
 import { Send } from "lucide-react";
+import { useTranslation } from "react-i18next";
 
 interface Props {
   onSend: (text: string) => void;
-  onTyping?: () => void; // ✅ новый проп
+  onTyping?: () => void;
   disabled?: boolean;
 }
 
 export const MessageInput: React.FC<Props> = ({ onSend, onTyping, disabled }) => {
+  const { t } = useTranslation();
+
   const [text, setText] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -38,12 +41,10 @@ export const MessageInput: React.FC<Props> = ({ onSend, onTyping, disabled }) =>
 
   const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setText(e.target.value);
-    // ✅ Сообщаем о наборе текста
     if (e.target.value) onTyping?.();
   };
 
   return (
-    // <div className="flex items-end gap-2 px-3 py-3 border-t border-slate-700/50 bg-slate-800/50">
     <div className="flex items-end gap-2 px-3 py-3 border-t border-slate-200 dark:border-slate-700/50 bg-white dark:bg-slate-800/50">
       <textarea
         ref={textareaRef}
@@ -52,7 +53,7 @@ export const MessageInput: React.FC<Props> = ({ onSend, onTyping, disabled }) =>
         onKeyDown={handleKeyDown}
         onInput={handleInput}
         disabled={disabled}
-        placeholder="Написать сообщение... (Enter — отправить)"
+        placeholder={t("ChatPlaceholder")}
         rows={1}
         className="
             flex-1 resize-none rounded-xl px-3 py-2 text-sm
@@ -64,6 +65,7 @@ export const MessageInput: React.FC<Props> = ({ onSend, onTyping, disabled }) =>
             disabled:opacity-50
             "
       />
+
       <button
         onClick={handleSend}
         disabled={!text.trim() || disabled}
@@ -86,10 +88,11 @@ export const MessageInput: React.FC<Props> = ({ onSend, onTyping, disabled }) =>
 
 // interface Props {
 //   onSend: (text: string) => void;
+//   onTyping?: () => void; // ✅ новый проп
 //   disabled?: boolean;
 // }
 
-// export const MessageInput: React.FC<Props> = ({ onSend, disabled }) => {
+// export const MessageInput: React.FC<Props> = ({ onSend, onTyping, disabled }) => {
 //   const [text, setText] = useState("");
 //   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -98,14 +101,12 @@ export const MessageInput: React.FC<Props> = ({ onSend, onTyping, disabled }) =>
 //     if (!trimmed || disabled) return;
 //     onSend(trimmed);
 //     setText("");
-//     // Сбрасываем высоту textarea
 //     if (textareaRef.current) {
 //       textareaRef.current.style.height = "auto";
 //     }
 //   };
 
 //   const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
-//     // Enter — отправить, Shift+Enter — новая строка
 //     if (e.key === "Enter" && !e.shiftKey) {
 //       e.preventDefault();
 //       handleSend();
@@ -119,25 +120,33 @@ export const MessageInput: React.FC<Props> = ({ onSend, onTyping, disabled }) =>
 //     el.style.height = `${Math.min(el.scrollHeight, 120)}px`;
 //   };
 
+//   const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+//     setText(e.target.value);
+//     // ✅ Сообщаем о наборе текста
+//     if (e.target.value) onTyping?.();
+//   };
+
 //   return (
-//     <div className="flex items-end gap-2 px-3 py-3 border-t border-slate-700/50 bg-slate-800/50">
+//     // <div className="flex items-end gap-2 px-3 py-3 border-t border-slate-700/50 bg-slate-800/50">
+//     <div className="flex items-end gap-2 px-3 py-3 border-t border-slate-200 dark:border-slate-700/50 bg-white dark:bg-slate-800/50">
 //       <textarea
 //         ref={textareaRef}
 //         value={text}
-//         onChange={(e) => setText(e.target.value)}
+//         onChange={handleChange}
 //         onKeyDown={handleKeyDown}
 //         onInput={handleInput}
 //         disabled={disabled}
 //         placeholder="Написать сообщение... (Enter — отправить)"
 //         rows={1}
 //         className="
-//           flex-1 resize-none rounded-xl px-3 py-2 text-sm
-//           bg-slate-700 text-slate-100 placeholder-slate-400
-//           border border-slate-600 focus:border-indigo-500 focus:outline-none
-//           transition-colors duration-150
-//           max-h-[120px] overflow-y-auto
-//           disabled:opacity-50
-//         "
+//             flex-1 resize-none rounded-xl px-3 py-2 text-sm
+//             bg-gray-100 dark:bg-slate-700 text-gray-900 dark:text-slate-100
+//             placeholder-gray-400 dark:placeholder-slate-400
+//             border border-gray-200 dark:border-slate-600 focus:border-indigo-500 focus:outline-none
+//             transition-colors duration-150
+//             max-h-[120px] overflow-y-auto
+//             disabled:opacity-50
+//             "
 //       />
 //       <button
 //         onClick={handleSend}

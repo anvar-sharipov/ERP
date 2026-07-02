@@ -100,11 +100,14 @@ class PriceTypeSerializer(serializers.ModelSerializer):
 class ProductPriceSerializer(serializers.ModelSerializer):
     price_type_name = serializers.CharField(source="price_type.name", read_only=True)
     warehouse_name = serializers.CharField(source="warehouse.name", read_only=True)
+    branch_name = serializers.CharField(source="branch.name", read_only=True)
 
     class Meta:
         model = ProductPrice
         fields = [
-            "id", "product", "warehouse", "warehouse_name",
+            "id", "product",
+            "warehouse", "warehouse_name",
+            "branch", "branch_name",
             "price_type", "price_type_name",
             "price", "valid_from", "valid_to", "is_active",
         ]

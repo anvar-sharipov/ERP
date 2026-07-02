@@ -25,7 +25,7 @@ export const UserProfileBlock: React.FC<UserProfileBlockProps> = ({ showName = t
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const notify = useNotify();
-  console.log("photo_thumbnail:", currentUser?.photo_thumbnail);
+  // console.log("photo_thumbnail:", currentUser?.photo_thumbnail);
 
   const [menuOpen, setMenuOpen] = useState(false);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);

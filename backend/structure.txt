@@ -1,0 +1,180 @@
+﻿├── .pytest_cache
+│   ├── v
+│   │   └── cache
+│   │       ├── lastfailed
+│   │       └── nodeids
+│   ├── .gitignore
+│   ├── CACHEDIR.TAG
+│   └── README.md
+├── accounting
+│   ├── filter
+│   │   ├── __pycache__
+│   │   └── audit_filter.py
+│   ├── migrations
+│   │   ├── __pycache__
+│   │   ├── 0001_initial.py
+│   │   ├── 0002_initial.py
+│   │   ├── 0003_remove_auditlog_audit_changed_data_gin_and_more.py
+│   │   ├── 0004_document_documentitem_documentparticipant_and_more.py
+│   │   ├── 0005_userscope.py
+│   │   ├── 0006_closedperiod_branch_closedperiod_warehouse_and_more.py
+│   │   ├── 0007_productbundle.py
+│   │   ├── 0008_employee_branch.py
+│   │   ├── 0009_volumediscount.py
+│   │   ├── 0010_alter_warehouse_branch.py
+│   │   ├── 0011_remove_productprice_unique_active_product_price_and_more.py
+│   │   ├── 0012_currency_exchangerate.py
+│   │   ├── 0013_alter_exchangerate_unique_together.py
+│   │   └── __init__.py
+│   ├── mixins
+│   │   └── audit_mixin.py
+│   ├── models
+│   │   ├── __pycache__
+│   │   ├── account.py
+│   │   ├── audit.py
+│   │   ├── company.py
+│   │   ├── counterparty.py
+│   │   ├── currency.py
+│   │   ├── directory.py
+│   │   ├── document.py
+│   │   ├── employee.py
+│   │   ├── product.py
+│   │   ├── stock.py
+│   │   ├── subconto.py
+│   │   ├── transaction.py
+│   │   └── __init__.py
+│   ├── serializers
+│   │   ├── __pycache__
+│   │   ├── account_serializers.py
+│   │   ├── audit_serializers.py
+│   │   ├── company_serializers.py
+│   │   ├── currency_serializers.py
+│   │   ├── directory_serializers.py
+│   │   ├── document_serializers.py
+│   │   ├── employee_serializers.py
+│   │   ├── product_serializers.py
+│   │   └── transaction_serializers.py
+│   ├── tests
+│   │   ├── base.py
+│   │   ├── test_audit.py
+│   │   ├── test_rbac_all.py
+│   │   ├── test_rbac_branches.py
+│   │   ├── test_users_permissions.py
+│   │   └── __init__.py
+│   ├── views
+│   │   ├── __pycache__
+│   │   ├── account_views.py
+│   │   ├── audit_views.py
+│   │   ├── company_views.py
+│   │   ├── currency_views.py
+│   │   ├── directory_views.py
+│   │   ├── document_views.py
+│   │   ├── employee_views.py
+│   │   ├── product_views.py
+│   │   ├── transaction_views.py
+│   │   └── __init__.py
+│   ├── __pycache__
+│   ├── admin.py
+│   ├── apps.py
+│   ├── mixins.py
+│   ├── models_disabled.py
+│   ├── tests.py
+│   ├── urls.py
+│   ├── utils.py
+│   ├── views.py
+│   └── __init__.py
+├── chat
+│   ├── migrations
+│   │   ├── __pycache__
+│   │   ├── 0001_initial.py
+│   │   └── __init__.py
+│   ├── __pycache__
+│   ├── admin.py
+│   ├── apps.py
+│   ├── consumers.py
+│   ├── models.py
+│   ├── notification_consumer.py
+│   ├── serializers.py
+│   ├── tests.py
+│   ├── urls.py
+│   ├── views.py
+│   └── __init__.py
+├── companies
+│   ├── migrations
+│   │   ├── __pycache__
+│   │   ├── 0001_initial.py
+│   │   ├── 0002_platformcontact.py
+│   │   └── __init__.py
+│   ├── serializers
+│   │   ├── __pycache__
+│   │   ├── CompanySerializer.py
+│   │   └── PlatformContactSerializer.py
+│   ├── __pycache__
+│   ├── admin.py
+│   ├── apps.py
+│   ├── middleware.py
+│   ├── models.py
+│   ├── tests.py
+│   ├── urls.py
+│   ├── views.py
+│   └── __init__.py
+├── config
+│   ├── __pycache__
+│   ├── asgi.py
+│   ├── pagination.py
+│   ├── settings.py
+│   ├── urls.py
+│   ├── urls_public.py
+│   ├── wsgi.py
+│   └── __init__.py
+├── media
+├── static
+├── users
+│   ├── management
+│   │   └── commands
+│   │       ├── __pycache__
+│   │       └── sync_permissions.py
+│   ├── migrations
+│   │   ├── __pycache__
+│   │   ├── 0001_initial.py
+│   │   └── __init__.py
+│   ├── serializers
+│   │   ├── __pycache__
+│   │   └── user_serializer.py
+│   ├── views
+│   │   ├── __pycache__
+│   │   ├── permission_views.py
+│   │   ├── RBAC_views.py
+│   │   ├── token_views.py
+│   │   ├── user_views.py
+│   │   └── __init__.py
+│   ├── __pycache__
+│   ├── admin.py
+│   ├── apps.py
+│   ├── models.py
+│   ├── permissions.py
+│   ├── rbac_events.py
+│   ├── scope_events.py
+│   ├── scoping.py
+│   ├── signals.py
+│   ├── tests.py
+│   ├── urls.py
+│   ├── views_old.py
+│   └── __init__.py
+├── utils
+│   ├── ws
+│   │   ├── __pycache__
+│   │   ├── consumers.py
+│   │   ├── jwt_auth_middleware.py
+│   │   ├── rbac_consumer.py
+│   │   ├── routing.py
+│   │   └── scope_consumer.py
+│   ├── __pycache__
+│   ├── storage.py
+│   └── validators.py
+├── .dockerignore
+├── Dockerfile
+├── entrypoint.sh
+├── init_tenant.py
+├── manage.py
+└── structure.txt

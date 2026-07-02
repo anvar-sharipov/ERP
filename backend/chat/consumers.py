@@ -122,11 +122,13 @@ class ChatConsumer(AsyncWebsocketConsumer):
                 }
             )
 
+
     # async def handle_read(self, data):
     #     message_id = data.get("message_id")
     #     if not message_id:
     #         return
     #     await self.mark_read(message_id)
+    #     print(f"[ws_read] user={self.user.id} message={message_id}")
     #     await self.channel_layer.group_send(
     #         self.group_name,
     #         {
@@ -135,18 +137,31 @@ class ChatConsumer(AsyncWebsocketConsumer):
     #             "user_id": self.user.id,
     #         }
     #     )
+    
     async def handle_read(self, data):
         message_id = data.get("message_id")
         if not message_id:
             return
         await self.mark_read(message_id)
         print(f"[ws_read] user={self.user.id} message={message_id}")
+        
         await self.channel_layer.group_send(
             self.group_name,
             {
                 "type": "message_read",
                 "message_id": message_id,
                 "user_id": self.user.id,
+            }
+        )
+        
+        # ✅ сбрасываем счётчик в notification consumer
+        unread = await self.get_unread_count()
+        print(f"[ws_read_after] user={self.user.id} unread_after={unread}")
+        await self.channel_layer.group_send(
+            f"chat_notifications_{self.user.id}",
+            {
+                "type": "unread_count_update",
+                "count": unread,
             }
         )
 
@@ -298,4 +313,17 @@ class ChatConsumer(AsyncWebsocketConsumer):
             return user.photo_thumbnail.url  # оставляем как есть → /media/CACHE/...
         except Exception:
             return None
+        
+        
+    @database_sync_to_async
+    def get_unread_count(self):
+        with schema_context(self.schema_name):
+            from .models import Message
+            return (
+                Message.objects
+                .filter(conversation__participants=self.user)
+                .exclude(reads__user=self.user)
+                .exclude(sender=self.user)
+                .count()
+            )
 

@@ -207,7 +207,7 @@ export const Table = <T extends { id: string | number }>({
   const pageSize = isServer ? (pagination as ServerPagination).pageSize : clientPageSize;
 
   const handlePageSizeChange = (size: number) => {
-    console.log("handlePageSizeChange", size, isServer);
+    // console.log("handlePageSizeChange", size, isServer);
     if (isServer) {
       (pagination as ServerPagination).onPageSizeChange(size);
     } else {
@@ -262,9 +262,10 @@ export const Table = <T extends { id: string | number }>({
 
   const sortedData = useMemo(() => {
     // if (isServer) return data;
-    if (isServer) return data ?? [];
-    if (!sortConfig.key) return data;
-    return [...data].sort((a, b) => {
+    // if (isServer) return data ?? [];
+    const source = data ?? [];
+    if (!sortConfig.key) return source;
+    return [...source].sort((a, b) => {
       const col = columns.find((c) => c.accessor === sortConfig.key);
       const getVal = (item: T) => (col?.sortValue ? col.sortValue(item) : item[sortConfig.key!]);
       const aVal = getVal(a);
@@ -295,7 +296,8 @@ export const Table = <T extends { id: string | number }>({
 
   const paginatedData = useMemo(() => {
     // if (isServer) return data;
-    if (isServer) return data ?? [];
+    // if (isServer) return data ?? [];
+    if (isServer) return sortedData;
     if (!pageSize) return sortedData;
     const start = (currentPage - 1) * pageSize;
     return sortedData.slice(start, start + pageSize);

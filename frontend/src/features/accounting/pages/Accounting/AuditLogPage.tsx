@@ -67,29 +67,6 @@ export default function AuditLogPage() {
     setPage(1);
   }, [periodFrom, periodTo, userFilter, actionFilter]);
 
-  //   useEffect(() => {
-  //     setSidebarContent(
-  //       <div className="space-y-4">
-  //         <div className="pt-2">
-  //           <h4 className="font-bold text-indigo-300 mb-2">Фильтр действий</h4>
-
-  //           <div className="flex flex-col gap-1">
-  //             <Button text="Все" variant="ghost" dark isActive={actionFilter === "all"} className="w-full justify-start" onClick={() => setActionFilter("all")} />
-
-  //             <Button text="Создание" variant="ghost" dark isActive={actionFilter === "create"} className="w-full justify-start" onClick={() => setActionFilter("create")} />
-
-  //             <Button text="Изменение" variant="ghost" dark isActive={actionFilter === "update"} className="w-full justify-start" onClick={() => setActionFilter("update")} />
-
-  //             <Button text="Удаление" variant="ghost" dark isActive={actionFilter === "delete"} className="w-full justify-start" onClick={() => setActionFilter("delete")} />
-
-  //             <Button text="Проведение" variant="ghost" dark isActive={actionFilter === "post"} className="w-full justify-start" onClick={() => setActionFilter("post")} />
-
-  //             <Button text="Отмена проведения" variant="ghost" dark isActive={actionFilter === "unpost"} className="w-full justify-start" onClick={() => setActionFilter("unpost")} />
-  //           </div>
-  //         </div>
-  //       </div>,
-  //     );
-  //   }, [setSidebarContent, actionFilter]);
 
   useEffect(() => {
     setSidebarContent(

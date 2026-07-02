@@ -51,6 +51,10 @@ import OrdersPage from "../../features/accounting/pages/Documents/OrdersPage";
 import ReturnsPage from "../../features/accounting/pages/Documents/ReturnsPage";
 import DocumentFormPage from "../../features/accounting/pages/Documents/Invoice/DocumentFormPage";
 import ChatPage from "../../features/chat/pages/ChatPage";
+import { PlatformContactPage } from "../../features/admin/components/PlatformContactPage";
+import ExchangeRates from "../../features/accounting/pages/ExchangeRates/ExchangeRates";
+import RatesPage from "../../features/accounting/pages/ExchangeRates/RatesPage";
+import CurrenciesPage from "../../features/accounting/pages/ExchangeRates/CurrenciesPage";
 
 const AppRouter: React.FC = () => {
   return (
@@ -67,6 +71,7 @@ const AppRouter: React.FC = () => {
         <Route element={<GlobalAdminRoute />}>
           <Route path="/admin-panel" element={<GlobalAdminPanel />} />
           <Route path="/create-company" element={<CreateCompany />} />
+          <Route path="/admin-panel/platform-contact" element={<PlatformContactPage />} />
           {/* Сюда будут добавляться будущие страницы админа, например:
                 <Route path="/admin/companies" element={<AdminCompanies />} /> */}
         </Route>
@@ -87,6 +92,11 @@ const AppRouter: React.FC = () => {
           </Route>
           {/* ОБЫЧНЫЕ РОУТЫ (доступны всем) */}
           <Route path={ROUTES.APP.DASHBOARD} element={<Dashboard />} />
+          <Route path={ROUTES.APP.EXCHANGE_RATES} element={<ExchangeRates />}>
+            <Route index element={<Navigate to="rates" replace />} />
+            <Route path="rates" element={<RatesPage />} />
+            <Route path="currencies" element={<CurrenciesPage />} />
+          </Route>
           {/* <Route path={ROUTES.APP.ACCOUNTING} element={<Accounting />} /> */}
 
           {/* Бухгалтерия */}
@@ -138,7 +148,6 @@ const AppRouter: React.FC = () => {
               <Route path="movements" element={<StockMovementsPage />} />
             </Route>
           </Route>
-
 
           <Route path={ROUTES.APP.CHAT} element={<ChatPage />} />
         </Route>

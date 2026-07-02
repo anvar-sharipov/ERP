@@ -232,6 +232,14 @@ class PriceType(models.Model):
 
 class ProductPrice(models.Model):
     product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name="prices")
+    branch = models.ForeignKey(
+        "Branch",
+        on_delete=models.CASCADE,
+        related_name="prices",
+        null=True,
+        blank=True,
+        verbose_name="Филиал (если warehouse не задан — цена на весь филиал)",
+    )
     warehouse = models.ForeignKey(
         "Warehouse",
         on_delete=models.CASCADE,
@@ -255,7 +263,7 @@ class ProductPrice(models.Model):
         verbose_name_plural = "Цены товаров"
         constraints = [
             models.UniqueConstraint(
-                fields=["product", "warehouse", "price_type"],
+                fields=["product", "warehouse", "branch", "price_type"],
                 condition=Q(is_active=True),
                 nulls_distinct=False,
                 name="unique_active_product_price",
@@ -263,12 +271,15 @@ class ProductPrice(models.Model):
         ]
         indexes = [
             models.Index(fields=["product", "warehouse"]),
+            models.Index(fields=["product", "branch"]),
             models.Index(fields=["price_type"]),
             models.Index(fields=["is_active"]),
         ]
 
     def __str__(self):
-        return f"{self.product} | {self.warehouse} | {self.price_type} = {self.price}"
+        scope = self.warehouse or self.branch or "GLOBAL"
+        return f"{self.product} | {scope} | {self.price_type} = {self.price}"
+    
     
 
 class ProductBundle(models.Model):

@@ -41,6 +41,7 @@ from .employee import Position, Employee
 from .audit import AuditLog
 from .document import DocumentParticipant, Document, DocumentItem
 from .company import UserScope
+from .currency import Currency, ExchangeRate
 
 
 # ПРОКСИ-ФУНКЦИИ ДЛЯ СОВМЕСТИМОСТИ С МИГРАЦИЯМИ
@@ -99,5 +100,6 @@ __all__ = [
     'product_image_path',
     'DocumentParticipant', 'Document', 'DocumentItem',
     'UserScope',
-    'ProductBundle', 'ProductBundle', 'VolumeDiscount'
+    'ProductBundle', 'ProductBundle', 'VolumeDiscount',
+    'Currency', 'ExchangeRate'
 ]

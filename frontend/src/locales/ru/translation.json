@@ -585,7 +585,67 @@
     "userscope": "Область доступа пользователя",
     "productbundle": "Комплект товара",
     "volumediscount": "Скидка за количество",
-    "NoPermissionToModify": "Нет прав на изменение"
+    "NoPermissionToModify": "Нет прав на изменение",
+
+    "BranchRequired": "Филиал обязателен",
+    "SelectBranch": "Выберите филиал",
+
+
+    
+    "PlatformAdministratorContacts": "Контакты администратора платформы",
+    "PlatformAdministratorContactsDescription": "Отображаются на экране блокировки тенанта и странице поддержки.",
+    "ChangePhoto": "Изменить фото",
+    "PhotoRequirements": "JPG, PNG до 5 МБ",
+    "FullNamePlaceholder": "Иван Иванов",
+    "Phone2": "Телефон 2",
+    "Telegram": "Telegram",
+    "AddressPlaceholder": "г. Ашхабад, ул. ...",
+    "ShowContactsOnLockScreen": "Показывать контакты на экране блокировки",
+
+    "AccessRestricted": "Доступ ограничен",
+    "LicenseExpiredMessage": "Срок действия лицензии истёк. Обратитесь к администратору системы для продления доступа.",
+    "AdministratorContacts": "Контакты администратора",
+    "RefreshPage": "Обновить страницу",
+
+    "AuditLog": "Журнал аудита",
+
+    "Messages": "Сообщения",
+    "NewConversation": "Новая беседа",
+    "SelectConversationOrCreateNew": "Выберите беседу или создайте новую",
+
+    "NoConversations": "Нет бесед",
+    "You": "Вы",
+    "NoMessages": "Нет сообщений",
+
+
+    "OnlineStatus": "онлайн",
+    "typing": "печатает...",
+    "typing_plural": "печатают...",
+
+    "ChatPlaceholder": "Написать сообщение... (Enter — отправить)",
+
+    "Direct": "💬 Личное",
+    "GroupName": "Название группы",
+    "SelectUser": "Выберите пользователя",
+    "AddParticipants": "Добавить участников",
+    "NoUsersFound": "Пользователи не найдены",
+    "Selected": "Выбрано: {count} участников",
+    "Creating": "Создание...",
+
+    "SelectChat": "Выберите беседу или создайте новую",
+
+    "Chat": "Чат",
+
+
+    "TypingSingle": "печатает...",
+    "TypingMultiple": "печатают...",
+    "Online": "онлайн",
+    "Offline": "оффлайн",
+    "NoMessagesYet": "Нет сообщений. Напишите первым!"
+
+
+
+    
 
  
 

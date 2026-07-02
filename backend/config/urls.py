@@ -11,7 +11,7 @@ from users.views import SuperuserTokenObtainView
 
 
 urlpatterns = [
-    path('admin/', admin.site.urls),
+    path('anvar-secret-admin-panel/', admin.site.urls),
     path('api/accounting/', include('accounting.urls')),
     path('api/users/', include('users.urls')),
     path("api/chat/", include("chat.urls")),
@@ -24,6 +24,7 @@ urlpatterns = [
     path('api/auth/superuser-token/', SuperuserTokenObtainView.as_view(), name='superuser_token'),
     
     path('api/auth/token/logout/', TokenBlacklistView.as_view(), name='token_logout'),
+    path('api/companies/', include('companies.urls')),
     
     
     

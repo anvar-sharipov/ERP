@@ -14,8 +14,14 @@ class ChatNotificationConsumer(AsyncWebsocketConsumer):
             await self.close()
             return
 
-        self.user = user
         self.schema_name = self.scope.get("tenant_schema", "public")
+
+        # ✅ В public-схеме чата не существует — закрываем соединение
+        if self.schema_name == "public":
+            await self.close()
+            return
+
+        self.user = user
         self.group_name = f"chat_notifications_{user.id}"
 
         await self.channel_layer.group_add(self.group_name, self.channel_name)
@@ -49,6 +55,12 @@ class ChatNotificationConsumer(AsyncWebsocketConsumer):
             "sender_photo_thumbnail": sender_photo,  # ✅
             "text": event["text"],
             "unread_count": unread,
+        }))
+        
+    async def unread_count_update(self, event):
+        await self.send(text_data=json.dumps({
+            "type": "unread_count",
+            "count": event["count"],
         }))
 
     # ─── DB ──────────────────────────────────────────────────────────
@@ -94,4 +106,6 @@ class ChatNotificationConsumer(AsyncWebsocketConsumer):
                 return user.photo_thumbnail.url
             except Exception:
                 return None
+            
+    
             
