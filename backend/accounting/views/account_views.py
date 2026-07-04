@@ -98,6 +98,8 @@ class AccountViewSet(AuditMixin, viewsets.ModelViewSet):
             return Response({'detail': 'Не найдено'}, status=status.HTTP_404_NOT_FOUND)
 
 
+
+ALLOWED_FILTER_KEYS = {'type', 'type__in', 'category', 'category__in'}
 # Новый ViewSet для SubcontoType
 class SubcontoTypeViewSet(AuditMixin, viewsets.ModelViewSet):
     pagination_class = None
@@ -108,27 +110,54 @@ class SubcontoTypeViewSet(AuditMixin, viewsets.ModelViewSet):
         return _rbac(self.action, "account")
     
     
+    
     @action(detail=True, methods=['get'], url_path='records')
     def records(self, request, pk=None):
-        """Вернуть записи для субконто — из модели или справочника"""
         subconto = self.get_object()
-        
+
         if subconto.directory:
-            # Пользовательский справочник
             from ..models import DirectoryRecord
             qs = DirectoryRecord.objects.filter(
                 directory=subconto.directory, is_active=True
             ).values('id', 'name')
             return Response(list(qs))
         else:
-            # Системная модель
             model_class = subconto.content_type.model_class()
             if hasattr(model_class, 'is_active'):
                 qs = model_class.objects.filter(is_active=True)
             else:
                 qs = model_class.objects.all()
+
+            # ✅ применяем доп. фильтр, если задан
+            if subconto.content_type_filter:
+                safe_filter = {k: v for k, v in subconto.content_type_filter.items() if k in ALLOWED_FILTER_KEYS}
+                qs = qs.filter(**safe_filter)
+
             data = [{"id": obj.pk, "name": str(obj)} for obj in qs]
             return Response(data)
+    
+    
+    # @action(detail=True, methods=['get'], url_path='records')
+    # def records(self, request, pk=None):
+    #     """Вернуть записи для субконто — из модели или справочника"""
+    #     subconto = self.get_object()
+        
+    #     if subconto.directory:
+    #         # Пользовательский справочник
+    #         from ..models import DirectoryRecord
+    #         qs = DirectoryRecord.objects.filter(
+    #             directory=subconto.directory, is_active=True
+    #         ).values('id', 'name')
+    #         return Response(list(qs))
+    #     else:
+    #         # Системная модель
+    #         model_class = subconto.content_type.model_class()
+    #         if hasattr(model_class, 'is_active'):
+    #             qs = model_class.objects.filter(is_active=True)
+    #         else:
+    #             qs = model_class.objects.all()
+    #         data = [{"id": obj.pk, "name": str(obj)} for obj in qs]
+    #         return Response(data)
 
  
     
@@ -142,4 +171,8 @@ def available_content_types(request):
     )
     data = [{"id": ct.id, "app_label": ct.app_label, "model": ct.model, "label": str(ct)} for ct in cts]
     return Response(data)
+
+
+
+
 

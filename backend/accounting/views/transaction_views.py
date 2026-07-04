@@ -24,6 +24,27 @@ from django.core.exceptions import ValidationError
 from ..models import AuditLog
 
 
+from channels.layers import get_channel_layer
+from asgiref.sync import async_to_sync
+
+
+def _broadcast_closed_period(request, instance, action_name):
+    channel_layer = get_channel_layer()
+    tenant_schema = getattr(request, "tenant", None)
+    schema_name = tenant_schema.schema_name if tenant_schema else "public"
+
+    async_to_sync(channel_layer.group_send)(
+        f"closed_period_{schema_name}",
+        {
+            "type": "closed_period_changed",
+            "date": str(instance.date),
+            "warehouse": instance.warehouse_id,
+            "action": action_name,
+        },
+    )
+
+
+
 class JournalEntryViewSet(AuditMixin, viewsets.ModelViewSet):
     pagination_class = None
 
@@ -38,7 +59,7 @@ class JournalEntryViewSet(AuditMixin, viewsets.ModelViewSet):
     def get_queryset(self):
         qs = (
             JournalEntry.objects
-            .select_related('created_by', 'source_document_type')
+            .select_related('created_by', 'source_document_type', 'branch')  # ✅ добавить branch
             .prefetch_related('lines__account')
         )
 
@@ -66,6 +87,8 @@ class JournalEntryViewSet(AuditMixin, viewsets.ModelViewSet):
                 Q(number__icontains=search) |
                 Q(description__icontains=search)
             )
+        if branch := params.get('branch'):
+            qs = qs.filter(branch_id=branch)
 
         return qs.order_by('-date', '-number')
 
@@ -206,123 +229,112 @@ class StockMovementViewSet(viewsets.ModelViewSet):
 
         return qs
 
-
 class ClosedPeriodViewSet(AuditMixin, viewsets.ModelViewSet):
     serializer_class  = ClosedPeriodSerializer
     pagination_class  = None
-    http_method_names = ['get', 'post', 'head', 'options']
- 
+    http_method_names = ['get', 'post', 'delete', 'head', 'options']
+
     def get_permissions(self):
         return _rbac(self.action, 'closedperiod')
-    
-    
+
     def get_queryset(self):
         qs = ClosedPeriod.objects.select_related(
-            'closed_by', 'branch', 'warehouse'
+            'closed_by', 'warehouse'
         ).order_by('-date')
+
+        qs = apply_scope(qs, self.request.user, branch_field=None)
 
         params = self.request.query_params
         if date := params.get('date'):
             qs = qs.filter(date=date)
-        if branch := params.get('branch'):
-            qs = qs.filter(branch_id=branch)
         if warehouse := params.get('warehouse'):
             qs = qs.filter(warehouse_id=warehouse)
+        if warehouse__in := params.get('warehouse__in'):
+            ids = [w for w in warehouse__in.split(',') if w]
+            qs = qs.filter(warehouse_id__in=ids)
 
         return qs
-    
- 
- 
-    # def perform_create(self, serializer):
-    #     serializer.save(closed_by=self.request.user)
-    
+
     def perform_create(self, serializer):
-        from django.core.exceptions import ValidationError
-        
-        branch    = serializer.validated_data.get('branch')
         warehouse = serializer.validated_data.get('warehouse')
-        
-        user_branches, user_warehouses = get_user_scope(self.request.user)
-        
-        print("branch:", branch)
-        print("warehouse:", warehouse)
-        print("user_branches:", user_branches)
-        print("user_warehouses:", user_warehouses)
-        
-        if user_branches or user_warehouses:
-            if not branch and not warehouse:
-                raise ValidationError("Недостаточно прав для глобального закрытия периода.")
-            if branch and branch.pk not in user_branches:
-                raise ValidationError("Нет доступа к этому филиалу.")
-            if warehouse and warehouse.pk not in user_warehouses:
-                raise ValidationError("Нет доступа к этому складу.")
-        
-        serializer.save(closed_by=self.request.user)
+        _, user_warehouses = get_user_scope(self.request.user)
+
+        if user_warehouses and warehouse.pk not in user_warehouses:
+            raise ValidationError("Нет доступа к этому складу.")
+
         instance = serializer.save(closed_by=self.request.user)
         self._write_log(self.request, instance, AuditLog.Action.CREATE)
- 
-    # GET /closed-periods/check/?date=2026-01-01&branch=1&warehouse=2
+        _broadcast_closed_period(self.request, instance, "closed")
+
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        _, user_warehouses = get_user_scope(request.user)
+
+        if user_warehouses:
+            return Response(
+                {'detail': 'Открывать закрытый день может только пользователь без привязки к складу.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        later_exists = ClosedPeriod.objects.filter(
+            warehouse=instance.warehouse,
+            date__gt=instance.date,
+        ).exists()
+
+        if later_exists:
+            return Response(
+                {'detail': 'Нельзя открыть этот день — есть закрытый день позже по этому складу. Открывайте дни по порядку, начиная с последнего.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        date, warehouse_id = instance.date, instance.warehouse_id
+        self._write_log(request, instance, AuditLog.Action.DELETE, {'snapshot': self._snapshot(instance)})
+        instance.delete()
+
+        channel_layer = get_channel_layer()
+        schema_name = getattr(getattr(request, "tenant", None), "schema_name", "public")
+        async_to_sync(channel_layer.group_send)(
+            f"closed_period_{schema_name}",
+            {"type": "closed_period_changed", "date": str(date), "warehouse": warehouse_id, "action": "reopened"},
+        )
+        return Response(status=status.HTTP_204_NO_CONTENT)
+    
+    
+    # GET /closed-periods/check/?date=2026-01-01&warehouse=2
     @action(detail=False, methods=['get'], url_path='check')
     def check(self, request):
         date_str = request.query_params.get('date')
-        if not date_str:
-            return Response({'detail': 'Укажи параметр date'}, status=400)
+        warehouse_id = request.query_params.get('warehouse')
+
+        if not date_str or not warehouse_id:
+            return Response({'detail': 'Укажите date и warehouse'}, status=400)
+
         try:
             date = datetime.date.fromisoformat(date_str)
         except ValueError:
             return Response({'detail': 'Неверный формат даты (YYYY-MM-DD)'}, status=400)
 
-        branch_id    = request.query_params.get('branch')
-        warehouse_id = request.query_params.get('warehouse')
+        period = ClosedPeriod.objects.filter(date=date, warehouse_id=warehouse_id).first()
 
-        from django.db.models import Q
-        from accounting.models import Warehouse
+        return Response({
+            'date': date_str,
+            'is_closed': period is not None,
+            'closed_period_id': period.id if period else None,
+        })
 
-        # Глобальное закрытие — блокирует всех
-        q = Q(date=date, branch__isnull=True, warehouse__isnull=True)
-
-        if branch_id and warehouse_id:
-            # Точное совпадение branch + warehouse
-            q |= Q(date=date, branch_id=branch_id, warehouse_id=warehouse_id)
-
-        if branch_id:
-            # Весь филиал закрыт
-            q |= Q(date=date, branch_id=branch_id, warehouse__isnull=True)
-
-        if warehouse_id:
-            # Конкретный склад закрыт
-            q |= Q(date=date, warehouse_id=warehouse_id, branch__isnull=True)
-            # Если филиал этого склада закрыт — склад тоже заблокирован
-            wh = Warehouse.objects.filter(pk=warehouse_id).first()
-            if wh and wh.branch_id:
-                q |= Q(date=date, branch_id=wh.branch_id, warehouse__isnull=True)
-
-        is_closed = ClosedPeriod.objects.filter(q).exists()
-        return Response({'date': date_str, 'is_closed': is_closed})
-
-    # GET /closed-periods/range/?from=2026-01-01&to=2026-01-31&branch=1&warehouse=2
+    # GET /closed-periods/range/?from=2026-01-01&to=2026-01-31&warehouse=2
     @action(detail=False, methods=['get'], url_path='range')
     def range_check(self, request):
         from_str = request.query_params.get('from')
         to_str   = request.query_params.get('to')
-        if not from_str or not to_str:
-            return Response({'detail': 'Укажи from и to'}, status=400)
- 
-        branch_id    = request.query_params.get('branch')
         warehouse_id = request.query_params.get('warehouse')
- 
-        from django.db.models import Q
-        q = Q(date__range=[from_str, to_str]) & (
-            Q(branch__isnull=True, warehouse__isnull=True)
-        )
-        if branch_id:
-            q |= Q(date__range=[from_str, to_str], branch_id=branch_id, warehouse__isnull=True)
-        if warehouse_id:
-            q |= Q(date__range=[from_str, to_str], warehouse_id=warehouse_id, branch__isnull=True)
- 
+
+        if not from_str or not to_str or not warehouse_id:
+            return Response({'detail': 'Укажите from, to и warehouse'}, status=400)
+
         closed_dates = list(
             ClosedPeriod.objects
-            .filter(q)
+            .filter(date__range=[from_str, to_str], warehouse_id=warehouse_id)
             .values_list('date', flat=True)
             .distinct()
         )
@@ -331,6 +343,3 @@ class ClosedPeriodViewSet(AuditMixin, viewsets.ModelViewSet):
             'to':           to_str,
             'closed_dates': [str(d) for d in closed_dates],
         })
-        
-        
-        

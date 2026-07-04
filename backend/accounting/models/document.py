@@ -17,14 +17,6 @@ from .transaction import JournalEntry
 
 
 class DocumentParticipant(models.Model):
-    class Role(models.TextChoices):
-        DRIVER  = 'driver',  'Водитель'
-        SELLER  = 'seller',  'Продавец'
-        LOADER  = 'loader',  'Грузчик'
-        CASHIER = 'cashier', 'Кассир'
-        MANAGER = 'manager', 'Менеджер'
-        OTHER   = 'other',   'Другое'
-
     document = models.ForeignKey(
         'Document', on_delete=models.CASCADE,
         related_name='participants'
@@ -33,7 +25,10 @@ class DocumentParticipant(models.Model):
         Employee, on_delete=models.PROTECT,
         related_name='document_participations'
     )
-    role = models.CharField(max_length=20, choices=Role.choices, default=Role.OTHER)
+    # Свободный текст — берётся из названия должности сотрудника (accounting.Position),
+    # которое администратор может назвать как угодно, поэтому фиксированный choices-список
+    # здесь не подходит (см. баг: "Логист" is not a valid choice).
+    role = models.CharField(max_length=100, default='other')
 
     class Meta:
         verbose_name = "Участник документа"
@@ -46,7 +41,7 @@ class DocumentParticipant(models.Model):
         ]
 
     def __str__(self):
-        return f"{self.get_role_display()}: {self.employee.full_name}"
+        return f"{self.role}: {self.employee.full_name}"
 
     def delete(self, *args, **kwargs):
         if self.document.status == Document.Status.POSTED:

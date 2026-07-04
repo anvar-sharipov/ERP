@@ -195,6 +195,10 @@ class ChatConsumer(AsyncWebsocketConsumer):
                 "sender_photo_thumbnail": event.get("sender_photo_thumbnail"),  # ✅
                 "text": event["text"],
                 "created_at": event["created_at"],
+                "attachment_url": event.get("attachment_url"),
+                "attachment_name": event.get("attachment_name"),
+                "attachment_size": event.get("attachment_size"),
+                "attachment_content_type": event.get("attachment_content_type"),
             }))
         except Exception:
             pass

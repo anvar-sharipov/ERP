@@ -167,9 +167,8 @@ const CompanyAdmin = () => {
           <p className="font-bold text-gray-900 dark:text-gray-200 mt-2">{formData.name || t("no_name")}</p>
         </div>
         <div className="flex justify-end gap-2">
-          <Button text={t("cancel")} onClick={() => setConfirmModal(false)} />
+          <Button text={t("cancel")} onClick={() => setConfirmModal(false)} variant="secondary" />
           <Button
-            variant="danger"
             text={mutation.isPending ? t("saving") : t("confirm")}
             onClick={() => {
               setConfirmModal(false);

@@ -213,9 +213,9 @@ const RoleFormPage = () => {
           </div>
 
           <div className="flex gap-2">
-            <Button text={t("Cancel")} onClick={() => navigate(ROUTES.COMPANY_ADMIN.ROLES)} />
+            <Button text={t("Cancel")} onClick={() => navigate(ROUTES.COMPANY_ADMIN.ROLES)} variant="secondary" />
 
-            <Button text={saveMutation.isPending ? t("Saving") : t("Save")} variant="danger" onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending} />
+            <Button text={saveMutation.isPending ? t("Saving") : t("Save")} onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending} />
           </div>
         </div>
 

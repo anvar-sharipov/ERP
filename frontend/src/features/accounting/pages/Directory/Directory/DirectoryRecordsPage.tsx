@@ -434,12 +434,13 @@ const DirectoryRecordsPage = () => {
           <div className="flex justify-end gap-2 pt-2">
             <Button
               text="Отмена"
+              variant="secondary"
               onClick={() => {
                 setFormModalOpen(false);
                 setEditingRecord(null);
               }}
             />
-            <Button text={saveMutation.isPending ? "Сохранение..." : editingRecord ? "Сохранить" : "Создать"} onClick={() => saveMutation.mutate(formData)} variant="danger" />
+            <Button text={saveMutation.isPending ? "Сохранение..." : editingRecord ? "Сохранить" : "Создать"} onClick={() => saveMutation.mutate(formData)} />
           </div>
         </div>
       </Modal>

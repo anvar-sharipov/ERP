@@ -31,3 +31,17 @@ export const playInfoSound = () => {
   audio.volume = 0.5;
   audio.play().catch(() => {});
 };
+
+
+export const playMessageOut = () => {
+  const audio = new Audio("/sounds/message-out.mp3");
+  audio.volume = 0.5;
+  audio.play().catch(() => {});
+};
+
+
+export const playMessageOut2 = () => {
+  const audio = new Audio("/sounds/message-out2.mp3");
+  audio.volume = 0.5;
+  audio.play().catch(() => {});
+};

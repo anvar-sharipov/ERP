@@ -3,7 +3,8 @@ from rest_framework import serializers
 from ..models import (
     Unit, Brand, Tag, ProductCategory,
     Product, ProductImage, PriceType, ProductPrice,
-    Counterparty, Warehouse, WarehouseStock, ProductBundle, VolumeDiscount
+    Counterparty, Warehouse, WarehouseStock, ProductBundle, VolumeDiscount,
+    QuantityPromotion
 )
 
 from rest_framework import serializers
@@ -124,7 +125,8 @@ class BundleItemSerializer(serializers.ModelSerializer):
     bundle_product_unit_name = serializers.CharField(
         source="bundle_product.unit.name", read_only=True, default=""
     )
- 
+    bundle_product_thumbnail = serializers.SerializerMethodField()
+
     class Meta:
         model = ProductBundle
         fields = [
@@ -133,9 +135,24 @@ class BundleItemSerializer(serializers.ModelSerializer):
             "bundle_product_name",
             "bundle_product_unit",
             "bundle_product_unit_name",
+            "bundle_product_thumbnail",
             "qty_ratio",
             "default_price",
         ]
+
+    def get_bundle_product_thumbnail(self, obj):
+        images = obj.bundle_product.images.all()
+        main = next((img for img in images if img.is_main), None)
+        if main is None and images:
+            main = images[0]
+        if main:
+            request = self.context.get("request")
+            try:
+                url = main.thumbnail.url
+                return request.build_absolute_uri(url) if request else url
+            except Exception:
+                return None
+        return None
  
 
  # ── VolumeDiscount ────────────────────────────────────────────────────────────
@@ -158,8 +175,31 @@ class VolumeDiscountSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError(
                 {"max_qty": "max_qty должен быть больше min_qty."}
             )
-        return attrs       
-        
+        return attrs
+
+
+# ── QuantityPromotion ("N за N", бесплатное кол-во того же товара) ─────────────
+class QuantityPromotionSerializer(serializers.ModelSerializer):
+    price_type_name = serializers.CharField(source="price_type.name", read_only=True)
+
+    class Meta:
+        model  = QuantityPromotion
+        fields = [
+            "id", "product",
+            "price_type", "price_type_name",
+            "min_qty", "max_qty",
+            "free_qty",
+        ]
+
+    def validate(self, attrs):
+        min_qty = attrs.get("min_qty", 0)
+        max_qty = attrs.get("max_qty")
+        if max_qty is not None and max_qty <= min_qty:
+            raise serializers.ValidationError(
+                {"max_qty": "max_qty должен быть больше min_qty."}
+            )
+        return attrs
+
 
 class ProductSerializer(serializers.ModelSerializer):
     category_detail = ProductCategoryShortSerializer(source="category", read_only=True)
@@ -178,6 +218,7 @@ class ProductSerializer(serializers.ModelSerializer):
     prices = ProductPriceSerializer(many=True, read_only=True)
     bundle_items = BundleItemSerializer(many=True, read_only=True)
     volume_discounts = VolumeDiscountSerializer(many=True, read_only=True)
+    quantity_promotions = QuantityPromotionSerializer(many=True, read_only=True)
 
     class Meta:
         model = Product
@@ -194,7 +235,7 @@ class ProductSerializer(serializers.ModelSerializer):
             "prices",
             "created_at", "updated_at",
             "length", "width", "height", "weight", "volume_m3",
-            "description", 'bundle_items', 'volume_discounts'
+            "description", 'bundle_items', 'volume_discounts', 'quantity_promotions'
         ]
         read_only_fields = ["sku", "created_at", "updated_at"]
 
@@ -261,14 +302,35 @@ class ProductBundleSerializer(serializers.ModelSerializer):
 # ── Counterparty ─────────────────────────────────────────────────────────────
 
 class CounterpartySerializer(serializers.ModelSerializer):
+    photo = serializers.ImageField(required=False, allow_null=True)
+    photo_thumbnail = serializers.SerializerMethodField()
+
     class Meta:
         model = Counterparty
         fields = [
             "id", "name", "type",
             "inn", "phone", "email", "address",
-            "is_active", "created_at", "extra_data",
+            "is_active", "photo", "photo_thumbnail", "created_at", "extra_data",
         ]
         read_only_fields = ["created_at"]
+
+    def get_photo_thumbnail(self, obj):
+        return obj.photo_thumbnail.url if obj.photo_thumbnail else None
+
+    def to_representation(self, instance):
+        representation = super().to_representation(instance)
+        if instance.photo and hasattr(instance.photo, 'url'):
+            representation['photo'] = instance.photo.url
+        return representation
+
+    def update(self, instance, validated_data):
+        request = self.context.get("request")
+        if request is not None and request.data.get("photo", None) == "":
+            if instance.photo:
+                instance.photo.delete(save=False)
+            instance.photo = None
+            validated_data.pop("photo", None)
+        return super().update(instance, validated_data)
 
 
 # ── Warehouse ─────────────────────────────────────────────────────────────────

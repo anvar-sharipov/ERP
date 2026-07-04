@@ -243,17 +243,17 @@ const SidebarLeft: React.FC<SidebarLeftProps> = ({ isOpen }) => {
         {/* Мобиль: профиль + язык + тема */}
         <div
           className={`
-    lg:hidden flex flex-col gap-2
-    transition-all duration-200
-    ${isOpen ? "opacity-100 translate-y-0 delay-300" : "opacity-0 -translate-y-2 delay-0 pointer-events-none"}
-  `}
+            lg:hidden flex flex-col gap-2
+            transition-all duration-200
+            ${isOpen ? "opacity-100 translate-y-0 delay-300" : "opacity-0 -translate-y-2 delay-0 pointer-events-none"}
+          `}
         >
           <>
+            <ExchangeRateWidget />
             <UserProfileBlock variant="inline" showName={true} />
             <div className="flex items-center gap-2 px-1">
               <LanguageSwitcher />
               <ThemeToggle />
-              <ExchangeRateWidget />
             </div>
           </>
         </div>

@@ -11,10 +11,10 @@ export const employeeApi = {
   getOne: async (id: number) =>
     (await api.get(`/accounting/employees/${id}/`)).data,
 
-  save: (id: number | null, data: any) =>
+  save: (id: number | null, data: FormData) =>
     id
-      ? api.put(`/accounting/employees/${id}/`, data)
-      : api.post("/accounting/employees/", data),
+      ? api.put(`/accounting/employees/${id}/`, data, { headers: { "Content-Type": "multipart/form-data" } })
+      : api.post("/accounting/employees/", data, { headers: { "Content-Type": "multipart/form-data" } }),
 
   delete: (id: number) =>
     api.delete(`/accounting/employees/${id}/`),

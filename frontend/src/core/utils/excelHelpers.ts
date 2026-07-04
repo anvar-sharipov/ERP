@@ -54,19 +54,24 @@ export const addExcelHeader = async (
   // --- 3. Информация ---
   const infoData = [
     { label: `${t("Company")}:`, value: company?.name || "—" },
-    { label: `${t("User")}:`, value: user?.full_name || "—" },
-    { label: `${t("Position")}:`, value: user?.position || "—" },
+    { label: `${t("Operator")}:`, value: user?.full_name || "—" },
     { label: `${t("DownloadDate")}:`, value: new Date().toLocaleString() },
   ];
 
   infoData.forEach((item, index) => {
-    // Используем C и D для вывода данных
-    const cellLabel = worksheet.getCell(`C${index + 1}`);
-    const cellValue = worksheet.getCell(`D${index + 1}`);
-    
+    const rowNum = index + 1;
+    // Метка — колонки C:D, значение — колонки E:I. Обе merge'нутся, чтобы длинный
+    // текст не "прятался" под соседними ячейками товарной таблицы ниже — её ширины
+    // колонок задаются отдельно и могут не совпадать с шириной, нужной этому блоку.
+    const cellLabel = worksheet.getCell(rowNum, 3);
+    const cellValue = worksheet.getCell(rowNum, 5);
+
     cellLabel.value = item.label;
     cellLabel.font = { bold: true };
     cellValue.value = item.value;
+
+    worksheet.mergeCells(rowNum, 3, rowNum, 4);
+    worksheet.mergeCells(rowNum, 5, rowNum, 9);
   });
 
   // --- 4. Отступ перед таблицей ---

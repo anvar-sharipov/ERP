@@ -1,5 +1,3 @@
-// import React from "react";
-// import { api } from "../../../core/api/axiosInstance";
 import { useSidebar } from "../../../core/context/SidebarRightContext";
 import { useEffect } from "react";
 import { useNotify } from "../../../core/context/NotificationContext";

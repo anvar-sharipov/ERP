@@ -20,29 +20,40 @@ interface HeaderProps {
   setUnpostConfirm: (val: boolean) => void;
   unpostMutation: { isPending: boolean };
   saveMutation: { isPending: boolean; mutate: () => void };
+  disableSave?: boolean;
 }
 
-const Header = ({ docId, isEdit, header, docNumber, isPosted, setPostConfirm, postMutation, setUnpostConfirm, unpostMutation, saveMutation }: HeaderProps) => {
+const Header = ({ docId, isEdit, header, docNumber, isPosted, setPostConfirm, postMutation, setUnpostConfirm, unpostMutation, saveMutation, disableSave }: HeaderProps) => {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { getBackProps } = useRestoreScroll("selectedDocumentId", () => {});
 
   return (
-    <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
-      <div className="flex items-center gap-3">
+    <div className="flex items-center justify-between gap-3 mb-3 print:mb-1 flex-wrap">
+      <div className="flex items-center gap-3 print:w-full print:justify-center">
         {/* <BackButton id={docId ?? 0} getBackProps={() => ({ to: ROUTES.APP.DOCUMENTS_INVOICES })} /> */}
-        <BackButton id={docId ?? 0} getBackProps={getBackProps} />
-        <div>
-          <h1 className="text-xl font-bold">{isEdit ? `${t(DOC_TYPES.find((d) => d.value === header.document_type)?.label ?? t("Document"))} №${docNumber}` : t("NewDocument")}</h1>
-          {isEdit && <p className="text-sm text-gray-500">{isPosted ? t("PostedBadge") : t("DraftBadge")}</p>}
+        <div className="print:hidden">
+          <BackButton id={docId ?? 0} getBackProps={getBackProps} />
+        </div>
+        <div className="print:w-full">
+          {/* ── Заголовок документа — merge'ится (на всю ширину) и центрируется при печати, как в Excel ── */}
+          <h1 className="text-xl print:text-base print:text-center print:w-full font-bold">
+            {isEdit ? `${t(DOC_TYPES.find((d) => d.value === header.document_type)?.label ?? t("Document"))} №${docNumber}` : t("NewDocument")}
+          </h1>
+          {isEdit && <p className="text-sm text-gray-500 print:hidden">{isPosted ? t("PostedBadge") : t("DraftBadge")}</p>}
         </div>
       </div>
 
-      <div className="flex gap-2">
+      <div className="flex gap-2 print:hidden">
         {isEdit && !isPosted && <Button text={t("Post")} variant="danger" icon={<CheckCircle className="w-4 h-4" />} onClick={() => setPostConfirm(true)} disabled={postMutation.isPending} />}
         {isEdit && isPosted && <Button text={t("Unpost")} icon={<XCircle className="w-4 h-4" />} onClick={() => setUnpostConfirm(true)} disabled={unpostMutation.isPending} />}
-        <Button text={saveMutation.isPending ? t("Saving") : isEdit ? t("Save") : t("Create")} onClick={() => saveMutation.mutate()} disabled={isPosted} />
-        <Button text={t("Cancel")} onClick={() => navigate(ROUTES.APP.DOCUMENTS_INVOICES)} />
+        <Button
+          text={saveMutation.isPending ? t("Saving") : t("Save")}
+          onClick={() => saveMutation.mutate()}
+          disabled={isPosted || disableSave}
+          title={disableSave ? t("SelectBranchAndWarehouse") : undefined}
+        />
+        <Button variant="secondary" text={t("Cancel")} onClick={() => navigate(ROUTES.APP.DOCUMENTS_INVOICES)} />
       </div>
     </div>
   );

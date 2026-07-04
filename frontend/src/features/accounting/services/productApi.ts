@@ -87,10 +87,10 @@ export const counterpartyApi = {
     const params = type ? `?type=${type}` : "";
     return (await api.get(`/accounting/counterparties/${params}`)).data;
   },
-  save: (id: number | null, data: any) =>
+  save: (id: number | null, data: FormData) =>
     id
-      ? api.put(`/accounting/counterparties/${id}/`, data)
-      : api.post("/accounting/counterparties/", data),
+      ? api.put(`/accounting/counterparties/${id}/`, data, { headers: { "Content-Type": "multipart/form-data" } })
+      : api.post("/accounting/counterparties/", data, { headers: { "Content-Type": "multipart/form-data" } }),
   delete: (id: number) => api.delete(`/accounting/counterparties/${id}/`),
 };
 
@@ -144,6 +144,20 @@ export const volumeDiscountApi = {
 
   delete: (productId: number, id: number) =>
     api.delete(`/accounting/products/${productId}/volume-discounts/${id}/`),
+};
+
+export const quantityPromotionApi = {
+  getAll: async (productId: number) =>
+    (await api.get(`/accounting/products/${productId}/quantity-promotions/`)).data,
+
+  create: (productId: number, data: any) =>
+    api.post(`/accounting/products/${productId}/quantity-promotions/`, data),
+
+  update: (productId: number, id: number, data: any) =>
+    api.patch(`/accounting/products/${productId}/quantity-promotions/${id}/`, data),
+
+  delete: (productId: number, id: number) =>
+    api.delete(`/accounting/products/${productId}/quantity-promotions/${id}/`),
 };
 
 

@@ -45,6 +45,7 @@ const InvoicesPage = () => {
   const [deleteId, setDeleteId] = useState<number | null>(null);
   const navigate = useNavigate();
   const { workWarehouse, workBranch } = useDateStore();
+  const canCreateInvoice = canPost && !!workBranch && !!workWarehouse;
 
   const {
     data: invoices = [],
@@ -107,7 +108,13 @@ const InvoicesPage = () => {
 
   usePageHotkeys({
     canPost,
-    onInsert: () => navigate(ROUTES.APP.DOCUMENTS_CREATE),
+    onInsert: () => {
+      if (!workBranch || !workWarehouse) {
+        notify("error", t("SelectBranchAndWarehouse"));
+        return;
+      }
+      navigate(ROUTES.APP.DOCUMENTS_CREATE);
+    },
   });
 
   useEffect(() => {
@@ -115,14 +122,12 @@ const InvoicesPage = () => {
       <div className="space-y-4">
         <h4 className="font-bold text-indigo-300">{t("Actions")}</h4>
         <Button
-          //   disabled={!canPost}
+          disabled={!canCreateInvoice}
+          title={!canCreateInvoice ? t("SelectBranchAndWarehouse") : undefined}
           text={t("AddInvoice")}
           className="w-full"
           dark={true}
           icon={<Plus className="w-4 h-4" />}
-          //   onClick={() => {
-          //     <Button text={t("Add")} className="w-full" dark={true} icon={<Plus className="w-4 h-4" />} onClick={() => navigate(ROUTES.APP.DOCUMENTS_CREATE)} />
-          //   }}
           onClick={() => navigate(ROUTES.APP.DOCUMENTS_CREATE)}
         />
 
@@ -163,7 +168,7 @@ const InvoicesPage = () => {
         </div>
       </div>,
     );
-  }, [setSidebarContent, canPost, t, typeFilter, statusFilter]);
+  }, [setSidebarContent, canCreateInvoice, t, typeFilter, statusFilter]);
 
   const filtered = useTableFilter(invoices, {
     search: searchQuery,
@@ -217,7 +222,7 @@ const InvoicesPage = () => {
       excelWidth: 20,
       render: (item) => `${t(item.document_type)}`,
     },
-    { header: t("Date"), accessor: "date", sortable: true, excelWidth: 12 },
+    { header: t("Date"), accessor: "date", sortable: true, excelWidth: 12, render: (item) => new Date(item.date).toLocaleDateString("ru-RU") },
     {
       header: t("Counterparty"),
       accessor: "counterparty_detail",
@@ -225,6 +230,15 @@ const InvoicesPage = () => {
       excelWidth: 25,
       sortValue: (item) => item.counterparty_detail?.name ?? "",
       render: (item) => item.counterparty_detail?.name ?? "—",
+    },
+    {
+      header: t("Branch"),
+      accessor: "branch_detail",
+      sortable: true,
+      excelWidth: 20,
+      excelValue: (item) => item.branch_detail?.name ?? "",
+      sortValue: (item) => item.branch_detail?.name ?? "",
+      render: (item) => item.branch_detail?.name ?? "—",
     },
     {
       header: t("Warehouse"),

@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { api } from "../api/axiosInstance";
 import { useRBACSocket } from "../hooks/useRBACSocket";
 import { useScopeSocket } from "../hooks/useScopeSocket";
+import { useClosedPeriodSocket } from "../hooks/useClosedPeriodSocket";
 
 interface UserContextType {
   user: any;
@@ -26,6 +27,7 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   useRBACSocket();
   useScopeSocket();
+  useClosedPeriodSocket();
 
   return <UserContext.Provider value={{ user: data, isLoading, refetch }}>{children}</UserContext.Provider>;
 };
@@ -35,7 +37,3 @@ export const useUser = () => {
   if (!context) throw new Error("useUser must be used within UserProvider");
   return context;
 };
-
-
-
-

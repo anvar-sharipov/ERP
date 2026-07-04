@@ -5,6 +5,8 @@ from django.db import transaction
 from django.contrib.contenttypes.models import ContentType
 from accounting.utils import check_period_open, generate_journal_number
 from rest_framework import serializers as drf_serializers
+from users.scoping import get_user_scope
+
 
 
 from accounting.models import (
@@ -90,6 +92,8 @@ class TransactionLineSerializer(serializers.ModelSerializer):
 
 class JournalEntrySerializer(serializers.ModelSerializer):
     lines = TransactionLineSerializer(many=True)
+    # branch_name = serializers.CharField(source='branch.name', read_only=True)
+    branch_name = serializers.CharField(source='branch.name', read_only=True, default=None)
 
     # Read-only поля для отображения
     created_by_name = serializers.CharField(
@@ -104,6 +108,7 @@ class JournalEntrySerializer(serializers.ModelSerializer):
         fields = [
             'id', 'number', 'date', 'status', 'status_display',
             'description', 'lines',
+            'branch', 'branch_name',
             'source_document_type', 'source_document_id',
             'created_by', 'created_by_name', 'created_at',
         ]
@@ -127,11 +132,34 @@ class JournalEntrySerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("Сумма операции не может быть равна нулю.")
 
         return lines
+    
+    
+    def validate_branch(self, branch):
+        user = self.context['request'].user
+        if user.is_superuser:
+            return branch
+        user_branches, _ = get_user_scope(user)
+        if user_branches:
+            if not branch:
+                raise serializers.ValidationError(
+                    "Выберите филиал в правой панели перед созданием операции."
+                )
+            if branch.pk not in user_branches:
+                raise serializers.ValidationError("Нет доступа к этому филиалу.")
+        return branch
 
     @transaction.atomic
     def create(self, validated_data):
-        lines_data   = validated_data.pop('lines')
-        user         = self.context['request'].user
+        lines_data = validated_data.pop('lines')
+        user = self.context['request'].user
+
+        # ✅ Автоподстановка branch, если у пользователя ровно один филиал в scope
+        if not validated_data.get('branch') and not user.is_superuser:
+            user_branches, _ = get_user_scope(user)
+            if len(user_branches) == 1:
+                from accounting.models import Branch
+                validated_data['branch'] = Branch.objects.get(pk=user_branches[0])
+
         journal_entry = JournalEntry.objects.create(
             **validated_data,
             created_by=user,
@@ -187,6 +215,7 @@ class JournalEntryListSerializer(serializers.ModelSerializer):
     status_display  = serializers.CharField(source='get_status_display', read_only=True)
     # created_by_name = serializers.CharField(source='created_by.get_full_name', read_only=True)
     created_by_name = serializers.SerializerMethodField()
+    branch_name     = serializers.CharField(source='branch.name', read_only=True, default=None) 
     debit_total     = serializers.SerializerMethodField()
     
     debit_accounts = serializers.SerializerMethodField()
@@ -247,6 +276,7 @@ class JournalEntryListSerializer(serializers.ModelSerializer):
             'id',
             'number',
             'date',
+            'branch_name',
 
             'debit_accounts',
             'debit_subconto1',
@@ -370,7 +400,7 @@ class ClosedPeriodSerializer(serializers.ModelSerializer):
     branch_name      = serializers.CharField(source='branch.name', read_only=True)
     warehouse_name   = serializers.CharField(source='warehouse.name', read_only=True)
     scope_display    = serializers.SerializerMethodField()
- 
+
     class Meta:
         model  = ClosedPeriod
         fields = [
@@ -382,14 +412,24 @@ class ClosedPeriodSerializer(serializers.ModelSerializer):
             'closed_at', 'note',
         ]
         read_only_fields = ['closed_by', 'closed_at']
- 
+
+    def validate_warehouse(self, warehouse):
+        # Вариант А: закрытие возможно ТОЛЬКО по конкретному складу.
+        # Никаких закрытий "на весь филиал" или "глобально".
+        if not warehouse:
+            raise serializers.ValidationError(
+                "Укажите склад — закрытие дня возможно только по конкретному складу."
+            )
+        return warehouse
+
+    def validate(self, attrs):
+        # branch не участвует в закрытии — если пришёл, игнорируем/обнуляем,
+        # чтобы не плодить неявных "закрытий филиала".
+        attrs['branch'] = None
+        return attrs
+
     def get_scope_display(self, obj):
-        if not obj.branch and not obj.warehouse:
-            return 'Глобально'
-        parts = []
-        if obj.branch:
-            parts.append(f'Филиал: {obj.branch.name}')
         if obj.warehouse:
-            parts.append(f'Склад: {obj.warehouse.name}')
-        return ' | '.join(parts)
+            return f'Склад: {obj.warehouse.name}'
+        return 'Глобально'  # не должно возникать при новых записях
  

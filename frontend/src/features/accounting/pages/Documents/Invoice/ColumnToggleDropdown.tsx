@@ -41,7 +41,7 @@ const ColumnToggleDropdown = ({ columns, onToggleScreen, onTogglePrint, onReset 
   const editableCols = columns.filter((c) => !c.locked);
 
   return (
-    <div ref={ref} className="relative">
+    <div ref={ref} className="relative print:hidden">
       {/* Кнопка */}
       <button
         onClick={() => setOpen((p) => !p)}

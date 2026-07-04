@@ -1,7 +1,20 @@
 # accounting/models/employee.py
+import uuid
 from django.conf import settings
-from django.db import models
+from django.db import connection, models
+from imagekit.models import ImageSpecField
+from imagekit.processors import ResizeToFill
+
+from utils.validators import validate_image_size
+
 from .company import Branch
+
+
+def employee_photo_path(instance, filename):
+    ext = filename.split('.')[-1].lower()
+    filename = f"{uuid.uuid4()}.{ext}"
+    folder_id = instance.pk if instance.pk else uuid.uuid4()
+    return f"{connection.schema_name}/employee_photos/{folder_id}/{filename}"
 
 
 class Position(models.Model):
@@ -43,6 +56,14 @@ class Employee(models.Model):
     )
     note = models.TextField(blank=True, verbose_name="Примечание")
     is_active = models.BooleanField(default=True, verbose_name="Активен")
+    photo = models.ImageField(
+        upload_to=employee_photo_path, blank=True, null=True,
+        validators=[validate_image_size], verbose_name="Фото"
+    )
+    photo_thumbnail = ImageSpecField(
+        source='photo', processors=[ResizeToFill(150, 150)],
+        format='JPEG', options={'quality': 80}
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

@@ -379,7 +379,7 @@ const Branches = () => {
             {t("Active")}
           </label>
           <div className="flex justify-end gap-2 pt-2">
-            <Button text={t("Cancel")} onClick={() => setModalOpen(false)} />
+            <Button text={t("Cancel")} onClick={() => setModalOpen(false)} variant="secondary" />
             <Button
               text={mutation.isPending ? t("Saving") : t("Save")}
               onClick={() => {
@@ -404,7 +404,7 @@ const Branches = () => {
           <p className="text-red-500 mt-4">{t("Irreversible")}</p>
         </div>
         <div className="flex justify-end gap-2">
-          <Button text={t("Cancel")} onClick={() => setDeleteModal(false)} />
+          <Button text={t("Cancel")} onClick={() => setDeleteModal(false)} variant="secondary" />
           <Button
             variant="danger"
             text={t("Delete")}

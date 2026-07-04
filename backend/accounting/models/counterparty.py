@@ -1,6 +1,18 @@
 # accounting/models/counterparty.py
+import uuid
 from django.contrib.postgres.indexes import GinIndex
-from django.db import models
+from django.db import connection, models
+from imagekit.models import ImageSpecField
+from imagekit.processors import ResizeToFill
+
+from utils.validators import validate_image_size
+
+
+def counterparty_photo_path(instance, filename):
+    ext = filename.split('.')[-1].lower()
+    filename = f"{uuid.uuid4()}.{ext}"
+    folder_id = instance.pk if instance.pk else uuid.uuid4()
+    return f"{connection.schema_name}/counterparty_photos/{folder_id}/{filename}"
 
 
 class CounterpartyManager(models.Manager):
@@ -26,6 +38,14 @@ class Counterparty(models.Model):
     email = models.EmailField(blank=True)
     address = models.TextField(blank=True)
     is_active = models.BooleanField(default=True)
+    photo = models.ImageField(
+        upload_to=counterparty_photo_path, blank=True, null=True,
+        validators=[validate_image_size], verbose_name="Фото"
+    )
+    photo_thumbnail = ImageSpecField(
+        source='photo', processors=[ResizeToFill(150, 150)],
+        format='JPEG', options={'quality': 80}
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     extra_data = models.JSONField(default=dict, blank=True)
 
@@ -40,3 +60,6 @@ class Counterparty(models.Model):
 
     def __str__(self):
         return self.name
+    
+    
+    

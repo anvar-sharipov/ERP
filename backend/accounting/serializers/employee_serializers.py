@@ -13,6 +13,8 @@ class EmployeeSerializer(serializers.ModelSerializer):
     position_name = serializers.CharField(source="position.name", read_only=True)
     user_username = serializers.CharField(source="user.username", read_only=True)
     branch_name   = serializers.CharField(source="branch.name",   read_only=True)
+    photo = serializers.ImageField(required=False, allow_null=True)
+    photo_thumbnail = serializers.SerializerMethodField()
 
     class Meta:
         model = Employee
@@ -31,9 +33,29 @@ class EmployeeSerializer(serializers.ModelSerializer):
             "user_username",
             "note",
             "is_active",
+            "photo",
+            "photo_thumbnail",
             "created_at",
             "updated_at",
         ]
+
+    def get_photo_thumbnail(self, obj):
+        return obj.photo_thumbnail.url if obj.photo_thumbnail else None
+
+    def to_representation(self, instance):
+        representation = super().to_representation(instance)
+        if instance.photo and hasattr(instance.photo, 'url'):
+            representation['photo'] = instance.photo.url
+        return representation
+
+    def update(self, instance, validated_data):
+        request = self.context.get("request")
+        if request is not None and request.data.get("photo", None) == "":
+            if instance.photo:
+                instance.photo.delete(save=False)
+            instance.photo = None
+            validated_data.pop("photo", None)
+        return super().update(instance, validated_data)
 
 
 # ── Короткий сериализатор для выбора в документах ─────────────────────────────

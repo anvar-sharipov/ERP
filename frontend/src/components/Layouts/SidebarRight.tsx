@@ -84,4 +84,5 @@ const SidebarRight: React.FC<SidebarRightProps> = ({ isOpen }) => {
   );
 };
 
-export default SidebarRight;
+// export default SidebarRight;
+export default React.memo(SidebarRight);

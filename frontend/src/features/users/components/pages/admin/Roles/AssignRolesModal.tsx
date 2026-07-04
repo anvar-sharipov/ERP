@@ -53,8 +53,8 @@ export const AssignRolesModal = ({ userId, isOpen, onClose, currentRoles }: any)
           ))}
         </div>
         <div className="flex justify-end gap-2 mt-4">
-          <Button text={t("Cancel")} onClick={onClose} />
-          <Button text={t("Save")} onClick={() => assignMutation.mutate(selectedRoles)} variant="danger" />
+          <Button text={t("Cancel")} onClick={onClose} variant="secondary" />
+          <Button text={t("Save")} onClick={() => assignMutation.mutate(selectedRoles)} />
         </div>
       </div>
     </Modal>

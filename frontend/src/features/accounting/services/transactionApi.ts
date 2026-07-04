@@ -14,6 +14,7 @@ export interface TransactionLine {
   account_code?: string
   account_name?: string
   amount:       string
+  // branch?: string
   subcontos:    Record<string, { id: number; name: string }>
 }
 
@@ -32,6 +33,8 @@ export interface JournalEntry {
   created_at:       string
   // debit_subcontos?: string
   // credit_subcontos?: string
+  branch?: number | null;        // ✅ добавить
+  branch_name?: string | null; 
   debit_subconto1?: string
   debit_subconto2?: string
   debit_subconto3?: string
@@ -44,6 +47,7 @@ export interface JournalEntry {
 export interface JournalEntryPayload {
   number?:      string
   date?:        string
+  branch?: number | null;
   description: string
   lines:       TransactionLine[]
 }
@@ -101,8 +105,6 @@ export const transactionApi = {
 export interface ClosedPeriod {
   id:             number
   date:           string
-  branch:         number | null
-  branch_name:    string | null
   warehouse:      number | null
   warehouse_name: string | null
   scope_display:  string
@@ -137,37 +139,57 @@ export const movementApi = {
   list: (params?: Record<string, string>) => api.get<StockMovement[]>(M, { params }),
 }
 
+// export const closedPeriodApi = {
+//   check: (date: string, params?: { branch?: number | null; warehouse?: number | null }) =>
+//     api.get<{ date: string; is_closed: boolean }>(`${C}check/`, {
+//       params: { date, ...params },
+//     }),
+ 
+//   list: (params?: Record<string, string>) =>
+//     api.get<ClosedPeriod[]>(C, { params }),
+ 
+//   close: (date: string, options?: { branch?: number | null; warehouse?: number | null; note?: string }) =>
+//     api.post<ClosedPeriod>(C, {
+//       date,
+//       branch:    options?.branch    ?? null,
+//       warehouse: options?.warehouse ?? null,
+//       note:      options?.note      ?? '',
+//     }),
+ 
+
+
+// open: async (date: string, options?: { branch?: number | null; warehouse?: number | null }) => {
+//     const params = {
+//       date,
+//       ...(options?.branch    ? { branch:    options.branch }    : {}),
+//       ...(options?.warehouse ? { warehouse: options.warehouse } : {}),
+//     }
+//     // console.log('open params:', params)  // ← что уходит
+//     const res = await api.get<ClosedPeriod[]>(C, { params })
+//     // console.log('open response:', res.data)
+//     const period = res.data[0] ?? (res.data as any).results?.[0]
+//     if (period) await api.delete(`${C}${period.id}/`)
+//   },
+// }
+
 export const closedPeriodApi = {
-  check: (date: string, params?: { branch?: number | null; warehouse?: number | null }) =>
+  check: (date: string, warehouse: number) =>
     api.get<{ date: string; is_closed: boolean }>(`${C}check/`, {
-      params: { date, ...params },
+      params: { date, warehouse },
     }),
- 
-  list: (params?: Record<string, string>) =>
-    api.get<ClosedPeriod[]>(C, { params }),
- 
-  close: (date: string, options?: { branch?: number | null; warehouse?: number | null; note?: string }) =>
-    api.post<ClosedPeriod>(C, {
-      date,
-      branch:    options?.branch    ?? null,
-      warehouse: options?.warehouse ?? null,
-      note:      options?.note      ?? '',
+
+  // Проверка "закрыты ли ВСЕ склады филиала" на дату — для инфо-текста,
+  // когда выбран branch, но не выбран конкретный warehouse
+  checkWarehouses: (date: string, warehouseIds: number[]) =>
+    api.get<ClosedPeriod[]>(C, {
+      params: { date, warehouse__in: warehouseIds.join(',') },
     }),
- 
 
+  close: (date: string, warehouse: number, note?: string) =>
+    api.post<ClosedPeriod>(C, { date, warehouse, note: note ?? '' }),
 
-open: async (date: string, options?: { branch?: number | null; warehouse?: number | null }) => {
-    const params = {
-      date,
-      ...(options?.branch    ? { branch:    options.branch }    : {}),
-      ...(options?.warehouse ? { warehouse: options.warehouse } : {}),
-    }
-    // console.log('open params:', params)  // ← что уходит
-    const res = await api.get<ClosedPeriod[]>(C, { params })
-    // console.log('open response:', res.data)
-    const period = res.data[0] ?? (res.data as any).results?.[0]
-    if (period) await api.delete(`${C}${period.id}/`)
-  },
+  reopen: (id: number) =>
+    api.delete(`${C}${id}/`),
 }
 
 

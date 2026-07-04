@@ -11,8 +11,11 @@ django.setup()
 
 from django.contrib.auth import get_user_model
 from django_tenants.utils import tenant_context
-from companies.models import Company, Domain
-from accounting.models import Account, CompanyProfile, Branch
+from companies.models import Company, Domain, PlatformContact
+from accounting.models import (
+    Account, CompanyProfile, Branch,
+    Unit, Brand, ProductCategory, Tag, PriceType, Currency, Warehouse, Position,
+)
 
 
 
@@ -94,6 +97,26 @@ def initialize_system():
         if saas_password and saas_username and not User.objects.filter(username=saas_username).exists():
             User.objects.create_superuser(username=saas_username, email=saas_email, password=saas_password)
             print(f"--- SaaS суперпользователь '{saas_username}' создан ---")
+
+        # ------------------------------------------------------------------
+        # 1.6. Контакты владельца платформы (public схема)
+        # ------------------------------------------------------------------
+        platform_contact, created = PlatformContact.objects.get_or_create(
+            id=1,
+            defaults={
+                'full_name': 'Sharipov Anvar',
+                'address': 'Merkez-2, jay-3, oy 55',
+                'phone': '+99361304356',
+                'phone2': '99332237383',
+                'email': 'anvar7235@gmail.com',
+                'telegram': 'dejavu',
+                'is_active': True,
+            }
+        )
+        if created:
+            print("--- Контакты платформы созданы ---")
+        else:
+            print("--- Контакты платформы уже существуют ---")
 
     # ------------------------------------------------------------------
     # 2. Тенант
@@ -342,6 +365,100 @@ def initialize_system():
                 print(f"--- Филиал '{b['name']}' создан ---")
             else:
                 print(f"--- Филиал '{b['name']}' уже существует ---")
+
+        # 3.8 Единицы измерения
+        units_data = [
+            {'name': 'Штука', 'short_name': 'шт'},
+            {'name': 'Килограмм', 'short_name': 'кг'},
+            {'name': 'Литр', 'short_name': 'л'},
+            {'name': 'Метр', 'short_name': 'м'},
+            {'name': 'Квадратный метр', 'short_name': 'м²'},
+            {'name': 'Упаковка', 'short_name': 'уп'},
+        ]
+        for u in units_data:
+            _, created = Unit.objects.get_or_create(short_name=u['short_name'], defaults={'name': u['name']})
+        print(f"--- Единицы измерения: {Unit.objects.count()} ---")
+
+        # 3.9 Бренды
+        brands_data = ['TechnoPro', 'AquaLine', 'BuildMaster', 'EcoPlast']
+        for name in brands_data:
+            Brand.objects.get_or_create(name=name, defaults={'slug': name.lower()})
+        print(f"--- Бренды: {Brand.objects.count()} ---")
+
+        # 3.10 Категории товаров (несколько уровней вложенности)
+        categories_data = [
+            # Корневые
+            {'name': 'Электроника', 'slug': 'electronics', 'parent': None},
+            {'name': 'Строительные материалы', 'slug': 'building-materials', 'parent': None},
+
+            # 2-й уровень
+            {'name': 'Компьютеры', 'slug': 'computers', 'parent': 'electronics'},
+            {'name': 'Телефоны', 'slug': 'phones', 'parent': 'electronics'},
+            {'name': 'Трубы и фитинги', 'slug': 'pipes-fittings', 'parent': 'building-materials'},
+            {'name': 'Крепёж', 'slug': 'fasteners', 'parent': 'building-materials'},
+
+            # 3-й уровень
+            {'name': 'Ноутбуки', 'slug': 'laptops', 'parent': 'computers'},
+            {'name': 'Комплектующие', 'slug': 'computer-parts', 'parent': 'computers'},
+            {'name': 'Металлические трубы', 'slug': 'metal-pipes', 'parent': 'pipes-fittings'},
+            {'name': 'Пластиковые трубы', 'slug': 'plastic-pipes', 'parent': 'pipes-fittings'},
+        ]
+        for c in categories_data:
+            if c['parent'] is None:
+                ProductCategory.objects.get_or_create(slug=c['slug'], defaults={'name': c['name'], 'parent': None})
+        for c in categories_data:
+            if c['parent'] is not None:
+                try:
+                    parent = ProductCategory.objects.get(slug=c['parent'])
+                    ProductCategory.objects.get_or_create(slug=c['slug'], defaults={'name': c['name'], 'parent': parent})
+                except ProductCategory.DoesNotExist:
+                    print(f"⚠️ Родительская категория '{c['parent']}' не найдена для '{c['slug']}'")
+        print(f"--- Категории товаров: {ProductCategory.objects.count()} ---")
+
+        # 3.11 Теги
+        tags_data = ['Новинка', 'Хит продаж', 'Акция']
+        for name in tags_data:
+            Tag.objects.get_or_create(name=name, defaults={'slug': name.lower().replace(' ', '-')})
+        print(f"--- Теги: {Tag.objects.count()} ---")
+
+        # 3.12 Типы цен
+        price_types_data = ['Розничная', 'Оптовая', 'Закупочная']
+        for name in price_types_data:
+            PriceType.objects.get_or_create(name=name)
+        print(f"--- Типы цен: {PriceType.objects.count()} ---")
+
+        # 3.13 Валюты
+        currencies_data = [
+            {'code': 'TMT', 'name': 'Туркменский манат', 'symbol': 'м'},
+            {'code': 'USD', 'name': 'Доллар США', 'symbol': '$'},
+            {'code': 'EUR', 'name': 'Евро', 'symbol': '€'},
+            {'code': 'RUB', 'name': 'Российский рубль', 'symbol': '₽'},
+        ]
+        for c in currencies_data:
+            Currency.objects.get_or_create(code=c['code'], defaults={'name': c['name'], 'symbol': c['symbol']})
+        print(f"--- Валюты: {Currency.objects.count()} ---")
+
+        # 3.14 Склады (по одному основному на филиал + резервный на главном офисе)
+        hq = Branch.objects.filter(code='HQ').first()
+        mary = Branch.objects.filter(code='MARY').first()
+        turk = Branch.objects.filter(code='TURK').first()
+        warehouses_data = [
+            {'name': 'Основной склад HQ', 'branch': hq, 'is_main': True},
+            {'name': 'Резервный склад HQ', 'branch': hq, 'is_main': False},
+            {'name': 'Склад Мары', 'branch': mary, 'is_main': True},
+            {'name': 'Склад Туркменабат', 'branch': turk, 'is_main': True},
+        ]
+        for w in warehouses_data:
+            if not w['branch']:
+                continue
+            Warehouse.objects.get_or_create(name=w['name'], branch=w['branch'], defaults={'is_main': w['is_main']})
+        print(f"--- Склады: {Warehouse.objects.count()} ---")
+
+        # 3.15 Должности (из позиций тестовых пользователей выше)
+        positions_data = sorted({u['position'] for u in test_users})
+        for name in positions_data:
+            Position.objects.get_or_create(name=name)
+        print(f"--- Должности: {Position.objects.count()} ---")
 
 
 if __name__ == '__main__':

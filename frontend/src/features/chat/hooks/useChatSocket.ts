@@ -17,6 +17,10 @@ interface IncomingMessage {
 
   text?: string;
   created_at?: string;
+  attachment_url?: string | null;
+  attachment_name?: string | null;
+  attachment_size?: number | null;
+  attachment_content_type?: string | null;
 
   user_id?: number;
 

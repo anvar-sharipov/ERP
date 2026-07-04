@@ -296,9 +296,9 @@ const PositionsPage = () => {
           </label>
 
           <div className="flex justify-end gap-2">
-            <Button text={t("Cancel")} onClick={() => setFormOpen(false)} />
+            <Button text={t("Cancel")} variant="secondary" onClick={() => setFormOpen(false)} />
 
-            <Button text={saveMutation.isPending ? t("Saving") : editing ? t("Save") : t("Create")} onClick={() => saveMutation.mutate(form)} variant="danger" />
+            <Button text={saveMutation.isPending ? t("Saving") : editing ? t("Save") : t("Create")} onClick={() => saveMutation.mutate(form)} />
           </div>
         </div>
       </Modal>

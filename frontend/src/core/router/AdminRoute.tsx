@@ -15,20 +15,3 @@ export const AdminRoute: React.FC = () => {
 
   return <Outlet />;
 };
-
-// import React from "react";
-// import { Navigate, Outlet } from "react-router-dom";
-// import { useAccess } from "../hooks/useAccess";
-// import { ROUTES } from "./routes";
-
-// export const AdminRoute: React.FC = () => {
-//   const { isAdmin, isSuperUser, isLoading } = useAccess();
-
-//   if (isLoading) return null; // или <Spinner />
-
-//   if (!isAdmin && !isSuperUser) {
-//     return <Navigate to={ROUTES.APP.DASHBOARD} replace />;
-//   }
-
-//   return <Outlet />;
-// };

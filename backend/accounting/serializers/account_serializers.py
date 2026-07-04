@@ -71,7 +71,7 @@ class SubcontoTypeSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = SubcontoType
-        fields = ['id', 'name', 'slug', 'directory', 'directory_name', 'content_type', 'content_type_detail']
+        fields = ['id', 'name', 'slug', 'directory', 'directory_name', 'content_type', 'content_type_detail', 'content_type_filter',]
 
     def validate(self, data):
         ct = data.get('content_type')

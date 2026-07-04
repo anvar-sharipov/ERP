@@ -8,24 +8,25 @@ User = get_user_model()
 
 class UserShortSerializer(serializers.ModelSerializer):
     photo_thumbnail = serializers.SerializerMethodField()
+    photo = serializers.SerializerMethodField()
 
     class Meta:
         model = User
-        fields = ["id", "username", "first_name", "last_name", "photo_thumbnail"]
+        fields = ["id", "username", "first_name", "last_name", "photo", "photo_thumbnail"]
 
-    # def get_photo_thumbnail(self, obj):
-    #     request = self.context.get("request")
-    #     try:
-    #         url = obj.photo_thumbnail.url
-    #         if request:
-    #             return request.build_absolute_uri(url)
-    #         return url
-    #     except Exception:
-    #         return None
     def get_photo_thumbnail(self, obj):
         try:
             url = obj.photo_thumbnail.url
             # Проверяем что url не пустой и содержит имя файла
+            if url and url != "/media/" and len(url) > 10:
+                return url
+            return None
+        except Exception:
+            return None
+
+    def get_photo(self, obj):
+        try:
+            url = obj.photo.url
             if url and url != "/media/" and len(url) > 10:
                 return url
             return None
@@ -45,17 +46,27 @@ class MessageSerializer(serializers.ModelSerializer):
     sender = UserShortSerializer(read_only=True)
     reads = MessageReadSerializer(many=True, read_only=True)
     is_read_by_me = serializers.SerializerMethodField()
+    attachment_url = serializers.SerializerMethodField()
 
     class Meta:
         model = Message
-        fields = ["id", "conversation", "sender", "text", "created_at", "reads", "is_read_by_me"]
-        read_only_fields = ["id", "sender", "created_at", "reads", "is_read_by_me"]
+        fields = [
+            "id", "conversation", "sender", "text", "created_at", "reads", "is_read_by_me",
+            "attachment_url", "attachment_name", "attachment_size", "attachment_content_type",
+        ]
+        read_only_fields = [
+            "id", "sender", "created_at", "reads", "is_read_by_me",
+            "attachment_url", "attachment_name", "attachment_size", "attachment_content_type",
+        ]
 
     def get_is_read_by_me(self, obj):
         request = self.context.get("request")
         if not request:
             return False
         return obj.reads.filter(user=request.user).exists()
+
+    def get_attachment_url(self, obj):
+        return obj.attachment.url if obj.attachment else None
 
 
 class ConversationSerializer(serializers.ModelSerializer):

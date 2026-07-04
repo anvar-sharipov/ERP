@@ -12,6 +12,8 @@ import { Modal } from "../../../../components/ui/Modal/Modal";
 import { ConfirmModal } from "../../../../components/ui/Modal/ConfirmModal";
 import { RBACGuard } from "../../../../components/ui/RBACGuard";
 import { StatusBadge } from "../../../../components/ui/StatusBadge";
+import { Avatar } from "../../../../components/ui/Avatar";
+import { ImagePreview } from "../../../../components/ui/ImagePreview";
 import { Plus } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useTableFilter } from "../../../../core/hooks/useTableFilter";
@@ -29,6 +31,8 @@ interface Employee {
   phone: string;
   note: string;
   is_active: boolean;
+  photo?: string | null;
+  photo_thumbnail?: string | null;
 }
 
 interface Position {
@@ -75,13 +79,18 @@ const EmployeesPage = () => {
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<Employee | null>(null);
   const [form, setForm] = useState<EmployeeForm>(EMPTY);
+  const [photoFile, setPhotoFile] = useState<File | null>(null);
+  const [photoCleared, setPhotoCleared] = useState(false);
+  const [existingPhotoUrl, setExistingPhotoUrl] = useState<string | null>(null);
+  const [previewSrc, setPreviewSrc] = useState<string | null>(null);
   const [deleteModal, setDeleteModal] = useState(false);
   const [deleteId, setDeleteId] = useState<number | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [positionFilter, setPositionFilter] = useState<number | "all">("all");
   const [branchFilter] = useState<number | "all">("all");
   const [activeFilter, setActiveFilter] = useState<"all" | "active" | "inactive">("all");
-  const { workBranch } = useDateStore();
+  // const { workBranch } = useDateStore();
+  const workBranch = useDateStore((s) => s.workBranch);
 
   const { data: positions = [] } = useQuery<Position[]>({
     queryKey: ["positions"],
@@ -102,7 +111,6 @@ const EmployeesPage = () => {
     staleTime: 60_000,
   });
   const branches = scope?.branches ?? [];
-
   const hasScope = !scope?.is_global;
 
   const {
@@ -116,6 +124,12 @@ const EmployeesPage = () => {
     retry: false,
   });
 
+  const handleAdd = () => {
+    setEditing(null);
+    setForm({ ...EMPTY, branch: workBranch?.id ?? null });
+    setFormOpen(true);
+  };
+
   useEffect(() => {
     if (editing) {
       setForm({
@@ -126,13 +140,25 @@ const EmployeesPage = () => {
         note: editing.note,
         is_active: editing.is_active,
       });
+      setExistingPhotoUrl(editing.photo ?? null);
     } else {
-      setForm(EMPTY);
+      setForm({ ...EMPTY, branch: workBranch?.id ?? null });
+      setExistingPhotoUrl(null);
     }
-  }, [editing]);
+    setPhotoFile(null);
+    setPhotoCleared(false);
+  }, [editing, workBranch]);
 
   const saveMutation = useMutation({
-    mutationFn: (data: EmployeeForm) => employeeApi.save(editing?.id ?? null, data),
+    mutationFn: () => {
+      const data = new FormData();
+      Object.entries(form).forEach(([key, value]) => {
+        if (value !== null && value !== undefined) data.append(key, String(value));
+      });
+      if (photoFile) data.append("photo", photoFile);
+      else if (photoCleared) data.append("photo", "");
+      return employeeApi.save(editing?.id ?? null, data);
+    },
     onSuccess: (res) => {
       queryClient.invalidateQueries({ queryKey: ["employees"] });
       notify("success", editing ? t("SuccessUpdated") : t("SuccessCreated"));
@@ -159,17 +185,8 @@ const EmployeesPage = () => {
     setSidebarContent(
       <div className="space-y-4">
         <h4 className="font-bold text-indigo-300">{t("Actions")}</h4>
-        <Button
-          disabled={!canPost}
-          text={t("AddEmployee")}
-          className="w-full"
-          dark
-          icon={<Plus className="w-4 h-4" />}
-          onClick={() => {
-            setEditing(null);
-            setFormOpen(true);
-          }}
-        />
+        {/* <Button disabled={!canPost} text={t("AddEmployee")} className="w-full" dark icon={<Plus className="w-4 h-4" />} onClick={handleAdd} /> */}
+        <Button disabled={!canPost} text={t("AddEmployee")} className="w-full" dark icon={<Plus className="w-4 h-4" />} onClick={handleAdd} />
 
         {/* Фильтр по должности */}
         <div className="pt-4 border-t border-indigo-900/30">
@@ -227,15 +244,17 @@ const EmployeesPage = () => {
 
   usePageHotkeys({
     canPost,
-    onInsert: () => {
-      setEditing(null);
-      setForm(EMPTY);
-      setFormOpen(true);
-    },
+    onInsert: handleAdd,
   });
 
   const columns: Column<Employee>[] = [
     { header: t("ID"), accessor: "id", sortable: true },
+    {
+      header: t("Photo"),
+      accessor: "photo_thumbnail",
+      hideInPrint: true,
+      render: (item) => <Avatar src={item.photo_thumbnail} fallbackText={item.full_name} size="sm" onClick={() => item.photo && setPreviewSrc(item.photo)} />,
+    },
     { header: t("FullName"), accessor: "full_name", sortable: true },
     { header: t("Position"), accessor: "position_name", sortable: true },
     {
@@ -302,6 +321,38 @@ const EmployeesPage = () => {
 
       <Modal isOpen={formOpen} onClose={() => setFormOpen(false)} title={editing ? t("Edit") : t("AddEmployee")} closeOnOutsideClick={false}>
         <div className="space-y-4">
+          {(() => {
+            const previewUrl = photoFile ? URL.createObjectURL(photoFile) : !photoCleared ? existingPhotoUrl : null;
+            return (
+              <div className="flex items-center gap-3">
+                {previewUrl && (
+                  <div className="relative inline-block">
+                    <Avatar src={previewUrl} fallbackText={form.full_name || "?"} size="xl" onClick={() => setPreviewSrc(previewUrl)} />
+                    <button
+                      type="button"
+                      className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-red-500 text-white text-[10px] flex items-center justify-center hover:bg-red-600"
+                      onClick={() => {
+                        setPhotoFile(null);
+                        setPhotoCleared(true);
+                      }}
+                    >
+                      ×
+                    </button>
+                  </div>
+                )}
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="text-[10px] flex-1 text-gray-500 dark:text-indigo-300 file:mr-2 file:py-1 file:px-2 file:rounded-md file:border-0 file:text-[10px] file:font-semibold file:bg-indigo-50 dark:file:bg-indigo-950 file:text-indigo-700 dark:file:text-indigo-300 hover:file:bg-indigo-100 dark:hover:file:bg-indigo-900 cursor-pointer"
+                  onChange={(e) => {
+                    setPhotoFile(e.target.files?.[0] || null);
+                    setPhotoCleared(false);
+                  }}
+                />
+              </div>
+            );
+          })()}
+
           <Input label={t("FullName")} value={form.full_name} onChange={(e) => setForm((p) => ({ ...p, full_name: e.target.value }))} />
 
           <div>
@@ -338,8 +389,8 @@ const EmployeesPage = () => {
           </label>
 
           <div className="flex justify-end gap-2">
-            <Button text={t("Cancel")} onClick={() => setFormOpen(false)} />
-            <Button text={saveMutation.isPending ? t("Saving") : editing ? t("Save") : t("Create")} onClick={() => saveMutation.mutate(form)} variant="danger" />
+            <Button text={t("Cancel")} variant="secondary" onClick={() => setFormOpen(false)} />
+            <Button text={saveMutation.isPending ? t("Saving") : editing ? t("Save") : t("Create")} onClick={() => saveMutation.mutate()} />
           </div>
         </div>
       </Modal>
@@ -357,6 +408,8 @@ const EmployeesPage = () => {
           }
         }}
       />
+
+      <ImagePreview src={previewSrc} onClose={() => setPreviewSrc(null)} />
     </RBACGuard>
   );
 };

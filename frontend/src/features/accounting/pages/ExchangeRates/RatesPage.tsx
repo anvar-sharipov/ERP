@@ -14,6 +14,7 @@ import { usePageHotkeys } from "../../../../core/hooks/usePageHotkeys";
 import { useNotify } from "../../../../core/context/NotificationContext";
 import { useClosedPeriod } from "../../../../core/hooks/useClosedPeriod";
 import { useDateStore } from "../../../../core/store/dateStore";
+import { formatDateDisplay } from "../../../../core/utils/formatDate";
 
 type ExchangeRateRow = {
   id: number;
@@ -137,7 +138,7 @@ export default function RatesPage() {
   const rates = (data?.results ?? []) as ExchangeRateRow[];
 
   const columns: Column<ExchangeRateRow>[] = [
-    { header: t("Date"), accessor: "date", sortable: true, excelWidth: 15 },
+    { header: t("Date"), accessor: "date", sortable: true, excelWidth: 15, render: (item) => new Date(item.date).toLocaleDateString("ru-RU") },
     {
       header: t("Currency"),
       accessor: "currency_code",
@@ -217,7 +218,7 @@ export default function RatesPage() {
           {/* Дата — только показываем */}
           <div className="flex items-center gap-3 px-3 py-2 rounded-lg bg-slate-800/60 border border-slate-700">
             <span className="text-xs text-slate-400">{t("Date", "Дата")}:</span>
-            <span className="text-sm font-semibold text-slate-200">{workDate}</span>
+            <span className="text-sm font-semibold text-slate-200">{formatDateDisplay(workDate)}</span>
             {isClosed && <span className="ml-auto text-xs text-red-400 bg-red-900/20 px-2 py-0.5 rounded">{t("DayClosed")}</span>}
           </div>
 
@@ -243,10 +244,9 @@ export default function RatesPage() {
           </div>
 
           <div className="flex justify-end gap-2 pt-2">
-            <Button text={t("Cancel")} onClick={() => setFormOpen(false)} />
+            <Button text={t("Cancel")} variant="secondary" onClick={() => setFormOpen(false)} />
             <Button
               text={mutation.isPending ? t("Saving") : t("Save")}
-              variant="danger"
               disabled={mutation.isPending || !form.currency || !form.rate || !canCreate}
               onClick={() => mutation.mutate()}
             />

@@ -26,7 +26,8 @@ export const AppLayout: React.FC = () => {
   const { user: currentUser } = useUser();
   const location = useLocation();
   const { t } = useTranslation();
-  const { workBranch } = useDateStore();
+  // const { workBranch } = useDateStore();
+  const workBranch = useDateStore((s) => s.workBranch);
 
   const { data: branches = [] } = useQuery({
     queryKey: ["branches"],

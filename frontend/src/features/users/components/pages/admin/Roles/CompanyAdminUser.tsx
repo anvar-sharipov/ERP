@@ -47,6 +47,7 @@ const CompanyAdminUser = () => {
     userId: null,
     userName: "",
   });
+  
 
   const [formData, setFormData] = useState({ username: "", first_name: "", last_name: "", phone: "", position: "", is_active: true, password: "" });
   const queryClient = useQueryClient();
@@ -338,8 +339,8 @@ const CompanyAdminUser = () => {
             {t("IsActive")}
           </label>
           <div className="flex justify-end gap-2">
-            <Button text={t("Cancel")} onClick={() => setUserModalOpen(false)} />
-            <Button text={t("Save")} onClick={() => userMutation.mutate(formData)} variant="danger" />
+            <Button text={t("Cancel")} onClick={() => setUserModalOpen(false)} variant="secondary" />
+            <Button text={t("Save")} onClick={() => userMutation.mutate(formData)} />
           </div>
         </div>
       </Modal>
@@ -358,7 +359,7 @@ const CompanyAdminUser = () => {
           <p className="text-red-500 mt-4">{t("Irreversible")}</p>
         </div>
         <div className="flex justify-end gap-2">
-          <Button text={t("Cancel")} onClick={() => setDeleteModal(false)} />
+          <Button text={t("Cancel")} onClick={() => setDeleteModal(false)} variant="secondary" />
           <Button
             variant="danger"
             text={t("Delete")}

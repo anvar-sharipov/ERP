@@ -40,8 +40,10 @@ export const Button: React.FC<ButtonProps> = ({
     }
   };
 
-  const baseClass = "flex items-center justify-center gap-2 font-medium transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed px-1 py-0.5 md:px-3 md:py-1";
-  // const baseClass = "flex items-center justify-center gap-2 font-medium transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed px-1 py-0.5 md:px-3 md:py-1";
+  const baseClass =
+    "flex items-center justify-center gap-2 font-medium transition-all duration-200 " +
+    "active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 " +
+    "disabled:opacity-50 disabled:cursor-not-allowed";
 
   // Добавляем логику активного состояния
   const activeClasses = isActive ? "bg-indigo-600 !text-white hover:bg-indigo-700" : "bg-indigo-900/20 text-indigo-200 hover:bg-indigo-900/40";
@@ -56,9 +58,10 @@ export const Button: React.FC<ButtonProps> = ({
       ? "bg-slate-900 text-indigo-300 border border-indigo-900 hover:border-indigo-700"
       : "bg-gray-200 text-gray-800 border border-gray-300 hover:bg-gray-300 dark:bg-slate-900 dark:text-indigo-300 dark:border-indigo-900 dark:hover:border-indigo-700",
 
+    // ✅ фикс: ghost больше не имеет постоянного фона — только при hover
     ghost: dark
-      ? "text-indigo-400 hover:bg-indigo-900/20 hover:text-indigo-200 bg-indigo-900/70"
-      : "text-gray-600 hover:bg-gray-100 bg-indigo-900 hover:text-indigo-600 dark:text-indigo-400 dark:hover:bg-indigo-900/20 dark:hover:text-indigo-200",
+      ? "text-indigo-400 hover:bg-indigo-900/40 hover:text-indigo-200"
+      : "text-gray-600 hover:bg-gray-100 hover:text-indigo-600 dark:text-indigo-400 dark:hover:bg-indigo-900/20 dark:hover:text-indigo-200",
 
     "1c": dark
       ? "bg-gray-700 text-gray-200 border border-gray-600 hover:bg-gray-600 hover:border-gray-500 active:bg-gray-500 rounded-[3px] shadow-sm"
@@ -69,10 +72,7 @@ export const Button: React.FC<ButtonProps> = ({
 
   return (
     <button
-      // className={`${baseClass} ${variants[variant]} ${className}`}
-
       className={`${baseClass} ${sizes[size]} ${variant === "ghost" && isActive ? "" : variants[variant]} ${isActive ? activeClasses : ""} ${className} print:hidden`}
-
       disabled={disabled || isLoading}
       onClick={handleClick}
       {...props}

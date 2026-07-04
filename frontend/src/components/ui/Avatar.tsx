@@ -21,7 +21,12 @@ export const Avatar = ({ src, fallbackText, onClick, size = "sm", rounded = fals
   return (
     <div className="flex justify-center">
       {src ? (
-        <img src={src} className={`${sizeClass} ${roundedClass} cursor-pointer hover:opacity-80 transition object-cover border border-gray-200`} onClick={onClick} />
+        <img
+          src={src}
+          loading="lazy"
+          className={`${sizeClass} ${roundedClass} cursor-pointer hover:opacity-80 hover:scale-105 transition object-cover border border-gray-200`}
+          onClick={onClick}
+        />
       ) : (
         <div
           className={`${sizeClass} ${roundedClass} bg-indigo-100 dark:bg-indigo-900/50 text-indigo-600 dark:text-indigo-300 flex items-center justify-center font-bold border border-indigo-200 dark:border-indigo-700 cursor-pointer`}

@@ -47,10 +47,17 @@
     "Actions": "Hereketler",
     "Columns": "Sütünler",
     "Column": "Sütün",
+    "ColumnVisibility": "Sütünleriň görünişi",
+    "ColumnsHint": "Sütün sazlamalary bu resminama görnüşi üçin awtomatiki ýatda saklanýar",
+    "ResetColumns": "Sütün sazlamalaryny arassalamak",
+    "Reset": "Arassalamak",
+    "Screen": "Ekran",
+    "Print": "Çap",
     "Search_press_esc_to_reset": "Gözleg (ýatyrmak üçin Esc basyň)...",
     "Active": "Aktiw",
     "Inactive": "Aktiw däl",
     "User": "Ulanyjy",
+    "Operator": "Operator",
     "DownloadDate": "Ýüklenen senesi",
     "Printed": "Çap etdi",
     "Date": "Senesi",
@@ -223,6 +230,7 @@
     "DirectoryFields": "Soraýyşnama meýdanlary",
     "EditRoles": "Rollary redaktirlemek",
     "ExportToExcel": "Excel-e eksport etmek",
+    "ErrorExportExcel": "Excel-e eksport etmekde ýalňyşlyk",
     "Search": "Gözleg",
     "HierarchyFilter": "Iýerarhiki süzgüç",
 
@@ -285,6 +293,7 @@
     "Kt": "Kt",
     "Employees": "Işgärler",
     "Employee": "Işgär",
+    "DriverLabel": "Awtoulag",
     "Positions": "Wezipeler",
 
     "AddEmployee": "Işgär goşmak",
@@ -486,6 +495,8 @@
     "Subtotal": "Jemi",
     "Discount": "Arzanladyş",
     "TotalPayable": "Tölenmeli",
+    "TotalAfterDiscount": "Arzanladyşdan soňky jemi",
+    "TotalIncome": "Jemi girdeji",
     "CounterpartyBalance": "Kontragentiň saldosy",
     "Info": "Maglumat",
     "PostedAt": "Geçirildi",
@@ -503,7 +514,9 @@
     "PriceType": "Bahanyň görnüşi",
     "NotSet": "— kesgitlenmedik —",
     "DiscountPercent": "Arzanladyş %",
+    "DiscountAmount": "Arzanladyş, möçberi",
     "Optional": "Islege bagly",
+    "NoteSuggestionsHelp": "Bu meýdança üçin maslahatlar \"{{slug}}\" slug-ly sprawochnikden alynýar. \"Sprawochnikler\" bölüminde şeýle slug bilen sprawochnik dörediň we oňa adaty teswirleri goşuň — olar şu ýerde saýlanýan wariantlar hökmünde peýda bolar.",
     "SelectCounterparty": "— kontragent saýlaň —",
 
     "Document": "Resminama",
@@ -514,14 +527,23 @@
     "Participants": "Gatnaşyjylar",
     "NoParticipants": "Gatnaşyjy ýok",
     "SelectEmployee": "— işgär saýlaň —",
+    "SelectEmployeeRequired": "Işgäri (resminamanyň gatnaşyjysyny) saýlaň",
 
-    "Counterparty": "Kontragentler",
+    "Counterparty": "Kontragent",
     "SelectBranchAndWarehouse": "Haryt goşmak üçin sag panelde şahamça we ammar saýlaň",
+    "ChangeWarehouseTitle": "Ammary çalyşmak",
+    "ChangeWarehouseMessage": "Ammary çalyşanyňyzda faktura içindäki harytlaryň sanawy arassalanar. Dowam etdirmelimi?",
+    "ChangeDocumentTypeTitle": "Resminama görnüşini çalyşmak",
+    "ChangeDocumentTypeMessage": "Resminamanyň görnüşini çalyşanyňyzda faktura içindäki harytlaryň sanawy arassalanar. Dowam etdirmelimi?",
     "EnterInPrice": "Bahada Enter → täze setir",
     "Unit": "Birlik",
     "Price": "Bahasy",
     "NoRows": "Setir ýok",
+    "InStock": "Barlygy",
+    "ProductQuantityMerged": "«{{name}}» eýýäm sanawda — mukdary {{qty}} çenli artdyryldy",
     "BundleComponents": "Komplektleýji (jemi)",
+    "PromoBonus": "Aksiýa bonusy (mugt)",
+    "Free": "mugt",
     "BundleQuantityTooltip": "Jemi mukdar (el bilen üýtgedip bolýar)",
     "RemoveBundle": "Komplektleýjini ýok et",
 
@@ -607,6 +629,10 @@
     "typing_plural": "ýazýarlar...",
 
     "ChatPlaceholder": "Habar ýazmak... (Enter — ibermek)",
+    "AttachFile": "Faýl goşmak",
+    "Emoji": "Emoji",
+    "SendingFile": "Faýl iberilýär...",
+    "ErrorSendingFile": "Faýly ibermek başartmady",
 
 
     
@@ -627,7 +653,21 @@
     "TypingMultiple": "ýazýarlar...",
     "Online": "onlaýn",
     "Offline": "oflaýn",
-    "NoMessagesYet": "Habar ýok. Ilkinji bolup ýazyň!"
+    "NoMessagesYet": "Habar ýok. Ilkinji bolup ýazyň!",
+
+    "AllWarehousesWithDash": "— Ähli ammarlar —",
+    "WarehouseWithDash": "— Ammar —",
+    "AllBranchesWithDash": "— Ähli şahamçalar —",
+    "BranchWithDash": "— Şahamça —",
+    "SelectBranchFirstWithDash": "— Ilki şahamçany saýlaň —",
+
+    "BranchClosed": "Şahamça ýapyk (ähli ammarlar)",
+    "BranchPartlyOpen": "Şahamça bölekleýin açyk",
+    "Reopen": "Açmak",
+    "CloseDayTitle": "Güni ýapmak",
+    "CloseDayMessage": "{{date}} güni «{{warehouse}}» ammary üçin ýapmaly? Bu hereket soňra ýatyrylyp bilner, ýöne diňe ýörite ulanyjy tarapyndan.",
+    "ReopenDayTitle": "Güni açmak",
+    "ReopenDayMessage": "{{date}} güni «{{warehouse}}» ammary üçin yzyna açmaly? Bu ammar boýunça ähli soňky günleriň ýapylmandygyna göz ýetiriň."
 
 
 

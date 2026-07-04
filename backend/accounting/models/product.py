@@ -362,6 +362,40 @@ class VolumeDiscount(models.Model):
     def __str__(self):
         max_str = f"до {self.max_qty}" if self.max_qty else "и выше"
         return f"{self.product.name}: от {self.min_qty} {max_str} → {self.discount_percent}%"
-    
-    
-    
+
+
+class QuantityPromotion(models.Model):
+    """
+    Акция «количество за количество»: купил N единиц — получи M бесплатно ТОГО ЖЕ товара.
+    Например: 10 мешков — +1 бесплатно, 20 — +2 бесплатно.
+    В отличие от ProductBundle (другой сопутствующий товар, непрерывный qty_ratio),
+    здесь бонус — тот же товар, начисляется порогово (по диапазону min_qty/max_qty),
+    и должен реально списываться со склада — поэтому оформляется как отдельная
+    строка документа с price=0, а не как скидка на цену.
+    """
+    product = models.ForeignKey(
+        Product, on_delete=models.CASCADE,
+        related_name='quantity_promotions'
+    )
+    price_type = models.ForeignKey(
+        PriceType, on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='quantity_promotions',
+        verbose_name="Тип цены (null = для всех)"
+    )
+    min_qty  = models.DecimalField(max_digits=15, decimal_places=3, default=0)
+    max_qty  = models.DecimalField(max_digits=15, decimal_places=3, null=True, blank=True)
+    free_qty = models.DecimalField(
+        max_digits=15, decimal_places=3, default=0,
+        validators=[MinValueValidator(0.001)],
+        verbose_name="Бесплатное количество"
+    )
+
+    class Meta:
+        verbose_name = "Акция по количеству"
+        verbose_name_plural = "Акции по количеству"
+        ordering = ['min_qty']
+
+    def __str__(self):
+        max_str = f"до {self.max_qty}" if self.max_qty else "и выше"
+        return f"{self.product.name}: от {self.min_qty} {max_str} → +{self.free_qty} бесплатно"

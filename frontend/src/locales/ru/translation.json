@@ -49,10 +49,17 @@
     "Actions": "Действия",
     "Columns": "Колонки",
     "Column": "Колонка",
+    "ColumnVisibility": "Видимость колонок",
+    "ColumnsHint": "Настройки колонок сохраняются автоматически для этого типа документа",
+    "ResetColumns": "Сбросить настройки колонок",
+    "Reset": "Сбросить",
+    "Screen": "Экран",
+    "Print": "Печать",
     "Search_press_esc_to_reset": "Поиск (нажмите Esc для сброса)...",
     "Active": "Активен",
     "Inactive": "Неактивен",
     "User": "Пользователь",
+    "Operator": "Оператор",
     "DownloadDate": "Дата выгрузки",
     "Printed": "Напечатал",
     "Date": "Дата",
@@ -229,6 +236,7 @@
 
     "Search": "Поиск",
     "ExportToExcel": "Экспорт в Excel",
+    "ErrorExportExcel": "Ошибка экспорта в Excel",
     "HierarchyFilter": "Иерархический фильтр",
 
     "Press": "Нажмите",
@@ -295,6 +303,7 @@
 
     "Employees": "Сотрудники",
     "Employee": "Сотрудник",
+    "DriverLabel": "Авто",
     "Positions": "Должности",
 
     "AddEmployee": "Добавить сотрудника",
@@ -499,6 +508,8 @@
     "Subtotal": "Сумма",
     "Discount": "Скидка",
     "TotalPayable": "К оплате",
+    "TotalAfterDiscount": "Сумма после скидки",
+    "TotalIncome": "Итого доход",
     "CounterpartyBalance": "Сальдо контрагента",
     "Info": "Информация",
     "PostedAt": "Проведён",
@@ -516,7 +527,9 @@
     "PriceType": "Тип цены",
     "NotSet": "— не задан —",
     "DiscountPercent": "Скидка %",
+    "DiscountAmount": "Скидка, сумма",
     "Optional": "Необязательно",
+    "NoteSuggestionsHelp": "Подсказки для этого поля берутся из справочника со слагом \"{{slug}}\". Создайте справочник с таким слагом в разделе «Справочники» и добавьте туда типовые комментарии — они появятся здесь как варианты выбора.",
     "SelectCounterparty": "— выберите контрагента —",
 
     "Document": "Документ",
@@ -527,15 +540,24 @@
     "Participants": "Участники",
     "NoParticipants": "Нет участников",
     "SelectEmployee": "— сотрудник —",
+    "SelectEmployeeRequired": "Выберите сотрудника (участника документа)",
 
-    "Counterparty": "Контрагенты",
+    "Counterparty": "Контрагент",
 
     "SelectBranchAndWarehouse": "Выберите филиал и склад в правой панели для добавления товаров",
+    "ChangeWarehouseTitle": "Смена склада",
+    "ChangeWarehouseMessage": "При смене склада список товаров в накладной будет очищен. Продолжить?",
+    "ChangeDocumentTypeTitle": "Смена типа документа",
+    "ChangeDocumentTypeMessage": "При смене типа документа список товаров в накладной будет очищен. Продолжить?",
     "EnterInPrice": "Enter в цене → новая строка",
     "Unit": "Ед.",
     "Price": "Цена",
     "NoRows": "Нет строк",
+    "InStock": "В наличии",
+    "ProductQuantityMerged": "«{{name}}» уже в списке — количество увеличено до {{qty}}",
     "BundleComponents": "Комплектующие (суммарно)",
+    "PromoBonus": "Бонус по акции (бесплатно)",
+    "Free": "бесплатно",
     "BundleQuantityTooltip": "Суммарное кол-во (можно изменить вручную)",
     "RemoveBundle": "Удалить комплектующую",
 
@@ -623,6 +645,10 @@
     "typing_plural": "печатают...",
 
     "ChatPlaceholder": "Написать сообщение... (Enter — отправить)",
+    "AttachFile": "Прикрепить файл",
+    "Emoji": "Эмодзи",
+    "SendingFile": "Отправка файла...",
+    "ErrorSendingFile": "Не удалось отправить файл",
 
     "Direct": "💬 Личное",
     "GroupName": "Название группы",
@@ -641,7 +667,23 @@
     "TypingMultiple": "печатают...",
     "Online": "онлайн",
     "Offline": "оффлайн",
-    "NoMessagesYet": "Нет сообщений. Напишите первым!"
+    "NoMessagesYet": "Нет сообщений. Напишите первым!",
+
+    "AllWarehousesWithDash": "— Все склады —",
+    "WarehouseWithDash": "— Склад —",
+    "AllBranchesWithDash": "— Все филиалы —",
+    "BranchWithDash": "— Филиал —",
+    "SelectBranchFirstWithDash": "— Сначала выберите филиал —",
+
+    
+    "BranchClosed": "Филиал закрыт (все склады)",
+    "BranchPartlyOpen": "Филиал открыт частично",
+    "Reopen": "Открыть",
+    "CloseDayTitle": "Закрытие дня",
+    "CloseDayMessage": "Закрыть день {{date}} для склада «{{warehouse}}»? Это действие можно отменить позже, но только специальным пользователем.",
+    "ReopenDayTitle": "Открытие дня",
+    "ReopenDayMessage": "Открыть обратно день {{date}} для склада «{{warehouse}}»? Убедитесь, что все более поздние дни по этому складу ещё не закрыты."
+
 
 
 

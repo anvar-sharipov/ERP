@@ -1,7 +1,9 @@
 // frontend/src/features/chat/components/MessageItem.tsx
 import { useUser } from "../../../core/context/UserContext";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
+import { FileText } from "lucide-react";
 import { isValidMediaUrl } from "../../../core/utils/media";
+import { ImagePreview } from "../../../components/ui/ImagePreview";
 
 interface Read {
   user: { id: number; username: string };
@@ -13,6 +15,7 @@ interface Sender {
   username: string;
   first_name: string;
   last_name: string;
+  photo?: string | null;
   photo_thumbnail?: string | null;
 }
 
@@ -24,6 +27,10 @@ interface Message {
   created_at: string;
   reads: Read[];
   is_read_by_me: boolean;
+  attachment_url?: string | null;
+  attachment_name?: string | null;
+  attachment_size?: number | null;
+  attachment_content_type?: string | null;
 }
 
 interface Props {
@@ -47,11 +54,19 @@ const getInitials = (u: { first_name: string; last_name: string; username: strin
 
 const formatTime = (iso: string) => new Date(iso).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" });
 
+const formatFileSize = (bytes: number) => {
+  if (bytes < 1024) return `${bytes} Б`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} КБ`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} МБ`;
+};
+
 export const MessageItem: React.FC<Props> = ({ message, onVisible }) => {
   const { user } = useUser();
   const isMe = message.sender?.id === user?.id;
   const isRead = message.reads.length > 0;
+  const isImageAttachment = !!message.attachment_content_type?.startsWith("image/");
   const elRef = useRef<HTMLDivElement>(null);
+  const [previewSrc, setPreviewSrc] = useState<string | null>(null);
   // Временно для отладки
   // console.log("photo_thumbnail value:", JSON.stringify(message.sender.photo_thumbnail));
 
@@ -74,12 +89,19 @@ export const MessageItem: React.FC<Props> = ({ message, onVisible }) => {
   }, [message.id, isMe, message.is_read_by_me]);
 
   return (
+    <>
     <div ref={elRef} className={`flex items-end gap-2 px-3 py-1 ${isMe ? "flex-row-reverse" : "flex-row"}`}>
       {/* {!isMe && <div className="w-7 h-7 rounded-full bg-slate-600 flex items-center justify-center text-xs font-bold text-slate-200 shrink-0 mb-1">{getInitials(message.sender)}</div>} */}
       {!isMe && (
-        <div className="w-7 h-7 rounded-full shrink-0 mb-1 overflow-hidden">
+        <div className="w-7 h-7 rounded shrink-0 mb-1 overflow-hidden">
           {isValidMediaUrl(message.sender.photo_thumbnail) ? (
-            <img src={message.sender.photo_thumbnail!} alt={message.sender.username} className="w-full h-full object-cover" />
+            <img
+              src={message.sender.photo_thumbnail!}
+              alt={message.sender.username}
+              loading="lazy"
+              className="w-full h-full object-cover cursor-pointer hover:scale-105 transition"
+              onClick={() => setPreviewSrc(message.sender.photo || message.sender.photo_thumbnail!)}
+            />
           ) : (
             <div className="w-full h-full bg-slate-600 flex items-center justify-center text-xs font-bold text-slate-200">{getInitials(message.sender)}</div>
           )}
@@ -95,6 +117,33 @@ export const MessageItem: React.FC<Props> = ({ message, onVisible }) => {
     ${isMe ? "bg-indigo-600 text-white rounded-br-sm" : "bg-gray-300 dark:bg-slate-700 text-gray-900 dark:text-slate-100 rounded-bl-sm border border-gray-100 dark:border-transparent"}
   `}
         >
+          {message.attachment_url &&
+            (isImageAttachment ? (
+              <img
+                src={message.attachment_url}
+                alt={message.attachment_name ?? ""}
+                loading="lazy"
+                className="max-w-full max-h-60 rounded-lg mb-1 cursor-pointer hover:opacity-90 transition"
+                onClick={() => setPreviewSrc(message.attachment_url!)}
+              />
+            ) : (
+              <a
+                href={message.attachment_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                download={message.attachment_name ?? undefined}
+                className={`flex items-center gap-2 rounded-lg px-2 py-1.5 mb-1 transition ${
+                  isMe ? "bg-indigo-700/50 hover:bg-indigo-700/70" : "bg-white/60 dark:bg-slate-800/60 hover:bg-white dark:hover:bg-slate-800"
+                }`}
+              >
+                <FileText className="w-5 h-5 shrink-0" />
+                <div className="min-w-0">
+                  <div className="text-xs font-medium truncate max-w-[180px]">{message.attachment_name}</div>
+                  {message.attachment_size != null && <div className="text-[10px] opacity-70">{formatFileSize(message.attachment_size)}</div>}
+                </div>
+              </a>
+            ))}
+
           {message.text}
 
           <div className={`flex items-center gap-1 mt-1 ${isMe ? "justify-end" : "justify-start"}`}>
@@ -118,5 +167,7 @@ export const MessageItem: React.FC<Props> = ({ message, onVisible }) => {
         </div>
       </div>
     </div>
+    <ImagePreview src={previewSrc} onClose={() => setPreviewSrc(null)} />
+    </>
   );
 };

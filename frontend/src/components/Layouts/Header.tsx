@@ -7,9 +7,6 @@ import { UserProfileBlock } from "../ui/UserProfileBlock";
 import { ExchangeRateWidget } from "../ui/ExchangeRateWidget";
 
 import { useChat } from "../../features/chat/context/ChatContext";
-// import { useNavigate } from "react-router-dom";
-// import { ROUTES } from "../../core/router/routes";
-// import { MessageSquare } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
 import { useQuery } from "@tanstack/react-query";
@@ -78,7 +75,8 @@ const ChatButton = () => {
 const Header: React.FC<HeaderProps> = ({ onToggleSidebar, onToggleSidebarRight }) => {
   const { company: currentCompany } = useCompany();
 
-  const { workBranch } = useDateStore();
+  // const { workBranch } = useDateStore();
+  const workBranch = useDateStore((s) => s.workBranch);
   const { data: branches = [] } = useQuery({
     queryKey: ["branches"],
     queryFn: branchApi.getBranches,
@@ -175,4 +173,5 @@ const Header: React.FC<HeaderProps> = ({ onToggleSidebar, onToggleSidebarRight }
   );
 };
 
-export default Header;
+// export default Header;
+export default React.memo(Header);

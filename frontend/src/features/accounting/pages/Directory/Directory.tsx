@@ -1,5 +1,4 @@
 import { Outlet } from "react-router-dom";
-// import { playClickSound } from "../../../../core/utils/sound";
 import { useTranslation } from "react-i18next";
 import { GoogleTabs } from "../../../../components/ui/Tabs/GoogleTabs";
 

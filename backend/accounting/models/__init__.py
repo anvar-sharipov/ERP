@@ -33,7 +33,7 @@ from .stock import StockMovement, Warehouse, WarehouseStock
 from .product import (
     Product, ProductCategory, Brand, Tag, Unit,
     ProductImage, PriceType, ProductPrice, ProductBundle, ProductBundle,
-    VolumeDiscount,
+    VolumeDiscount, QuantityPromotion,
     product_image_path
 )
 from .counterparty import Counterparty
@@ -100,6 +100,6 @@ __all__ = [
     'product_image_path',
     'DocumentParticipant', 'Document', 'DocumentItem',
     'UserScope',
-    'ProductBundle', 'ProductBundle', 'VolumeDiscount',
+    'ProductBundle', 'ProductBundle', 'VolumeDiscount', 'QuantityPromotion',
     'Currency', 'ExchangeRate'
 ]

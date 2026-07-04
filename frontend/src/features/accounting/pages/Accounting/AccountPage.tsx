@@ -471,8 +471,8 @@ const AccountPage = () => {
           )}
 
           <div className="flex justify-end gap-2 pt-2">
-            <Button text={t("Cancel")} onClick={() => setFormModal(false)} />
-            <Button text={saveMutation.isPending ? t("Saving") : t("Save")} variant="danger" onClick={() => saveMutation.mutate(formData)} />
+            <Button text={t("Cancel")} variant="secondary" onClick={() => setFormModal(false)} />
+            <Button text={saveMutation.isPending ? t("Saving") : t("Save")} onClick={() => saveMutation.mutate(formData)} />
           </div>
         </div>
       </Modal>
@@ -486,7 +486,7 @@ const AccountPage = () => {
           <p className="text-red-500 text-sm">{t("DeleteWarning")}</p>
         </div>
         <div className="flex justify-end gap-2">
-          <Button text={t("Cancel")} onClick={() => setDeleteModal(false)} />
+          <Button text={t("Cancel")} variant="secondary" onClick={() => setDeleteModal(false)} />
           <Button text={deleteMutation.isPending ? t("Deleting") : t("Delete")} variant="danger" onClick={() => deleteTarget && deleteMutation.mutate(deleteTarget.id)} />
         </div>
       </Modal>

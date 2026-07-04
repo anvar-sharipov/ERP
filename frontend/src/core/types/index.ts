@@ -301,6 +301,7 @@ export interface DocumentList {
   warehouse_detail: { id: number; name: string } | null;
   total: string;
   created_at: string;
+  branch_detail: { id: number; name: string } | null;
 }
  
 

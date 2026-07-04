@@ -10,7 +10,7 @@ from .views.product_views import (
     UnitViewSet, BrandViewSet, TagViewSet, ProductCategoryViewSet,
     ProductViewSet, CounterpartyViewSet, WarehouseViewSet, WarehouseStockViewSet,
     ProductImageViewSet, PriceTypeViewSet, ProductPriceViewSet, ProductBundleViewSet,
-    VolumeDiscountViewSet
+    VolumeDiscountViewSet, QuantityPromotionViewSet
 )
 from .views.audit_views import AuditLogViewSet
 from .views.employee_views import PositionViewSet, EmployeeViewSet
@@ -94,6 +94,7 @@ documents_router.register(r'participants', DocumentParticipantViewSet, basename=
 products_router = nested_routers.NestedDefaultRouter(router, r"products", lookup="product")
 products_router.register(r"bundles", ProductBundleViewSet, basename="product-bundles")
 products_router.register(r'volume-discounts', VolumeDiscountViewSet, basename='product-volume-discounts')
+products_router.register(r'quantity-promotions', QuantityPromotionViewSet, basename='product-quantity-promotions')
 
 
 

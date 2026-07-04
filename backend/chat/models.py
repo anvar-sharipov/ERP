@@ -1,8 +1,17 @@
 # backend/chat/models.py
-from django.db import models
+import uuid
+from django.db import connection, models
 from django.conf import settings
 
+from utils.validators import validate_attachment_size
+
 User = settings.AUTH_USER_MODEL
+
+
+def message_attachment_path(instance, filename):
+    ext = filename.split('.')[-1].lower() if '.' in filename else ''
+    new_filename = f"{uuid.uuid4()}.{ext}" if ext else str(uuid.uuid4())
+    return f"{connection.schema_name}/chat_attachments/{instance.conversation_id}/{new_filename}"
 
 
 class Conversation(models.Model):
@@ -32,7 +41,14 @@ class Message(models.Model):
     sender = models.ForeignKey(
         User, on_delete=models.SET_NULL, null=True, related_name="sent_messages"
     )
-    text = models.TextField()
+    text = models.TextField(blank=True)
+    attachment = models.FileField(
+        upload_to=message_attachment_path, blank=True, null=True,
+        validators=[validate_attachment_size]
+    )
+    attachment_name = models.CharField(max_length=255, blank=True)
+    attachment_size = models.PositiveIntegerField(null=True, blank=True)
+    attachment_content_type = models.CharField(max_length=100, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

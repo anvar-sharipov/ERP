@@ -1,5 +1,5 @@
-import React, { createContext, useContext, useState, type ReactNode } from "react";
-
+// frontend/src/core/context/SidebarRightContext.tsx
+import React, { createContext, useContext, useMemo, useState, type ReactNode } from "react";
 
 interface SidebarContextType {
   sidebarContent: ReactNode | null;
@@ -8,9 +8,15 @@ interface SidebarContextType {
 
 const SidebarContext = createContext<SidebarContextType | undefined>(undefined);
 
+// export const SidebarProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+//   const [sidebarContent, setSidebarContent] = useState<ReactNode | null>(null);
+//   return <SidebarContext.Provider value={{ sidebarContent, setSidebarContent }}>{children}</SidebarContext.Provider>;
+// };
+
 export const SidebarProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [sidebarContent, setSidebarContent] = useState<ReactNode | null>(null);
-  return <SidebarContext.Provider value={{ sidebarContent, setSidebarContent }}>{children}</SidebarContext.Provider>;
+  const value = useMemo(() => ({ sidebarContent, setSidebarContent }), [sidebarContent]);
+  return <SidebarContext.Provider value={value}>{children}</SidebarContext.Provider>;
 };
 
 export const useSidebar = () => {

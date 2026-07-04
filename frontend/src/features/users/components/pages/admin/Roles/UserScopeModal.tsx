@@ -1,6 +1,6 @@
 // frontend/src/features/users/components/pages/admin/Roles/UserScopeModal.tsx
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Trash2, Plus } from "lucide-react";
 import { Modal } from "../../../../../../components/ui/Modal/Modal";
@@ -122,15 +122,26 @@ const UserScopeModal = ({ isOpen, userId, userName, onClose }: Props) => {
   });
 
   // Склады фильтруем по выбранному филиалу
-  const filteredWarehouses = newBranch ? (warehouses as any[]).filter((w: any) => w.branch === newBranch) : (warehouses as any[]);
+  // ID складов, уже прикреплённых к пользователю (чтобы не дублировать в списке)
+  const attachedWarehouseIds = new Set(scopes.map((s) => s.warehouse).filter((id): id is number => id != null));
+
+  // Склады фильтруем по выбранному филиалу и убираем уже прикреплённые
+  const filteredWarehouses = (newBranch ? (warehouses as any[]).filter((w: any) => w.branch === newBranch) : (warehouses as any[])).filter((w: any) => !attachedWarehouseIds.has(w.id));
+
+  const isAddDisabled = addMutation.isPending || !newBranch || !newWarehouse;
 
   const handleAdd = () => {
-    if (!newBranch && !newWarehouse) {
+    if (!newBranch || !newWarehouse) {
       notify("error", t("SelectBranchOrWarehouse"));
       return;
     }
     addMutation.mutate();
   };
+
+  useEffect(() => {
+    setNewBranch(null);
+    setNewWarehouse(null);
+  }, [userId, isOpen]);
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title={`${t("Access")}: ${userName}`} closeOnOutsideClick={false}>
@@ -200,7 +211,8 @@ const UserScopeModal = ({ isOpen, userId, userName, onClose }: Props) => {
               onChange={(value) => setNewWarehouse(value ? Number(value) : null)}
             />
           </div>
-          <Button text={addMutation.isPending ? t("Adding") : t("Add")} icon={<Plus className="w-4 h-4" />} onClick={handleAdd} disabled={addMutation.isPending} variant="danger" />
+          {/* <Button text={addMutation.isPending ? t("Adding") : t("Add")} icon={<Plus className="w-4 h-4" />} onClick={handleAdd} disabled={addMutation.isPending} variant="danger" /> */}
+          <Button text={addMutation.isPending ? t("Adding") : t("Add")} icon={<Plus className="w-4 h-4" />} onClick={handleAdd} disabled={isAddDisabled} />
         </div>
 
         <div className="flex justify-end pt-2">

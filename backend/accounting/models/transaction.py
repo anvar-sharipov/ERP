@@ -19,12 +19,21 @@ class JournalEntry(models.Model):
                               default=Status.DRAFT, db_index=True)
     description = models.CharField(max_length=255, blank=True)
 
+    branch = models.ForeignKey(
+        'Branch', on_delete=models.PROTECT,
+        null=True, blank=True,
+        related_name='journal_entries',
+        verbose_name="Филиал"
+    )
+    
     source_document_type = models.ForeignKey(
         'contenttypes.ContentType',  # ✅ ПРАВИЛЬНАЯ ССЫЛКА
         on_delete=models.SET_NULL, 
         null=True, 
         blank=True
     )
+    
+    
     source_document_id = models.PositiveIntegerField(null=True, blank=True)
 
     created_by = models.ForeignKey(

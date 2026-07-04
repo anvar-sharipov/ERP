@@ -182,8 +182,8 @@ const UnitsPage = () => {
           <Input label={t("Name")} value={form.name} onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))} />
           <Input label={t("ShortName")} value={form.short_name} placeholder="шт, кг, л" onChange={(e) => setForm((p) => ({ ...p, short_name: e.target.value }))} />
           <div className="flex justify-end gap-2 pt-2">
-            <Button text={t("Cancel")} onClick={() => setFormOpen(false)} />
-            <Button text={saveMutation.isPending ? t("Saving") : editing ? t("Save") : t("Create")} onClick={() => saveMutation.mutate(form)} variant="danger" />
+            <Button text={t("Cancel")} variant="secondary" onClick={() => setFormOpen(false)} />
+            <Button text={saveMutation.isPending ? t("Saving") : editing ? t("Save") : t("Create")} onClick={() => saveMutation.mutate(form)} />
           </div>
         </div>
       </Modal>

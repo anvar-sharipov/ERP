@@ -4,7 +4,7 @@ from accounting.models import (
     Product, Unit, PriceType, Warehouse, Counterparty, Employee
 )
 from accounting.models.company import Branch
-from ..serializers.product_serializers import BundleItemSerializer
+from ..serializers.product_serializers import BundleItemSerializer, ProductImageSerializer
 
 
 # ── Short serializers (для detail-полей) ──────────────────────────────────────
@@ -15,29 +15,43 @@ class ProductShortSerializer(serializers.ModelSerializer):
     unit_detail = serializers.SerializerMethodField()
     prices = serializers.SerializerMethodField()
     bundle_items = BundleItemSerializer(many=True, read_only=True)
- 
+    main_image = serializers.SerializerMethodField()
+
     class Meta:
         model = Product
         fields = [
             "id",
             "name",
+            "sku",
+            "barcode",
             "unit",
             "unit_detail",
             "cost_price",
             "prices",
-            "bundle_items",   # ← новое
+            "bundle_items",
+            "main_image",
+            "weight", "volume_m3", "length", "width", "height",
         ]
- 
+
     def get_unit_detail(self, obj):
         if obj.unit:
             return {"id": obj.unit.id, "name": obj.unit.name}
         return None
- 
+
     def get_prices(self, obj):
         return [
             {"price_type": p.price_type_id, "price": str(p.price)}
             for p in obj.prices.filter(is_active=True)
         ]
+
+    def get_main_image(self, obj):
+        images = obj.images.all()
+        main = next((img for img in images if img.is_main), None)
+        if main is None and images:
+            main = images[0]
+        if main:
+            return ProductImageSerializer(main, context=self.context).data
+        return None
 
 
 
@@ -112,7 +126,8 @@ class DocumentItemSerializer(serializers.ModelSerializer):
 
 class DocumentParticipantSerializer(serializers.ModelSerializer):
     employee_detail = EmployeeShortSerializer(source='employee', read_only=True)
-    role_display    = serializers.CharField(source='get_role_display', read_only=True)
+    # role — свободный текст (название должности), больше не choices-поле
+    role_display    = serializers.CharField(source='role', read_only=True)
 
     class Meta:
         model = DocumentParticipant
@@ -211,6 +226,7 @@ class DocumentListSerializer(serializers.ModelSerializer):
     status_display        = serializers.CharField(source='get_status_display', read_only=True)
     counterparty_detail   = CounterpartyShortSerializer(source='counterparty', read_only=True)
     warehouse_detail      = WarehouseShortSerializer(source='warehouse', read_only=True)
+    branch_detail         = BranchShortSerializer(source='branch', read_only=True) 
 
     class Meta:
         model = Document
@@ -219,6 +235,7 @@ class DocumentListSerializer(serializers.ModelSerializer):
             'document_type', 'document_type_display',
             'status', 'status_display',
             'date',
+            'branch', 'branch_detail',
             'counterparty', 'counterparty_detail',
             'warehouse', 'warehouse_detail',
             'total',

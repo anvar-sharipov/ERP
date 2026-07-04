@@ -21,8 +21,9 @@ import SpecsTab from "./SpecsTab";
 import ImagesTab from "./ImagesTab";
 import PricesTab from "./PricesTab";
 import DiscountsTab from "./DiscountsTab";
+import PromotionsTab from "./PromotionsTab";
 
-const TABS = ["Основное", "Характеристики", "Изображения", "Цены", "Комплектующие", "Скидки"] as const;
+const TABS = ["Основное", "Характеристики", "Изображения", "Цены", "Комплектующие", "Скидки", "Акции"] as const;
 type Tab = (typeof TABS)[number];
 
 const ProductFormPage = () => {
@@ -178,7 +179,7 @@ const ProductFormPage = () => {
             <MainTab form={form} setForm={setForm} units={units} brands={brands} tags={tags} categories={categories} isEdit={isEdit} />;
             <div className="flex gap-2 mt-6">
               <Button text={saveMutation.isPending ? t("Saving") : isEdit ? t("Save") : t("Create")} onClick={() => saveMutation.mutate(form)} />
-              <Button text={t("Cancel")} onClick={() => navigate(ROUTES.APP.PRODUCTS_LIST)} />
+              <Button text={t("Cancel")} variant="secondary" onClick={() => navigate(ROUTES.APP.PRODUCTS_LIST)} />
             </div>
           </>
         )}
@@ -187,8 +188,8 @@ const ProductFormPage = () => {
           <>
             <SpecsTab form={form} setForm={setForm} product={product} />
             <div className="flex gap-2 mt-6">
-              <Button text={saveMutation.isPending ? t("Saving") : t("Save")} onClick={() => saveMutation.mutate(form)} variant="danger" />
-              <Button text={t("Cancel")} onClick={() => navigate(ROUTES.APP.PRODUCTS_LIST)} />
+              <Button text={saveMutation.isPending ? t("Saving") : t("Save")} onClick={() => saveMutation.mutate(form)} />
+              <Button text={t("Cancel")} variant="secondary" onClick={() => navigate(ROUTES.APP.PRODUCTS_LIST)} />
             </div>
           </>
         )}
@@ -202,6 +203,8 @@ const ProductFormPage = () => {
         {activeTab === "Комплектующие" && isEdit && product && <BundlesTab productId={product.id} />}
 
         {activeTab === "Скидки" && isEdit && product && <DiscountsTab productId={product.id} priceTypes={priceTypes as PriceType[]} />}
+
+        {activeTab === "Акции" && isEdit && product && <PromotionsTab productId={product.id} priceTypes={priceTypes as PriceType[]} />}
       </div>
     </RBACGuard>
   );

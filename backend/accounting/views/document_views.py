@@ -37,6 +37,8 @@ class DocumentViewSet(viewsets.ModelViewSet):
             'posted_by', 'created_by',
         ).prefetch_related(
             'items__product',
+            'items__product__images',
+            'items__product__bundle_items__bundle_product__images',
             'items__unit',
             'items__price_type',
             'participants__employee',

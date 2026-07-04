@@ -22,6 +22,12 @@ class SubcontoType(models.Model):
         verbose_name="Какую модель подключаем",
         limit_choices_to=models.Q(app_label='accounting') | models.Q(app_label='companies') | models.Q(app_label='users')
     )
+    
+    content_type_filter = models.JSONField(
+        default=dict,
+        blank=True,
+        verbose_name="Доп. фильтр записей (например {'type': 'client'})"
+    )
 
     class Meta:
         verbose_name = "Вид субконто"

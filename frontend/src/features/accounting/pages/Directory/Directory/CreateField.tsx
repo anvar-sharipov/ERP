@@ -333,7 +333,7 @@ const CreateField = () => {
             {t("IsActive")}
           </label>
           <div className="flex justify-end gap-2">
-            <Button text={t("Cancel")} onClick={() => setFormModalOpen(false)} />
+            <Button text={t("Cancel")} variant="secondary" onClick={() => setFormModalOpen(false)} />
             <Button text={editingDir ? t("Save") : t("Create")} onClick={() => setConfirmModal(true)} />
           </div>
         </div>

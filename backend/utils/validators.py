@@ -30,3 +30,10 @@ def validate_image_size(value):
     # Важный момент: после img.verify() файловый курсор нужно вернуть в начало,
     # чтобы Django мог сохранить файл на диск
     value.seek(0)
+
+
+def validate_attachment_size(value):
+    # Вложения в чат: любой тип файла (Excel, PDF, фото...), макс 20 МБ
+    limit = 20 * 1024 * 1024
+    if value.size > limit:
+        raise ValidationError('Файл слишком большой. Максимальный размер 20 МБ.')

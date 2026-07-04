@@ -11,7 +11,8 @@ from accounting.utils import resolve_product_price
 from ..models import (
     Unit, Brand, Tag, ProductCategory,
     Product, ProductImage, PriceType, ProductPrice,
-    Counterparty, Warehouse, WarehouseStock, ProductBundle, VolumeDiscount
+    Counterparty, Warehouse, WarehouseStock, ProductBundle, VolumeDiscount,
+    QuantityPromotion
 )
 from ..serializers.product_serializers import (
     UnitSerializer, BrandSerializer, TagSerializer, ProductCategorySerializer,
@@ -19,7 +20,7 @@ from ..serializers.product_serializers import (
     ProductImageSerializer, ProductImageUploadSerializer,
     PriceTypeSerializer, ProductPriceSerializer,
     CounterpartySerializer, WarehouseSerializer, WarehouseStockSerializer, ProductBundleSerializer,
-    VolumeDiscountSerializer
+    VolumeDiscountSerializer, QuantityPromotionSerializer
 )
 from users.permissions import _rbac
 from rest_framework.permissions import IsAuthenticated
@@ -70,7 +71,11 @@ class ProductViewSet(AuditMixin, viewsets.ModelViewSet):
         return (
             Product.objects
             .select_related("category", "brand", "unit")
-            .prefetch_related("tags", "images", "prices__price_type", "prices__warehouse", "bundle_items__bundle_product__unit")
+            .prefetch_related(
+                "tags", "images", "prices__price_type", "prices__warehouse",
+                "bundle_items__bundle_product__unit", "bundle_items__bundle_product__images",
+                "volume_discounts", "quantity_promotions",
+            )
             .order_by("name")
         )
 
@@ -395,6 +400,31 @@ class VolumeDiscountViewSet(
 
     def get_queryset(self):
         return VolumeDiscount.objects.filter(
+            product_id=self.kwargs["product_pk"]
+        ).select_related("price_type").order_by("price_type", "min_qty")
+
+    def perform_create(self, serializer):
+        serializer.save(product_id=int(self.kwargs["product_pk"]))
+
+
+class QuantityPromotionViewSet(
+    mixins.ListModelMixin,
+    mixins.CreateModelMixin,
+    mixins.UpdateModelMixin,
+    mixins.DestroyModelMixin,
+    viewsets.GenericViewSet,
+):
+    """
+    GET    /api/accounting/products/{product_pk}/quantity-promotions/
+    POST   /api/accounting/products/{product_pk}/quantity-promotions/
+    PATCH  /api/accounting/products/{product_pk}/quantity-promotions/{id}/
+    DELETE /api/accounting/products/{product_pk}/quantity-promotions/{id}/
+    """
+    serializer_class = QuantityPromotionSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        return QuantityPromotion.objects.filter(
             product_id=self.kwargs["product_pk"]
         ).select_related("price_type").order_by("price_type", "min_qty")
 
