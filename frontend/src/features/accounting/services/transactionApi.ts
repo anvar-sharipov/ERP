@@ -42,6 +42,12 @@ export interface JournalEntry {
   credit_subconto1?: string
   credit_subconto2?: string
   credit_subconto3?: string
+  // ✅ Ручная проводка (создана вручную через журнал) vs проводка, сгенерированная
+  // документом при проведении (Document.post()) — см. JournalPage.tsx: фильтр
+  // "Ручные/Документы/Все" в сайдбаре, и запрет редактировать/проводить/удалять
+  // document-проводки напрямую из журнала (это делается через сам документ).
+  is_manual?: boolean
+  source_document_id?: number | null
 }
 
 export interface JournalEntryPayload {
@@ -117,7 +123,7 @@ export interface ClosedPeriod {
 export interface UserScope {
   is_global:  boolean
   warehouses: { id: number; name: string }[]
-  branches:   { id: number; name: string }[]
+  branches:   { id: number; name: string; slogan?: string }[]
 }
  
 
@@ -188,8 +194,8 @@ export const closedPeriodApi = {
   close: (date: string, warehouse: number, note?: string) =>
     api.post<ClosedPeriod>(C, { date, warehouse, note: note ?? '' }),
 
-  reopen: (id: number) =>
-    api.delete(`${C}${id}/`),
+  reopen: (id: number, note: string) =>
+    api.delete(`${C}${id}/`, { data: { note } }),
 }
 
 

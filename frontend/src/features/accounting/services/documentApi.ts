@@ -11,6 +11,13 @@ export const documentApi = {
     return res.data;
   },
 
+  // ✅ Пользователи для фильтров "Создал"/"Провёл" в InvoicesPage.tsx — только те,
+  // кто реально фигурирует в документах текущего scope (см. DocumentViewSet.filter_users).
+  getFilterUsers: async (): Promise<{ id: number; name: string }[]> => {
+    const res = await api.get(`/accounting/documents/filter-users/`);
+    return res.data;
+  },
+
   save: async (id: number | null, data: any) => {
     if (id) {
       return api.patch(`/accounting/documents/${id}/`, data);

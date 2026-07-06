@@ -151,6 +151,9 @@ class Branch(models.Model):
     manager_name = models.CharField(max_length=255, blank=True, verbose_name="Управляющий")
     manager_position = models.CharField(max_length=255, default="Директор филиала", verbose_name="Должность")
 
+    # Текст, отображаемый внизу счёта-фактуры (печать/Excel) для этого филиала
+    slogan = models.TextField(max_length=256, blank=True, verbose_name="Слоган филиала")
+
     logo = models.ImageField(upload_to=branch_logo_directory_path, blank=True, null=True)
     logo_thumbnail = ImageSpecField(source='logo', processors=[ResizeToFill(100, 100)], format='JPEG', options={'quality': 80})
     signature_image = models.ImageField(upload_to=branch_signature_directory_path, blank=True, null=True)
@@ -190,10 +193,28 @@ class Branch(models.Model):
     class Meta:
         verbose_name = "Филиал"
         verbose_name_plural = "Филиалы"
-        
-        
-        
-        
+
+
+class DocumentSettings(models.Model):
+    """
+    Общие настройки документов/накладных на тенанта (singleton по конвенции —
+    как CompanyProfile: ничего не запрещает создать вторую строку, но
+    приложение ожидает ровно одну). Будет расширяться (правила проводки и т.д.).
+    """
+    purchase_price_type = models.ForeignKey(
+        'PriceType', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='+', verbose_name="Тип цены для прихода",
+        help_text="Эта цена подставляется по умолчанию в строки приходной накладной",
+    )
+
+    class Meta:
+        verbose_name = "Настройка документов"
+        verbose_name_plural = "Настройки документов"
+
+    def __str__(self):
+        return "Настройки документов"
+
+
 class UserScope(models.Model):
     """
     Определяет к каким филиалам и складам имеет доступ пользователь.

@@ -28,6 +28,7 @@ import HeadDocument, { type HeadDocumentHandle } from "./HeadDocument";
 import ProductRow, { type ProductRowHandle } from "./ProductRow/ProductRow";
 import Participants from "./Participants";
 import { userScopeApi } from "../../../services/transactionApi";
+import { documentSettingsApi } from "../../../services/documentSettingsApi";
 import { useShallow } from "zustand/react/shallow";
 
 // ── Компонент ─────────────────────────────────────────────────────────────────
@@ -57,7 +58,7 @@ const DocumentFormPage = () => {
   // ── Состояние шапки ──────────────────────────────────────────────────────────
 
   const [header, setHeader] = useState<DocHeader>({
-    document_type: "in",
+    document_type: "out",
     date: workDate ?? new Date().toISOString().slice(0, 10),
     warehouse: workWarehouse?.id ?? null,
     warehouse_to: null,
@@ -97,9 +98,10 @@ const DocumentFormPage = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isEdit, workBranch, workWarehouse]);
 
-  // Фокус на сотруднике при входе на форму
+  // Фокус на сотруднике при входе на форму — только при создании нового документа,
+  // при открытии существующего (update) фокус на водителе не нужен
   useEffect(() => {
-    if (!isPosted) {
+    if (!isEdit && !isPosted) {
       setTimeout(() => headDocumentRef.current?.focusEmployee(), 100);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -118,6 +120,14 @@ const DocumentFormPage = () => {
     queryKey: ["price-types"],
     queryFn: priceTypeApi.getAll,
   });
+
+  // ✅ Настройка "Тип цены для прихода" (админка → Настройка фактуры) — подставляется
+  // по умолчанию в шапку нового документа типа "Приход", см. CLAUDE.md/DocumentSettings.
+  const { data: documentSettingsList } = useQuery({
+    queryKey: ["document-settings"],
+    queryFn: documentSettingsApi.getSettings,
+  });
+  const purchasePriceType = documentSettingsList?.[0]?.purchase_price_type ?? null;
 
   const { data: counterparties = [] } = useQuery({
     queryKey: ["counterparties", counterpartyType],
@@ -158,14 +168,26 @@ const DocumentFormPage = () => {
     if (!isEdit) setHeader((p) => ({ ...p, branch: workBranch?.id ?? null }));
   }, [workBranch?.id, isEdit]);
 
+  // ✅ Обычный дефолт (последний использованный/первый тип цены) — только для
+  // НЕ-приходных документов. Для "Приход" типом цены управляет отдельный эффект ниже
+  // (настройка из админки, либо явный null → фолбэк на себестоимость в ProductRow).
   useEffect(() => {
-    if (!priceTypes.length || isEdit) return;
+    if (!priceTypes.length || isEdit || header.document_type === "in") return;
     const saved = localStorage.getItem("default_price_type");
     const savedId = saved ? Number(saved) : null;
     const exists = savedId && priceTypes.some((pt: any) => pt.id === savedId);
     const priceTypeId = exists ? savedId : (priceTypes[0] as any).id;
     setHeader((p) => ({ ...p, default_price_type: priceTypeId }));
-  }, [priceTypes, isEdit]);
+  }, [priceTypes, isEdit, header.document_type]);
+
+  // ✅ Для нового документа типа "Приход" — тип цены управляется ТОЛЬКО настройкой
+  // "Настройка фактуры" (админка): если задана — подставляется она; если нет —
+  // явно обнуляем default_price_type, чтобы сработал фолбэк на cost_price в ProductRow
+  // (а не случайный "последний использованный" тип цены от другого документа).
+  useEffect(() => {
+    if (isEdit || header.document_type !== "in") return;
+    setHeader((p) => ({ ...p, default_price_type: purchasePriceType ?? null }));
+  }, [purchasePriceType, header.document_type, isEdit]);
 
   useEffect(() => {
     if (!doc) return;
@@ -339,6 +361,11 @@ const DocumentFormPage = () => {
                   {t("PostedAt")}: {new Date(doc.posted_at).toLocaleDateString("ru-RU")}
                 </div>
               )}
+              {doc.posted_by_name && (
+                <div>
+                  {t("PostedByLabel")}: {doc.posted_by_name}
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -405,7 +432,10 @@ const DocumentFormPage = () => {
     },
     onError: (err: any) => {
       if (err._handled) return;
-      notify("error", err.response?.data?.detail || t("ErrorSaving"));
+      // ✅ Ошибка "период закрыт" (DocumentSerializer.validate(), см. utils.py::
+      // check_period_open) приходит как {"date": ["текст"]}, а не {"detail": ...} —
+      // без фолбэка в тост улетал бы дженерик ErrorSaving вместо понятной причины.
+      notify("error", err.response?.data?.detail || err.response?.data?.date?.[0] || t("ErrorSaving"));
     },
   });
 
@@ -506,6 +536,9 @@ const DocumentFormPage = () => {
       ...p,
       document_type: newType,
       warehouse_to: newType === "move" ? p.warehouse_to : null,
+      // ✅ "Приход" не поддерживает скидку — сбрасываем, чтобы она не осталась
+      // от предыдущего типа документа, для которого поле было заполнено.
+      discount_percent: newType === "in" ? "0" : p.discount_percent,
     }));
   };
 
@@ -532,7 +565,7 @@ const DocumentFormPage = () => {
         const pp = prod.prices.find((p: any) => p.price_type === priceTypeId);
         const price = pp ? String(pp.price) : row.price;
         const qty = parseFloat(row.quantity) || 0;
-        const autoDiscount = !row.discount_manual ? resolveVolumeDiscount(prod, qty, priceTypeId) : null;
+        const autoDiscount = header.document_type !== "in" && !row.discount_manual ? resolveVolumeDiscount(prod, qty, priceTypeId) : null;
         return { ...row, price, discount_percent: autoDiscount ?? row.discount_percent };
       }),
     );
@@ -553,6 +586,24 @@ const DocumentFormPage = () => {
   const isMove = header.document_type === "move";
   const needsCounterparty = ["in", "out", "return_in", "return_out"].includes(header.document_type);
   const filteredWarehouses = header.branch ? (scope?.warehouses ?? []).filter((w: any) => w.branch === header.branch) : (scope?.warehouses ?? []);
+  // ✅ Слоган филиала — текст внизу счёта-фактуры (только печать/Excel, на экране скрыт)
+  const branchSlogan = scope?.branches.find((b) => b.id === header.branch)?.slogan || "";
+
+  // ✅ Временное требование заказчика: перед проведением сотрудник/контрагент/примечание
+  // обязательны — ТОЛЬКО на фронте (валидация перед открытием confirm-модалки), бэкенд не трогаем.
+  // Когда заказчик попросит убрать обязательность — просто удалить эту проверку.
+  const handlePostClick = () => {
+    const missing: string[] = [];
+    if (!participants[0]?.employee) missing.push(t("Employee"));
+    if (needsCounterparty && !header.counterparty) missing.push(t("Counterparty"));
+    if (!header.note.trim()) missing.push(t("Note"));
+
+    if (missing.length > 0) {
+      notify("error", t("FillRequiredFields", { fields: missing.join(", ") }));
+      return;
+    }
+    setPostConfirm(true);
+  };
 
   // ── Excel-экспорт ──────────────────────────────────────────────────────────
   // Использует те же items/columns/итоги, что уже показаны на экране и при печати —
@@ -566,7 +617,7 @@ const DocumentFormPage = () => {
     const warehouseName = filteredWarehouses.find((w: any) => w.id === header.warehouse)?.name ?? "—";
     const warehouseToName = filteredWarehouses.find((w: any) => w.id === header.warehouse_to)?.name ?? "—";
     const primaryParticipant = participants[0];
-    const employeeName = employees.find((e: any) => e.id === primaryParticipant?.employee)?.full_name ?? "—";
+    const employeeName = employees.find((e: any) => e.id === primaryParticipant?.employee)?.full_name;
     const counterparty = counterparties.find((c: any) => c.id === header.counterparty);
     const discPercentNum = parseFloat(String(header.discount_percent)) || 0;
     const extraParticipantsText = participants
@@ -593,14 +644,18 @@ const DocumentFormPage = () => {
               ...(isMove ? [{ label: t("DestinationWarehouse") + ":", value: warehouseToName }] : []),
             ],
           },
-          ...(discPercentNum !== 0 ? [{ label: t("DiscountPercent") + ":", value: `${header.discount_percent}%` }] : []),
+          ...(header.document_type !== "in" && discPercentNum !== 0 ? [{ label: t("DiscountPercent") + ":", value: `${header.discount_percent}%` }] : []),
           ...(extraParticipantsText ? [{ label: t("Participants") + ":", value: extraParticipantsText }] : []),
         ],
         counterpartyLine: needsCounterparty ? { name: counterparty?.name ?? "—", phone: counterparty?.phone } : undefined,
-        driverLine: primaryParticipant ? { label: t("DriverLabel"), name: employeeName } : undefined,
+        driverLine: employeeName ? { label: t("DriverLabel"), name: employeeName } : undefined,
+        postedByLine: isPosted && doc?.posted_by_name ? { label: t("PostedByLabel"), name: doc.posted_by_name } : undefined,
+        branchSlogan: branchSlogan || undefined,
         // ✅ Excel следует галочкам "ПЕЧАТЬ" в кнопке "Колонки" (та же логика, что и Ctrl+P),
         // а не "ЭКРАН" — это позволяет включить в Excel/печать колонку, скрытую на экране.
-        columns: columns.filter((c) => c.visiblePrint),
+        // "Приход" не поддерживает скидку — исключаем её колонки, даже если для них
+        // осталась включённой печать от предыдущего типа документа.
+        columns: columns.filter((c) => c.visiblePrint && !(header.document_type === "in" && (c.key === "discount_percent" || c.key === "discount_amount"))),
         mainItems,
         bundleItems,
         promoItems,
@@ -626,7 +681,7 @@ const DocumentFormPage = () => {
             header={header}
             docNumber={docNumber}
             isPosted={isPosted}
-            setPostConfirm={setPostConfirm}
+            setPostConfirm={handlePostClick}
             postMutation={postMutation}
             setUnpostConfirm={setUnpostConfirm}
             unpostMutation={unpostMutation}
@@ -679,6 +734,8 @@ const DocumentFormPage = () => {
             total={total}
             disabled={!canAddProducts}
             defaultPriceType={header.default_price_type}
+            isPurchase={header.document_type === "in"}
+            filterByStock={["out", "move", "return_out"].includes(header.document_type)}
             onBack={() => headDocumentRef.current?.focusNote()}
             columns={columns}
             onColumnsChange={setAllColumns}
@@ -686,12 +743,29 @@ const DocumentFormPage = () => {
           />
         </div>
 
-        {/* ── Печатная версия: "Авто" (сотрудник/водитель) — под таблицей товаров ── */}
-        {participants[0] && (
-          <div className="hidden print:block text-xs pt-1 mt-1 border-t border-gray-300">
-            <span className="font-semibold">{t("DriverLabel")}:</span> {employees.find((e: any) => e.id === participants[0].employee)?.full_name ?? "—"}
-          </div>
-        )}
+        {/* ── Печатная версия: "Авто" (водитель, если назначен) и кто провёл документ — под таблицей товаров ── */}
+        {(() => {
+          const driverName = participants[0]?.employee ? employees.find((e: any) => e.id === participants[0].employee)?.full_name : undefined;
+          const postedByName = isPosted ? doc?.posted_by_name : undefined;
+          if (!driverName && !postedByName) return null;
+          return (
+            <div className="hidden print:block text-xs pt-1 mt-1 border-t border-gray-300">
+              {driverName && (
+                <div>
+                  <span className="font-semibold">{t("DriverLabel")}:</span> {driverName}
+                </div>
+              )}
+              {postedByName && (
+                <div>
+                  <span className="font-semibold">{t("PostedByLabel")}:</span> {postedByName}
+                </div>
+              )}
+            </div>
+          );
+        })()}
+
+        {/* ── Печатная версия: слоган филиала — внизу счёта-фактуры, на экране скрыт ── */}
+        {branchSlogan && <div className="hidden print:block print:text-3xl font-bold italic text-center mt-3 font-serif">{branchSlogan}</div>}
       </div>
 
       <ConfirmModal isOpen={postConfirm} type="info" title={t("PostDocument")} message={t("PostDocumentConfirm")} onClose={() => setPostConfirm(false)} onConfirm={() => postMutation.mutate()} />

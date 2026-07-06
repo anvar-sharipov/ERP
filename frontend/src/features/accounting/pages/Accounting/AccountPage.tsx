@@ -154,6 +154,16 @@ const AccountPage = () => {
     setFormModal(true);
   };
 
+  // ✅ editingAccount — снимок, сделанный при открытии модалки; после add/removeSubconto
+  // инвалидируется только запрос accounts, а не сам editingAccount — синхронизируем
+  // его со свежими данными, чтобы список субконто в модалке обновлялся реактивно.
+  useEffect(() => {
+    if (editingAccount) {
+      const fresh = accounts.find((a) => a.id === editingAccount.id);
+      if (fresh) setEditingAccount(fresh);
+    }
+  }, [accounts]);
+
   const openDelete = (account: AccountInterface) => {
     setDeleteTarget(account);
     setDeleteModal(true);

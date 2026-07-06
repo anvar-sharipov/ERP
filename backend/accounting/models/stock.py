@@ -14,6 +14,42 @@ class Warehouse(models.Model):
     is_active = models.BooleanField(default=True)
     is_main = models.BooleanField(default=False, verbose_name="Основной склад")
 
+    # ✅ Счета для автогенерации проводки при проведении "Расхода" с этого склада —
+    # заполняются вручную пользователем (ничего не подставляется автоматически).
+    # Разные склады могут вести учёт в разных счетах (например, чтобы не смешивать
+    # суммы по разным валютам/группам товаров в ОСВ — см. обсуждение в CLAUDE.md).
+    receivable_account = models.ForeignKey(
+        'Account', on_delete=models.PROTECT, null=True, blank=True,
+        related_name='warehouses_receivable', verbose_name="Счёт расчётов с покупателем",
+    )
+    revenue_account = models.ForeignKey(
+        'Account', on_delete=models.PROTECT, null=True, blank=True,
+        related_name='warehouses_revenue', verbose_name="Счёт выручки",
+    )
+    cogs_account = models.ForeignKey(
+        'Account', on_delete=models.PROTECT, null=True, blank=True,
+        related_name='warehouses_cogs', verbose_name="Счёт себестоимости продаж",
+    )
+    inventory_account = models.ForeignKey(
+        'Account', on_delete=models.PROTECT, null=True, blank=True,
+        related_name='warehouses_inventory', verbose_name="Счёт учёта товаров",
+    )
+    # ✅ Для "Прихода" — товар дебетуется на тот же inventory_account (он же кредитуется
+    # в "Расходе"), а кредитуется этот счёт — задолженность перед поставщиком.
+    payable_account = models.ForeignKey(
+        'Account', on_delete=models.PROTECT, null=True, blank=True,
+        related_name='warehouses_payable', verbose_name="Счёт расчётов с поставщиком",
+    )
+    # ✅ Необязательный — если не настроен, скидка просто netted в total как раньше
+    # (обратная совместимость). Если настроен — "Расход"/"Возврат от покупателя" проводят
+    # выручку/долг клиента ПО ПОЛНОЙ цене (subtotal), а скидку отдельной строкой:
+    # Дт discount_account / Кт receivable_account — контр-счёт выручки, чтобы в ОСВ было
+    # видно сумму предоставленных скидок отдельно, а не смешанной с чистой выручкой.
+    discount_account = models.ForeignKey(
+        'Account', on_delete=models.PROTECT, null=True, blank=True,
+        related_name='warehouses_discount', verbose_name="Счёт скидок",
+    )
+
     class Meta:
         verbose_name = "Склад"
 
@@ -39,6 +75,39 @@ class WarehouseStock(models.Model):
             models.Index(fields=["warehouse"]),
         ]
         verbose_name = "Остаток на складе"
+
+
+class WarehouseProductSnapshot(models.Model):
+    """
+    Остаток товара на складе "на конец закрытого дня" — создаётся при закрытии
+    дня (см. ClosedPeriodViewSet.perform_create / accounting/services/warehouse_snapshot.py),
+    один снапшот на (склад, товар, дата). Нужен, чтобы отчёты по оборотам
+    (report_views.py::product_turnover) не пересчитывали остаток "на начало
+    периода" сканированием ВСЕЙ истории проводок с первого дня существования
+    склада каждый раз при открытии — вместо этого берут ближайший снапшот перед
+    периодом и досчитывают только небольшой хвост движений после него.
+    """
+    warehouse = models.ForeignKey(Warehouse, on_delete=models.CASCADE, related_name='product_snapshots')
+    product = models.ForeignKey('Product', on_delete=models.CASCADE, related_name='warehouse_snapshots')
+    date = models.DateField(db_index=True, verbose_name="Дата снапшота (на конец дня)")
+    quantity = models.DecimalField(max_digits=15, decimal_places=3, default=0)
+    value = models.DecimalField(max_digits=18, decimal_places=2, default=0)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["warehouse", "product", "date"],
+                name="unique_warehouse_product_snapshot_date"
+            )
+        ]
+        indexes = [
+            models.Index(fields=["warehouse", "date"]),
+        ]
+        verbose_name = "Снапшот остатка склада"
+        verbose_name_plural = "Снапшоты остатков склада"
+
+    def __str__(self):
+        return f"{self.warehouse_id}/{self.product_id} на {self.date}: {self.quantity}"
 
 
 class StockMovement(models.Model):

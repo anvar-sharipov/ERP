@@ -9,6 +9,8 @@ interface OSVRow {
   code: string;
   name: string;
   account_type: string;
+  is_group: boolean;
+  depth: number;
   opening_debit: string;
   opening_credit: string;
   debit_turnover: string;
@@ -38,8 +40,11 @@ export const OSVTable: React.FC<OSVTableProps> = ({ rows, onRowDoubleClick }) =>
     }
   }, [rows.length]);
 
-  // Итоги
-  const totals = rows.reduce(
+  // Итоги — только по строкам верхнего уровня (depth === 0): у групп суммы уже
+  // включают в себя все дочерние счета/подгруппы, поэтому суммировать ВСЕ строки
+  // означало бы посчитать дочерние суммы дважды (один раз как группу, ещё раз как
+  // отдельную строку потомка).
+  const totals = rows.filter((row) => row.depth === 0).reduce(
     (acc, row) => ({
       opening_debit: acc.opening_debit + Number(row.opening_debit),
       opening_credit: acc.opening_credit + Number(row.opening_credit),
@@ -135,7 +140,7 @@ export const OSVTable: React.FC<OSVTableProps> = ({ rows, onRowDoubleClick }) =>
       }
       if (e.key === "Enter" || e.key === "F2") {
         e.preventDefault();
-        if (onRowDoubleClick) onRowDoubleClick(rows[rowIdx]);
+        if (onRowDoubleClick && !rows[rowIdx].is_group) onRowDoubleClick(rows[rowIdx]);
       }
     };
 
@@ -171,13 +176,18 @@ export const OSVTable: React.FC<OSVTableProps> = ({ rows, onRowDoubleClick }) =>
   });
 
   return (
-    <div ref={containerRef} className="overflow-x-auto rounded-lg border border-green-700 dark:border-green-800 w-fit" onFocus={() => focusManager.setRegion("table")} tabIndex={-1}>
-      <table className="text-xs md:text-sm border-collapse w-auto">
+    <div
+      ref={containerRef}
+      className="overflow-x-auto print:overflow-visible rounded-lg border border-green-700 dark:border-green-800 print:border-black w-fit print:w-full [print-color-adjust:exact] [-webkit-print-color-adjust:exact]"
+      onFocus={() => focusManager.setRegion("table")}
+      tabIndex={-1}
+    >
+      <table className="text-xs md:text-sm border-collapse w-auto print:w-full">
         <thead>
           {/* Строка 1 — группы */}
           <tr>
             {groups.map((g, i) => (
-              <th key={i} colSpan={g.span} className={`${thBase} bg-green-700 dark:bg-green-800 text-center`}>
+              <th key={i} colSpan={g.span} className={`${thBase} bg-green-700 dark:bg-green-800 print:bg-gray-300 print:text-black text-center`}>
                 {g.label ?? ""}
               </th>
             ))}
@@ -187,7 +197,7 @@ export const OSVTable: React.FC<OSVTableProps> = ({ rows, onRowDoubleClick }) =>
             {COLS.map((col, i) => (
               <th
                 key={i}
-                className={`${thBase} bg-green-600 dark:bg-green-700 ${col.numeric ? "text-right" : "text-left"}`}
+                className={`${thBase} bg-green-600 dark:bg-green-700 print:bg-gray-200 print:text-black ${col.numeric ? "text-right" : "text-left"}`}
                 style={{ width: col.key === "code" ? 60 : col.key === "name" ? 180 : 100 }}
               >
                 {col.label}
@@ -201,11 +211,15 @@ export const OSVTable: React.FC<OSVTableProps> = ({ rows, onRowDoubleClick }) =>
             <tr
               key={row.id}
               data-row-idx={rowIdx}
-              onDoubleClick={() => onRowDoubleClick?.(row)}
+              onDoubleClick={() => {
+                // ✅ У групп своих проводок не бывает — drill-down (список проводок
+                // по счёту) имеет смысл только для листовых счетов.
+                if (!row.is_group) onRowDoubleClick?.(row);
+              }}
               className={`
                 transition-colors
-                ${rowIdx % 2 === 0 ? "bg-white dark:bg-slate-900" : "bg-gray-50/50 dark:bg-slate-800/30"}
-                hover:bg-green-50 dark:hover:bg-green-900/10
+                ${row.is_group ? "bg-gray-100 dark:bg-slate-800/70 font-bold print:bg-gray-200 print:font-bold" : `${rowIdx % 2 === 0 ? "bg-white dark:bg-slate-900" : "bg-gray-50/50 dark:bg-slate-800/30"} print:!bg-transparent`}
+                ${row.is_group ? "" : "hover:bg-green-50 dark:hover:bg-green-900/10"}
               `}
             >
               {COLS.map((col, colIdx) => {
@@ -220,14 +234,17 @@ export const OSVTable: React.FC<OSVTableProps> = ({ rows, onRowDoubleClick }) =>
                       setSelectedCell({ rowIdx, colIdx });
                       focusManager.setRegion("table");
                     }}
+                    style={col.key === "code" || col.key === "name" ? { paddingLeft: 8 + row.depth * 16 } : undefined}
                     className={`
-                      ${tdBase}
+                      ${tdBase} print:border-black
+                      ${row.is_group ? "cursor-default" : ""}
                       ${col.numeric ? "font-mono text-right tabular-nums" : ""}
-                      ${col.key === "code" ? "font-semibold text-indigo-600 dark:text-indigo-400" : "text-gray-700 dark:text-gray-300"}
-                      ${isSelected ? "bg-yellow-400/30 dark:bg-yellow-500/20 shadow-[inset_0_0_0_2px_#eab308]" : ""}
-                      ${isRowSelected && !isSelected ? "bg-yellow-50 dark:bg-yellow-900/10" : ""}
-                      ${col.key === "opening_debit" || col.key === "debit_turnover" || col.key === "closing_debit" ? "text-blue-600 dark:text-blue-400" : ""}
-                      ${col.key === "opening_credit" || col.key === "credit_turnover" || col.key === "closing_credit" ? "text-red-500 dark:text-red-400" : ""}
+                      ${col.key === "code" ? "font-semibold text-indigo-600 dark:text-indigo-400 print:text-black" : "text-gray-700 dark:text-gray-300 print:text-black"}
+                      ${row.is_group ? "text-gray-900 dark:text-gray-100 print:text-black" : ""}
+                      ${isSelected ? "bg-yellow-400/30 dark:bg-yellow-500/20 shadow-[inset_0_0_0_2px_#eab308] print:!bg-transparent print:!shadow-none" : ""}
+                      ${isRowSelected && !isSelected ? "bg-yellow-50 dark:bg-yellow-900/10 print:!bg-transparent" : ""}
+                      ${col.key === "opening_debit" || col.key === "debit_turnover" || col.key === "closing_debit" ? "text-blue-600 dark:text-blue-400 print:text-black" : ""}
+                      ${col.key === "opening_credit" || col.key === "credit_turnover" || col.key === "closing_credit" ? "text-red-500 dark:text-red-400 print:text-black" : ""}
                     `}
                   >
                     {col.numeric ? fmt(val) : val}
@@ -239,12 +256,12 @@ export const OSVTable: React.FC<OSVTableProps> = ({ rows, onRowDoubleClick }) =>
         </tbody>
 
         <tfoot>
-          <tr className="bg-green-700 dark:bg-green-800 font-semibold">
-            <td colSpan={2} className={`${tdBase} border-green-600 dark:border-green-700 text-white font-bold`}>
+          <tr className="bg-green-700 dark:bg-green-800 print:bg-gray-300 font-semibold">
+            <td colSpan={2} className={`${tdBase} border-green-600 dark:border-green-700 print:border-black text-white print:text-black font-bold`}>
               {t("Total")}
             </td>
             {(["opening_debit", "opening_credit", "debit_turnover", "credit_turnover", "closing_debit", "closing_credit"] as const).map((key) => (
-              <td key={key} className={`${tdBase} border-green-600 dark:border-green-700 text-white font-mono text-right tabular-nums`}>
+              <td key={key} className={`${tdBase} border-green-600 dark:border-green-700 print:border-black text-white print:text-black font-mono text-right tabular-nums`}>
                 {fmt(totals[key])}
               </td>
             ))}

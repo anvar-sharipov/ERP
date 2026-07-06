@@ -9,6 +9,7 @@ const Accounting = () => {
     { to: "accounts", label: t("AccountsPlan") },
     { to: "subconto-types", label: t("SubcontoTypes") },
     { to: "osv", label: t("OSV") },
+    { to: "product-turnover", label: t("ProductTurnover") },
     { to: "audit-log", label: t("AuditLog") },
   ];
 

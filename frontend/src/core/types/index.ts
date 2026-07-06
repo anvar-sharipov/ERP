@@ -74,6 +74,9 @@ export interface Branch {
   manager_name: string;
   manager_position: string;
 
+  // Текст внизу счёта-фактуры (печать/Excel)
+  slogan?: string;
+
   // Изображения (URL)
   logo?: string | null;
   signature_image?: string | null;
@@ -296,12 +299,19 @@ export interface DocumentList {
   status_display: string;
   date: string;
   counterparty: number | null;
-  counterparty_detail: { id: number; name: string } | null;
+  counterparty_detail: { id: number; name: string; phone?: string; photo?: string | null; photo_thumbnail?: string | null } | null;
   warehouse: number | null;
   warehouse_detail: { id: number; name: string } | null;
   total: string;
   created_at: string;
   branch_detail: { id: number; name: string } | null;
+  has_discount: boolean;
+  has_gift: boolean;
+  has_bundle: boolean;
+  created_by: number | null;
+  created_by_name?: string | null;
+  posted_by: number | null;
+  posted_by_name?: string | null;
 }
  
 

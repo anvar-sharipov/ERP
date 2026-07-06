@@ -3,7 +3,7 @@ from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from rest_framework_nested import routers as nested_routers
 
-from .views.company_views import CompanyProfileViewSet, BranchViewSet, UserScopeViewSet
+from .views.company_views import CompanyProfileViewSet, BranchViewSet, UserScopeViewSet, DocumentSettingsViewSet
 from .views.account_views import AccountViewSet, SubcontoTypeViewSet, available_content_types
 from .views.directory_views import DirectoryViewSet, DirectoryFieldViewSet, DirectoryRecordViewSet
 from .views.product_views import (
@@ -17,6 +17,7 @@ from .views.employee_views import PositionViewSet, EmployeeViewSet
 from .views.transaction_views import JournalEntryViewSet, StockMovementViewSet, ClosedPeriodViewSet
 from .views.document_views import DocumentViewSet, DocumentItemViewSet, DocumentParticipantViewSet
 from .views.currency_views import CurrencyViewSet, ExchangeRateViewSet
+from .views.report_views import ReportViewSet
 
 
 
@@ -29,6 +30,7 @@ router = DefaultRouter()
 # Company
 router.register(r'company-profile', CompanyProfileViewSet, basename='company-profile')
 router.register(r'branches', BranchViewSet, basename='branches')
+router.register(r'document-settings', DocumentSettingsViewSet, basename='document-settings')
 
 # Accounting
 router.register(r'accounts', AccountViewSet, basename='accounts')
@@ -71,6 +73,9 @@ router.register(r'exchange-rates', ExchangeRateViewSet, basename='exchange-rate'
 
 # Audit
 router.register(r'audit-logs', AuditLogViewSet, basename='audit-log')
+
+# Reports
+router.register(r'reports', ReportViewSet, basename='report')
 
 # Documents (основной роутер)
 router.register(r'documents', DocumentViewSet, basename='document')

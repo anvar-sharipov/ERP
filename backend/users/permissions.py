@@ -51,6 +51,14 @@ def _rbac(action: str, resource: str):
         'set_main':       'POST',
         'check':          'GET',
         'range_check':    'GET',
+        'osv':            'GET',
+        'product_turnover':        'GET',
+        'product_turnover_detail': 'GET',
+        'filter_users':   'GET',
+        # ✅ Массовое удаление (см. accounting/mixins.py::BulkDestroyMixin) — метод
+        # DELETE, а не POST по умолчанию, иначе право "создавать" ошибочно давало
+        # бы право массово удалять.
+        'bulk_destroy':   'DELETE',
     }
     method = action_map.get(action, 'POST')  # неизвестные экшены → POST
     return [IsAuthenticated(), HasPermission(resource, method)()]

@@ -10,6 +10,7 @@ import { HelpCircle } from "lucide-react";
 import Dropdown from "../../../../../components/ui/Invoice/Dropdown";
 import { formatDateDisplay } from "../../../../../core/utils/formatDate";
 import { directoryApi, directoryRecordApi } from "../../../services/directoryApi";
+import { InvoiceHeaderView } from "./InvoiceHeaderView";
 
 // Слаг справочника с типовыми комментариями к документу — создаётся пользователем
 // через конструктор справочников (Directory). Если такого справочника нет —
@@ -151,38 +152,18 @@ const HeadDocument = forwardRef<HeadDocumentHandle, HeadDocumentProps>(
   return (
     <div className="px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-lg bg-gray-200 dark:bg-slate-800 print:p-0 print:border-none print:bg-transparent">
       {/* ── Печатная версия: компактно, без инпутов, как настоящий документ ── */}
-      <div className="hidden print:block leading-snug mb-2">
-        <div className="text-xs flex flex-wrap gap-x-4 gap-y-0.5">
-          <div>
-            <span className="font-semibold">{t("Date")}:</span> {formattedDate}
-          </div>
-          <div>
-            <span className="font-semibold">{isMove ? t("SourceWarehouse") : t("Warehouse")}:</span> {warehouseName}
-          </div>
-          {isMove && (
-            <div>
-              <span className="font-semibold">{t("DestinationWarehouse")}:</span> {warehouseToName}
-            </div>
-          )}
-          {parseFloat(String(header.discount_percent)) !== 0 && (
-            <div>
-              <span className="font-semibold">{t("DiscountPercent")}:</span> {header.discount_percent}%
-            </div>
-          )}
-        </div>
-
-        {needsCounterparty &&
-          (() => {
-            const cp = counterparties.find((c) => c.id === header.counterparty);
-            return (
-              <div className="mt-1 pt-1 border-t border-gray-300">
-                <span className="print:text-3xl font-bold">
-                  {t("Counterparty")}: {cp?.name ?? "—"}
-                </span>
-                {cp?.phone && <span className="ml-3 print:text-xl font-normal">{cp.phone}</span>}
-              </div>
-            );
-          })()}
+      <div className="hidden print:block">
+        <InvoiceHeaderView
+          formattedDate={formattedDate}
+          isMove={isMove}
+          warehouseName={warehouseName}
+          warehouseToName={warehouseToName}
+          documentType={header.document_type}
+          discountPercent={header.discount_percent}
+          needsCounterparty={needsCounterparty}
+          counterpartyName={counterparties.find((c) => c.id === header.counterparty)?.name}
+          counterpartyPhone={counterparties.find((c) => c.id === header.counterparty)?.phone}
+        />
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-x-4 gap-y-1.5 print:hidden">
@@ -276,15 +257,18 @@ const HeadDocument = forwardRef<HeadDocumentHandle, HeadDocumentProps>(
           )}
         </div>
 
-        {/* Скидка */}
-        <div>
-          <label className={fieldLabel}>{t("DiscountPercent")}</label>
-          {isPosted ? (
-            <p className={fieldValue}>{header.discount_percent}</p>
-          ) : (
-            <Input value={header.discount_percent} type="number" onChange={(e) => setHeader((p) => ({ ...p, discount_percent: e.target.value }))} />
-          )}
-        </div>
+        {/* Скидка — не актуальна для "Приход": себестоимость и так берётся из
+            фактически введённой цены строки, отдельного поля скидки не нужно. */}
+        {header.document_type !== "in" && (
+          <div>
+            <label className={fieldLabel}>{t("DiscountPercent")}</label>
+            {isPosted ? (
+              <p className={fieldValue}>{header.discount_percent}</p>
+            ) : (
+              <Input value={header.discount_percent} type="number" onChange={(e) => setHeader((p) => ({ ...p, discount_percent: e.target.value }))} />
+            )}
+          </div>
+        )}
       </div>
 
       {/* ── Сотрудник → Контрагент → Комментарий: один ряд, стрелки влево/вправо ── */}

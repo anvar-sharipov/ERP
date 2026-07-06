@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
+import { useSearchParams } from "react-router-dom";
+import { X } from "lucide-react";
 import { journalApi, type JournalEntry } from "../../services/transactionApi";
 import { Table, type Column } from "../../../../components/ui/Table/Table";
 import { Button } from "../../../../components/ui/Button";
@@ -13,6 +15,7 @@ import { usePageAccess } from "../../../../core/hooks/usePageAccess";
 import { useSidebar } from "../../../../core/context/SidebarRightContext";
 import { useDateStore } from "../../../../core/store/dateStore";
 import { useClosedPeriod } from "../../../../core/hooks/useClosedPeriod";
+import { useNotify } from "../../../../core/context/NotificationContext";
 import JournalEntryForm from "./JournalEntryForm";
 import { Plus } from "lucide-react";
 import { usePageHotkeys } from "../../../../core/hooks/usePageHotkeys";
@@ -26,12 +29,32 @@ export default function JournalPage() {
 
   const { canView, canPost, canPut, canDelete } = usePageAccess("journalentry");
   const { isClosed } = useClosedPeriod();
+  const notify = useNotify();
 
   // Берём период из глобального стора
-  const { periodFrom, periodTo, workBranch } = useDateStore();
+  const { periodFrom, periodTo, workBranch, workWarehouse } = useDateStore();
+
+  // ✅ Drill-down из ОСВ — двойной клик по счёту в ОСВ ведёт сюда с ?account=<id>,
+  // period уже совпадает сам собой (тот же глобальный periodFrom/periodTo).
+  // account_code/account_name — только для баннера-подсказки, в фильтр не идут.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const accountFilter = searchParams.get("account");
+  const accountLabel = searchParams.get("account_code") ? `${searchParams.get("account_code")} — ${searchParams.get("account_name") ?? ""}` : null;
+
+  const clearAccountFilter = () => {
+    const next = new URLSearchParams(searchParams);
+    next.delete("account");
+    next.delete("account_code");
+    next.delete("account_name");
+    setSearchParams(next);
+  };
 
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
+  // ✅ Ручные vs сгенерированные документом проводки — по умолчанию только ручные
+  // (см. обсуждение: document-проводки правятся только через сам документ, поэтому
+  // в журнале по умолчанию не мешаются с ручными и не создают соблазна их трогать).
+  const [entryTypeFilter, setEntryTypeFilter] = useState<"manual" | "document" | "all">("manual");
   const [formOpen, setFormOpen] = useState(false);
   const [editEntry, setEditEntry] = useState<JournalEntry | null>(null);
   const [confirmPost, setConfirmPost] = useState<JournalEntry | null>(null);
@@ -53,15 +76,22 @@ export default function JournalPage() {
   // });
 
   // Убираем search из filters
+  // ✅ Склад в приоритете над филиалом (тот же принцип, что и в OSV/Product Turnover —
+  // см. CLAUDE.md: "все отчёты должны смотреть на branch, warehouse, date_range"):
+  // выбран конкретный склад — фильтруем только по нему; выбран только филиал (без
+  // склада) — по всем складам этого филиала (см. get_queryset на бэкенде); не выбрано
+  // ничего — не сужаем сверх RBAC-scope пользователя.
   const filters: Record<string, string> = {
     ...(statusFilter && { status: statusFilter }),
     ...(periodFrom && { date_from: periodFrom }),
     ...(periodTo && { date_to: periodTo }),
-    ...(workBranch?.id && { branch: String(workBranch.id) }),
+    ...(workWarehouse?.id ? { warehouse: String(workWarehouse.id) } : workBranch?.id ? { branch: String(workBranch.id) } : {}),
+    ...(accountFilter && { account: accountFilter }),
+    ...(entryTypeFilter !== "all" && { entry_type: entryTypeFilter }),
   };
 
   const { data: rawEntries = [], isLoading } = useQuery({
-    queryKey: ["journal-entries", filters, workBranch?.id],
+    queryKey: ["journal-entries", filters, workBranch?.id, workWarehouse?.id, accountFilter, entryTypeFilter],
     queryFn: () => journalApi.list(filters).then((r) => r.data),
     enabled: canView,
   });
@@ -72,17 +102,31 @@ export default function JournalPage() {
     searchFields: ["number", "description", "debit_accounts", "credit_accounts"],
   });
 
+  // ✅ Раньше здесь не было onError вообще — ошибка (например "период закрыт",
+  // см. utils.py::check_period_open) молча проглатывалась, кнопка "Провести"
+  // просто ничего не делала без единого сообщения. Backend отдаёт понятный
+  // текст в {detail: ...} (см. transaction_views.py::_get_error_detail).
   const postMutation = useMutation({
     mutationFn: (id: number) => journalApi.post(id),
-    onSuccess: () => {
+    onSuccess: (res: any) => {
       qc.invalidateQueries({ queryKey: ["journal-entries"] });
+      setConfirmPost(null);
+      notify("success", res?.data?.detail || t("EntryPosted"));
+    },
+    onError: (err: any) => {
+      notify("error", err?.response?.data?.detail || t("ErrorPosting"));
       setConfirmPost(null);
     },
   });
   const unpostMutation = useMutation({
     mutationFn: (id: number) => journalApi.unpost(id),
-    onSuccess: () => {
+    onSuccess: (res: any) => {
       qc.invalidateQueries({ queryKey: ["journal-entries"] });
+      setConfirmUnpost(null);
+      notify("success", res?.data?.detail || t("EntryUnposted"));
+    },
+    onError: (err: any) => {
+      notify("error", err?.response?.data?.detail || t("ErrorUnposting"));
       setConfirmUnpost(null);
     },
   });
@@ -90,6 +134,11 @@ export default function JournalPage() {
     mutationFn: (id: number) => journalApi.delete(id),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["journal-entries"] });
+      setConfirmDelete(null);
+      notify("success", t("SuccessDeleted"));
+    },
+    onError: (err: any) => {
+      notify("error", err?.response?.data?.detail || t("ErrorDeleting"));
       setConfirmDelete(null);
     },
   });
@@ -143,9 +192,27 @@ export default function JournalPage() {
             ))}
           </div>
         </div>
+
+        {/* ✅ Ручные vs сгенерированные документом проводки — по умолчанию "Ручные"
+            (см. обсуждение: document-проводки нельзя менять напрямую из журнала,
+            поэтому по умолчанию они не мешаются в список). */}
+        <div className="pt-4 border-t border-indigo-900/30">
+          <h4 className="font-bold text-indigo-300 mb-2 text-xs uppercase tracking-wider">{t("EntryType")}</h4>
+          <div className="flex flex-col gap-1">
+            {(
+              [
+                { value: "manual", label: t("ManualEntries") },
+                { value: "document", label: t("DocumentEntries") },
+                { value: "all", label: t("All") },
+              ] as const
+            ).map((item) => (
+              <Button key={item.value} onClick={() => setEntryTypeFilter(item.value)} text={item.label} variant="ghost" dark isActive={entryTypeFilter === item.value} className="w-full justify-start" />
+            ))}
+          </div>
+        </div>
       </div>,
     );
-  }, [setSidebarContent, canPost, isClosed, statusFilter, t]);
+  }, [setSidebarContent, canPost, isClosed, statusFilter, entryTypeFilter, t]);
 
   console.log("entries", entries);
 
@@ -298,7 +365,12 @@ export default function JournalPage() {
       hideInPrint: true,
       render: (item) => (
         <div className="flex gap-1">
-          {canPost && item.status === "draft" && (
+          {/* ✅ Проводки, сгенерированные документом (item.is_manual === false), нельзя
+              проводить/распроводить/редактировать/удалять из журнала напрямую —
+              см. обсуждение: это делается только через сам документ. Бэкенд это
+              уже блокирует (JournalEntryViewSet._reject_if_document_entry), но кнопки
+              скрываем и здесь, чтобы не предлагать действие, которое всё равно упадёт. */}
+          {canPost && item.status === "draft" && item.is_manual && (
             <Button
               variant="1c"
               title={t("Post")}
@@ -310,7 +382,7 @@ export default function JournalPage() {
               }}
             />
           )}
-          {canPost && item.status === "posted" && (
+          {canPost && item.status === "posted" && item.is_manual && (
             <Button
               variant="1c"
               title={t("Unpost")}
@@ -322,7 +394,7 @@ export default function JournalPage() {
               }}
             />
           )}
-          {canPut && item.status === "draft" && (
+          {canPut && item.status === "draft" && item.is_manual && (
             <Button
               variant="1c"
               title={`F2 - ${t("Edit")}`}
@@ -334,7 +406,7 @@ export default function JournalPage() {
               }}
             />
           )}
-          {canDelete && item.status === "draft" && (
+          {canDelete && item.status === "draft" && item.is_manual && (
             <Button
               variant="1c"
               title={`DELETE - ${t("Delete")}`}
@@ -353,6 +425,17 @@ export default function JournalPage() {
 
   return (
     <div className="space-y-4">
+      {accountFilter && (
+        <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 text-sm text-indigo-700 dark:text-indigo-300 w-fit">
+          <span>
+            {t("FilteredByAccount")}: <b>{accountLabel ?? accountFilter}</b>
+          </span>
+          <button type="button" onClick={clearAccountFilter} className="hover:text-red-500 transition-colors" title={t("ClearFilter")}>
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
       <Table
         columns={columns}
         data={entries}

@@ -40,6 +40,11 @@ export default function AuditLogPage() {
   });
   const [searchQuery, setSearchQuery] = useState("");
   const [actionFilter, setActionFilter] = useState<"all" | "create" | "update" | "delete" | "post" | "unpost">("all");
+  // ✅ Сортировка при server-пагинации — уходит на бэкенд (см. audit_views.py::
+  // AUDIT_LOG_ORDERING_FIELDS), а не сортируется на клиенте (клиент видит только
+  // текущую страницу).
+  const [sortBy, setSortBy] = useState<string | null>(null);
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
 
   const filters = {
     page,
@@ -50,22 +55,29 @@ export default function AuditLogPage() {
     ...(userFilter && { user: userFilter }),
     ...(periodFrom && { date_from: periodFrom }),
     ...(periodTo && { date_to: periodTo }),
+    ...(sortBy && { ordering: sortDir === "desc" ? `-${sortBy}` : sortBy }),
   };
 
+  // ✅ AuditLog пишется из десятков разных мест по всему проекту (документы,
+  // проводки, закрытие/переоткрытие дня, справочники и т.д.) — заводить полноценный
+  // WebSocket-broadcast на каждое из них ради этой одной страницы избыточно.
+  // Поллинг — простое и достаточное решение: список сам обновляется, не требуя
+  // ручной перезагрузки страницы (раньше новые записи появлялись только после F5).
   const { data, isLoading, error } = useQuery({
     // queryKey: ["audit-logs", filters],
-    queryKey: ["audit-logs", page, pageSize, actionFilter, userFilter, periodFrom, periodTo],
+    queryKey: ["audit-logs", page, pageSize, actionFilter, userFilter, periodFrom, periodTo, sortBy, sortDir],
     queryFn: () => accountApi.getAuditLogs(filters),
     enabled: canView,
     placeholderData: (prev) => prev,
     staleTime: 0,
+    refetchInterval: 15000,
   });
 
   //   console.log("data", data);
 
   useEffect(() => {
     setPage(1);
-  }, [periodFrom, periodTo, userFilter, actionFilter]);
+  }, [periodFrom, periodTo, userFilter, actionFilter, sortBy, sortDir]);
 
 
   useEffect(() => {
@@ -213,6 +225,12 @@ export default function AuditLogPage() {
               localStorage.setItem("table:audit_logs:pageSize", String(size));
             } catch {}
           },
+          sortBy,
+          sortDir,
+          onSortChange: (key, direction) => {
+            setSortBy(key);
+            setSortDir(direction);
+          },
         }}
         onFetchAllData={async () => {
           const res = await accountApi.getAuditLogs({
@@ -221,6 +239,7 @@ export default function AuditLogPage() {
             ...(userFilter && { user: userFilter }),
             ...(periodFrom && { date_from: periodFrom }),
             ...(periodTo && { date_to: periodTo }),
+            ...(sortBy && { ordering: sortDir === "desc" ? `-${sortBy}` : sortBy }),
           });
 
           return res.results ?? [];

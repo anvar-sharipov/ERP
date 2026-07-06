@@ -60,12 +60,27 @@ class AccountViewSet(AuditMixin, viewsets.ModelViewSet):
         account = self.get_object()
         if account.subaccounts.exists():
             return Response({"detail": "Нельзя удалить счёт — у него есть субсчета."}, status=status.HTTP_400_BAD_REQUEST)
-        has_transactions = (
-            account.debit_transactions.exists() or
-            account.credit_transactions.exists()
-        )
-        if has_transactions:
+        if account.transaction_lines.exists():
             return Response({"detail": "Нельзя удалить счёт — по нему есть проводки."}, status=status.HTTP_400_BAD_REQUEST)
+        from ..models import Warehouse
+        warehouse_fields = {
+            'receivable_account': 'Счёт расчётов с покупателем',
+            'revenue_account': 'Счёт выручки',
+            'cogs_account': 'Счёт себестоимости продаж',
+            'inventory_account': 'Счёт учёта товаров',
+            'payable_account': 'Счёт расчётов с поставщиком',
+            'discount_account': 'Счёт скидок',
+        }
+        used_by = []
+        for field, label in warehouse_fields.items():
+            names = Warehouse.objects.filter(**{field: account}).values_list('name', flat=True)
+            for wh_name in names:
+                used_by.append(f"{wh_name} ({label})")
+        if used_by:
+            return Response(
+                {"detail": f"Нельзя удалить счёт — он используется в проводках складов: {', '.join(used_by)}."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         return super().destroy(request, *args, **kwargs)
 
     @action(detail=False, methods=['get'], url_path='tree')

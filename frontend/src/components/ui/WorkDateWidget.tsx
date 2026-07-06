@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { useEffect, useState } from "react";
 import { closedPeriodApi, userScopeApi } from "../../features/accounting/services/transactionApi";
+import { useNotify } from "../../core/context/NotificationContext";
 import { useDateStore } from "../../core/store/dateStore";
 import { useClosedPeriod, useBranchWarehousesClosed } from "../../core/hooks/useClosedPeriod";
 import { usePageAccess } from "../../core/hooks/usePageAccess";
@@ -15,8 +16,13 @@ import { formatDateDisplay } from "../../core/utils/formatDate";
 export default function WorkDateWidget() {
   const { t } = useTranslation();
   const qc = useQueryClient();
+  const notify = useNotify();
   const { canView, canPost, canPut } = usePageAccess("closedperiod");
   const [confirmOpen, setConfirmOpen] = useState<"close" | "reopen" | null>(null);
+  // ✅ Примечание — обязательное при переоткрытии (значимое админ-действие,
+  // причина должна фиксироваться явно, см. AuditLog), необязательное при закрытии.
+  const [closeNote, setCloseNote] = useState("");
+  const [reopenNote, setReopenNote] = useState("");
 
   const { workDate, periodFrom, periodTo, workBranch, workWarehouse, setWorkDate, setPeriodFrom, setPeriodTo, setWorkBranch, setWorkWarehouse, setCurrentMonth, setCurrentYear, setCurrentDay } =
     useDateStore(
@@ -86,11 +92,20 @@ export default function WorkDateWidget() {
   const { allClosed: branchFullyClosed, isLoading: branchCheckLoading } = useBranchWarehousesClosed(!workWarehouse ? branchWarehouseIds : []);
 
   const closeMutation = useMutation({
-    mutationFn: () => closedPeriodApi.close(workDate, workWarehouse!.id),
+    mutationFn: () => closedPeriodApi.close(workDate, workWarehouse!.id, closeNote),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["closed-period-check"] });
       qc.invalidateQueries({ queryKey: ["closed-period-branch-check"] });
       setConfirmOpen(null);
+      setCloseNote("");
+      notify("success", t("CloseDaySuccess", { date: formatDateDisplay(workDate), warehouse: workWarehouse?.name }));
+    },
+    onError: (err: any) => {
+      // ✅ Раньше onError не было вообще — например отказ по новому строгому
+      // правилу "закрывать можно только по порядку" (см. ClosedPeriodViewSet::
+      // perform_create) проходил бы молча, кнопка "Закрыть" просто ничего не делала.
+      setConfirmOpen(null);
+      notify("error", err.response?.data?.detail || t("Error"));
     },
   });
 
@@ -103,16 +118,18 @@ export default function WorkDateWidget() {
 
   const reopenMutation = useMutation({
     // mutationFn: () => closedPeriodApi.reopen(closedRecord!.id),
-    mutationFn: () => closedPeriodApi.reopen(closedPeriodId!),
+    mutationFn: () => closedPeriodApi.reopen(closedPeriodId!, reopenNote),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["closed-period-check"] });
       qc.invalidateQueries({ queryKey: ["closed-period-branch-check"] });
       setConfirmOpen(null);
+      setReopenNote("");
+      notify("success", t("ReopenDaySuccess", { date: formatDateDisplay(workDate), warehouse: workWarehouse?.name }));
     },
     onError: (err: any) => {
       // сюда придёт detail из backend (например "есть закрытый день позже")
       setConfirmOpen(null);
-      alert(err.response?.data?.detail || t("Error"));
+      notify("error", err.response?.data?.detail || t("Error"));
     },
   });
 
@@ -223,14 +240,16 @@ export default function WorkDateWidget() {
 
         <div className="space-y-2">
           <h4 className="font-bold text-indigo-300 uppercase tracking-wider">{t("ReportPeriod")}</h4>
-          <div className="space-y-1.5">
+          {/* ✅ From/To в один ряд — раньше каждый занимал отдельную строку целиком,
+              хотя оба поля узкие (просто дата) и без проблем помещаются рядом. */}
+          <div className="grid grid-cols-2 gap-2">
             <div>
-              <label className="text-indigo-400/70 ml-1">{t("From")}</label>
-              <input tabIndex={0} type="date" value={periodFrom} onChange={(e) => setPeriodFrom(e.target.value)} className={inputCls} />
+              <label className="text-indigo-400/70 ml-1 text-xs">{t("From")}</label>
+              <input tabIndex={0} type="date" value={periodFrom} onChange={(e) => setPeriodFrom(e.target.value)} className={`${inputCls} !px-1.5 text-sm`} />
             </div>
             <div>
-              <label className="text-indigo-400/70 ml-1">{t("To")}</label>
-              <input tabIndex={0} type="date" value={periodTo} onChange={(e) => setPeriodTo(e.target.value)} className={inputCls} />
+              <label className="text-indigo-400/70 ml-1 text-xs">{t("To")}</label>
+              <input tabIndex={0} type="date" value={periodTo} onChange={(e) => setPeriodTo(e.target.value)} className={`${inputCls} !px-1.5 text-sm`} />
             </div>
           </div>
           <div className="flex flex-wrap gap-1 pt-1">
@@ -254,9 +273,25 @@ export default function WorkDateWidget() {
         message={t("CloseDayMessage", { date: formatDateDisplay(workDate), warehouse: workWarehouse?.name })}
         confirmText={t("Close")}
         loading={closeMutation.isPending}
-        onClose={() => setConfirmOpen(null)}
+        onClose={() => {
+          setConfirmOpen(null);
+          setCloseNote("");
+        }}
         onConfirm={() => closeMutation.mutate()}
-      />
+      >
+        <textarea
+          value={closeNote}
+          onChange={(e) => setCloseNote(e.target.value)}
+          placeholder={t("Note")}
+          rows={2}
+          className="mt-2 w-full px-2 py-1.5 rounded-lg border text-sm outline-none transition-colors
+            bg-white dark:bg-slate-950 text-gray-900 dark:text-indigo-100
+            placeholder:text-gray-400 dark:placeholder:text-slate-500
+            border-gray-300 dark:border-indigo-900/50
+            focus:border-indigo-500 dark:focus:border-indigo-500/50 focus:ring-1 focus:ring-indigo-500/20
+            resize-none"
+        />
+      </ConfirmModal>
 
       <ConfirmModal
         isOpen={confirmOpen === "reopen"}
@@ -265,9 +300,26 @@ export default function WorkDateWidget() {
         message={t("ReopenDayMessage", { date: formatDateDisplay(workDate), warehouse: workWarehouse?.name })}
         confirmText={t("Reopen")}
         loading={reopenMutation.isPending}
-        onClose={() => setConfirmOpen(null)}
+        confirmDisabled={!reopenNote.trim()}
+        onClose={() => {
+          setConfirmOpen(null);
+          setReopenNote("");
+        }}
         onConfirm={() => reopenMutation.mutate()}
-      />
+      >
+        <textarea
+          value={reopenNote}
+          onChange={(e) => setReopenNote(e.target.value)}
+          placeholder={`${t("ReopenNoteRequired")} *`}
+          rows={2}
+          className="mt-2 w-full px-2 py-1.5 rounded-lg border text-sm outline-none transition-colors
+            bg-white dark:bg-slate-950 text-gray-900 dark:text-indigo-100
+            placeholder:text-gray-400 dark:placeholder:text-slate-500
+            border-gray-300 dark:border-indigo-900/50
+            focus:border-indigo-500 dark:focus:border-indigo-500/50 focus:ring-1 focus:ring-indigo-500/20
+            resize-none"
+        />
+      </ConfirmModal>
     </RBACGuard>
   );
 }

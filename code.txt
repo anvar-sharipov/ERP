@@ -1,6 +1,6 @@
 function Show-Tree($path, $indent = "") {
     # Массив папок, содержимое которых нужно игнорировать
-    $excludeContainers = @("venv", "node_modules", "media", "public", "__pycache__")
+    $excludeContainers = @("venv", "node_modules", "media", "public", "__pycache__", "icons")
 
     $items = Get-ChildItem $path
     for ($i = 0; $i -lt $items.Count; $i++) {

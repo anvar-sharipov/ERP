@@ -61,7 +61,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     audio.play().catch(() => {});
     setTimeout(() => {
       setNotifications((prev) => prev.filter((n) => n.id !== id));
-    }, 5000);
+    }, 10000);
   }, []);
 
   const remove = (id: number) => setNotifications((prev) => prev.filter((n) => n.id !== id));
@@ -113,7 +113,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
                 <motion.div
                   initial={{ scaleX: 1 }}
                   animate={{ scaleX: 0 }}
-                  transition={{ duration: 5, ease: "linear" }}
+                  transition={{ duration: 10, ease: "linear" }}
                   style={{ transformOrigin: "left" }}
                   className={`h-0.5 bg-gradient-to-r ${cfg.bar}`}
                 />

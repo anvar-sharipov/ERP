@@ -88,6 +88,8 @@ export interface ExportDocumentExcelOptions {
   headerLines: (HeaderInfoLine | HeaderInfoRow)[]; // Дата/Склад/Скидка(если не 0)/Участники — уже готовые label/value пары
   counterpartyLine?: { name: string; phone?: string }; // выводится отдельно, крупным шрифтом
   driverLine?: { label: string; name: string }; // "Авто" — выводится под таблицей товаров
+  postedByLine?: { label: string; name: string }; // "Провёл" — логин/ФИО пользователя, кто провёл документ
+  branchSlogan?: string; // слоган филиала — выводится в самом низу листа
   columns: ColumnDef[]; // видимые на экране колонки (visibleScreen) — те же, что участвуют в печати
   mainItems: ItemRow[];
   bundleItems: ItemRow[];
@@ -153,7 +155,7 @@ function cellValueForColumn(col: ColumnDef, row: ItemRow, index: number, lineTot
 }
 
 export async function exportDocumentExcel(opts: ExportDocumentExcelOptions): Promise<void> {
-  const { company, user, t, fileNamePrefix, docTitle, headerLines, counterpartyLine, driverLine, columns, mainItems, bundleItems, promoItems, lineTotal, totals } = opts;
+  const { company, user, t, fileNamePrefix, docTitle, headerLines, counterpartyLine, driverLine, postedByLine, branchSlogan, columns, mainItems, bundleItems, promoItems, lineTotal, totals } = opts;
 
   const exportCols = columns.filter((c) => EXPORTABLE_KEYS.has(c.key));
   // ✅ Ширина шапки (в колонках) — на неё же merge'им заголовок/инфо-строки/контрагента,
@@ -203,21 +205,17 @@ export async function exportDocumentExcel(opts: ExportDocumentExcelOptions): Pro
     if (valueCol <= headerSpan) worksheet.mergeCells(row.number, valueCol, row.number, headerSpan);
   }
 
-  // ── Контрагент — отдельно, крупным шрифтом ──────────────────────────────────
+  // ── Контрагент — отдельно, крупным шрифтом; телефон сразу после имени в ТОЙ ЖЕ ячейке ──
   if (counterpartyLine) {
-    const nameSpanEnd = Math.max(headerSpan - 2, 1);
-    const phoneCol = nameSpanEnd + 1;
-    // ✅ Значение должно лежать в АНКОРНОЙ (первой/левой) ячейке своего будущего
-    // merge-диапазона — Excel сохраняет только значение top-left ячейки при merge,
-    // всё остальное в диапазоне отбрасывается (см. правило в CLAUDE.md).
-    const values = new Array(headerSpan).fill("");
-    values[0] = `${t("Counterparty")}: ${counterpartyLine.name}`;
-    if (phoneCol <= headerSpan) values[phoneCol - 1] = counterpartyLine.phone ?? "";
-    const row = worksheet.addRow(values);
-    row.getCell(1).font = { bold: true, size: COUNTERPARTY_FONT_SIZE };
-    if (phoneCol <= headerSpan) row.getCell(phoneCol).font = { size: Math.round(COUNTERPARTY_FONT_SIZE * 0.6) };
-    worksheet.mergeCells(row.number, 1, row.number, nameSpanEnd);
-    if (nameSpanEnd < headerSpan) worksheet.mergeCells(row.number, phoneCol, row.number, headerSpan);
+    const richText: { font?: { bold?: boolean; size?: number }; text: string }[] = [
+      { font: { bold: true, size: COUNTERPARTY_FONT_SIZE }, text: `${t("Counterparty")}: ${counterpartyLine.name}` },
+    ];
+    if (counterpartyLine.phone) {
+      richText.push({ font: { size: COUNTERPARTY_FONT_SIZE }, text: "   " });
+      richText.push({ font: { size: Math.round(COUNTERPARTY_FONT_SIZE * 0.6) }, text: counterpartyLine.phone });
+    }
+    const row = worksheet.addRow([{ richText } as unknown as string]);
+    worksheet.mergeCells(row.number, 1, row.number, headerSpan);
   }
   worksheet.addRow([]);
 
@@ -272,9 +270,15 @@ export async function exportDocumentExcel(opts: ExportDocumentExcelOptions): Pro
     if (labelMergeStart < labelCol) worksheet.mergeCells(row.number, labelMergeStart, row.number, labelCol);
   };
 
-  addTotalRow(t("Subtotal") + ":", totals.subtotal);
-  if (totals.discAmount > 0.004) addTotalRow(t("Discount") + ":", -totals.discAmount);
-  addTotalRow(t("TotalAfterDiscount") + ":", totals.total);
+  // ✅ Без скидки "Подытог" и "Сумма после скидки" совпадают — одна строка "Сумма:",
+  // как на экране/печати (см. Tablefooter.tsx), а не два одинаковых числа подряд.
+  if (totals.discAmount > 0.004) {
+    addTotalRow(t("Subtotal") + ":", totals.subtotal);
+    addTotalRow(t("Discount") + ":", -totals.discAmount);
+    addTotalRow(t("TotalAfterDiscount") + ":", totals.total);
+  } else {
+    addTotalRow(t("Subtotal") + ":", totals.total);
+  }
 
   // ── "Авто" (сотрудник/водитель) — под таблицей товаров ──────────────────────
   if (driverLine) {
@@ -285,6 +289,24 @@ export async function exportDocumentExcel(opts: ExportDocumentExcelOptions): Pro
     // колонками товарной таблицы — см. правило в CLAUDE.md про Excel-тексты.
     worksheet.mergeCells(row.number, 1, row.number, 2);
     worksheet.mergeCells(row.number, 3, row.number, headerSpan);
+  }
+
+  // ── Кто провёл документ ──────────────────────────────────────────────────────
+  if (postedByLine) {
+    const row = worksheet.addRow([`${postedByLine.label}:`, "", postedByLine.name]);
+    row.getCell(1).font = { bold: true };
+    worksheet.mergeCells(row.number, 1, row.number, 2);
+    worksheet.mergeCells(row.number, 3, row.number, headerSpan);
+  }
+
+  // ── Слоган филиала — внизу листа ─────────────────────────────────────────────
+  if (branchSlogan) {
+    worksheet.addRow([]);
+    const row = worksheet.addRow([branchSlogan]);
+    row.getCell(1).font = { bold: true, italic: true, size: 20, name: "Georgia" };
+    row.getCell(1).alignment = { horizontal: "center" };
+    row.height = 30;
+    worksheet.mergeCells(row.number, 1, row.number, headerSpan);
   }
 
   // ── Ширина колонок ───────────────────────────────────────────────────────────

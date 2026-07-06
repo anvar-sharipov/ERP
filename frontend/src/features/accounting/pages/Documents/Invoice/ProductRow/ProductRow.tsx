@@ -2,7 +2,7 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { newItemRow, resolveVolumeDiscount, resolveQuantityPromotion, calcRowIncome } from "../Vars";
-import { DEFAULT_COLUMNS, colVisibilityClass, type ProductRowProps, type ItemRow, type Product } from "../Interface";
+import { DEFAULT_COLUMNS, colVisibilityClass, printSize, type ProductRowProps, type ItemRow, type Product } from "../Interface";
 import SearchableSelect, { type SelectOption, type SearchableSelectHandle } from "../../../../../../components/ui/SearchableSelect";
 import MainRows, { type MainRowsHandle } from "./Mainrows";
 import BundleRows from "./Bundlerows";
@@ -12,13 +12,19 @@ import ColumnToggleDropdown from "../ColumnToggleDropdown";
 import { useWarehouseStocks } from "../useWarehouseStocks";
 import { useNotify } from "../../../../../../core/context/NotificationContext";
 import { ImagePreview } from "../../../../../../components/ui/ImagePreview";
+import { focusManager } from "../../../../../../core/utils/focusManager";
+import { playClickSound } from "../../../../../../core/utils/sound";
 
 // ── Хелперы ──────────────────────────────────────────────────────────────────
 
 // Пересчитывает автоматические строки: комплектующие (другой товар, непрерывный
 // ratio) и бонус по акции "количество за количество" (тот же товар, порогово).
-function recalcAuto(items: ItemRow[], products: Product[], priceTypeId: number | null): ItemRow[] {
+// ✅ На Приходе (isPurchase) это не применяется — комплектующие/бонусы это то, что
+// МЫ отдаём покупателю на Расходе, а не то, что появляется само при приёмке товара
+// от поставщика (см. также существующий запрет авто-скидок на Приходе выше).
+function recalcAuto(items: ItemRow[], products: Product[], priceTypeId: number | null, isPurchase: boolean): ItemRow[] {
   const mainItems = items.filter((r) => !r.is_bundle && !r.is_promo);
+  if (isPurchase) return mainItems;
 
   // ── Комплектующие ──────────────────────────────────────────────────────────
   const bundleMap = new Map<
@@ -169,10 +175,13 @@ const ProductRow = forwardRef<ProductRowHandle, ProductRowProps>(({
   total,
   disabled,
   defaultPriceType,
+  isPurchase,
+  filterByStock,
   columns,
   onColumnsChange,
   warehouseId,
   onBack,
+  viewMode,
 }, ref) => {
   const { t } = useTranslation();
   const notify = useNotify();
@@ -200,17 +209,32 @@ const ProductRow = forwardRef<ProductRowHandle, ProductRowProps>(({
     .filter(Boolean)
     .join(", ");
 
-  // ✅ Подсветка выбранной строки — общая для основных и комплектующих строк,
-  // клик вне строки товара (шапка/футер таблицы, пустое место, вне таблицы) сбрасывает выбор.
-  const [selectedRowKey, setSelectedRowKey] = useState<string | null>(null);
+  // ✅ Фокус ячейки — как в Table.tsx: {key, colIndex} вместо просто rowKey товара,
+  // клик вне строки (шапка/футер таблицы, пустое место, вне таблицы) сбрасывает выбор.
+  // Цвета подсветки строки (indigo/amber/emerald) не трогаем — они как и раньше
+  // управляются сравнением selectedCell.key с row._key в Main/Bundle/PromoRows.
+  const [selectedCell, setSelectedCell] = useState<{ key: string; colIndex: number } | null>(null);
 
   useEffect(() => {
     const handleDocMouseDown = (e: MouseEvent) => {
       const target = e.target as HTMLElement | null;
-      if (!target?.closest?.("[data-selectable-row]")) setSelectedRowKey(null);
+      if (!target?.closest?.("[data-selectable-row]")) setSelectedCell(null);
     };
     document.addEventListener("mousedown", handleDocMouseDown);
     return () => document.removeEventListener("mousedown", handleDocMouseDown);
+  }, []);
+
+  const selectCell = useCallback((key: string, colIndex: number) => {
+    playClickSound();
+    focusManager.setRegion("table");
+    setSelectedCell({ key, colIndex });
+  }, []);
+
+  const scrollToCell = useCallback((key: string, colIndex: number) => {
+    requestAnimationFrame(() => {
+      const cell = scrollContainerRef.current?.querySelector(`[data-row-key="${key}"][data-col-idx="${colIndex}"]`);
+      cell?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "nearest" });
+    });
   }, []);
 
   // ✅ Увеличенное превью фото товара по клику на миниатюру — как в EmployeesPage/CounterpartiesPage.
@@ -234,7 +258,11 @@ const ProductRow = forwardRef<ProductRowHandle, ProductRowProps>(({
   //   label: p.name,
   //   sublabel: p.unit_detail?.name,
   // }));
-  const productOptions: SelectOption[] = products.map((p) => ({
+  // ✅ Для складывающих товар документов (Расход/Перемещение/Возврат поставщику)
+  // не показываем в выборе то, чего физически нет в наличии на этом складе.
+  const selectableProducts = filterByStock ? products.filter((p) => (stockMap.get(p.id)?.available ?? 0) > 0) : products;
+
+  const productOptions: SelectOption[] = selectableProducts.map((p) => ({
     id: p.id,
     label: p.name,
     sublabel: p.unit_detail?.name,
@@ -269,13 +297,13 @@ const ProductRow = forwardRef<ProductRowHandle, ProductRowProps>(({
       if (existingIndex !== -1) {
         const existingRow = mainItems[existingIndex];
         const newQty = String((parseFloat(existingRow.quantity) || 0) + 1);
-        const autoDiscount = !existingRow.discount_manual ? resolveVolumeDiscount(prod, parseFloat(newQty), defaultPriceType ?? null) : null;
+        const autoDiscount = !isPurchase && !existingRow.discount_manual ? resolveVolumeDiscount(prod, parseFloat(newQty), defaultPriceType ?? null) : null;
 
         setItems((prev) => {
           const mains = prev.filter((r) => !r.is_bundle && !r.is_promo);
           const auto = prev.filter((r) => r.is_bundle || r.is_promo);
           const updatedMains = mains.map((r) => (r._key === existingRow._key ? { ...r, quantity: newQty, discount_percent: autoDiscount ?? r.discount_percent } : r));
-          return recalcAuto([...updatedMains, ...auto], products, defaultPriceType ?? null);
+          return recalcAuto([...updatedMains, ...auto], products, defaultPriceType ?? null, !!isPurchase);
         });
 
         addSelectRef.current?.clear();
@@ -288,8 +316,12 @@ const ProductRow = forwardRef<ProductRowHandle, ProductRowProps>(({
       if (defaultPriceType && prod.prices) {
         const pp = prod.prices.find((p) => p.price_type === defaultPriceType);
         if (pp) price = String(pp.price);
+      } else if (isPurchase) {
+        // ✅ Приход без настроенного типа цены — по умолчанию цена строки = себестоимость,
+        // а не случайный "последний использованный" тип цены (см. правило в CLAUDE.md).
+        price = String(prod.cost_price ?? 0);
       }
-      const autoDiscount = resolveVolumeDiscount(prod, 1, defaultPriceType ?? null);
+      const autoDiscount = isPurchase ? null : resolveVolumeDiscount(prod, 1, defaultPriceType ?? null);
 
       const row: ItemRow = {
         ...newItemRow(),
@@ -315,13 +347,13 @@ const ProductRow = forwardRef<ProductRowHandle, ProductRowProps>(({
       setItems((prev) => {
         const mains = prev.filter((r) => !r.is_bundle && !r.is_promo);
         const auto = prev.filter((r) => r.is_bundle || r.is_promo);
-        return recalcAuto([...mains, row, ...auto], products, defaultPriceType ?? null);
+        return recalcAuto([...mains, row, ...auto], products, defaultPriceType ?? null, !!isPurchase);
       });
 
       addSelectRef.current?.clear();
       setTimeout(() => mainRowsRef.current?.focusQty(newIndex), 50);
     },
-    [products, setItems, defaultPriceType, mainItems, notify, t],
+    [products, setItems, defaultPriceType, isPurchase, mainItems, notify, t],
   );
 
   // ── qty → пересчёт bundle/акций + скидки ─────────────────────────────────
@@ -334,15 +366,15 @@ const ProductRow = forwardRef<ProductRowHandle, ProductRowProps>(({
           if (!r.discount_manual) {
             const prod = products.find((p) => p.id === r.product);
             const qty = parseFloat(value) || 0;
-            const autoDiscount = resolveVolumeDiscount(prod, qty, defaultPriceType ?? null);
+            const autoDiscount = isPurchase ? null : resolveVolumeDiscount(prod, qty, defaultPriceType ?? null);
             return { ...r, quantity: value, discount_percent: autoDiscount ?? r.discount_percent };
           }
           return { ...r, quantity: value };
         });
-        return recalcAuto(updated, products, defaultPriceType ?? null);
+        return recalcAuto(updated, products, defaultPriceType ?? null, !!isPurchase);
       });
     },
-    [products, setItems, defaultPriceType],
+    [products, setItems, defaultPriceType, isPurchase],
   );
 
   // ── Удаление ──────────────────────────────────────────────────────────────
@@ -356,11 +388,11 @@ const ProductRow = forwardRef<ProductRowHandle, ProductRowProps>(({
       }
       setItems((prev) => {
         const without = prev.filter((r) => r._key !== row._key && !r.is_bundle && !r.is_promo);
-        return recalcAuto(without, products, defaultPriceType ?? null);
+        return recalcAuto(without, products, defaultPriceType ?? null, !!isPurchase);
       });
       if (row.id) removeItem(row);
     },
-    [removeItem, setItems, products, defaultPriceType],
+    [removeItem, setItems, products, defaultPriceType, isPurchase],
   );
 
   // ── Колонки ───────────────────────────────────────────────────────────────
@@ -383,10 +415,73 @@ const ProductRow = forwardRef<ProductRowHandle, ProductRowProps>(({
     onColumnsChange(DEFAULT_COLUMNS);
   }, [onColumnsChange]);
 
+  // ✅ "Приход" не поддерживает скидку — колонки скидки не должны быть доступны
+  // для переключения и не должны рендериться, а не просто быть скрытыми по умолчанию.
+  const displayColumns = isPurchase ? columns.filter((c) => c.key !== "discount_percent" && c.key !== "discount_amount") : columns;
+
   // ✅ Экран и печать/Excel управляются независимо (галочки "ЭКРАН"/"ПЕЧАТЬ" в кнопке
   // "Колонки") — рендерим объединение обоих множеств, а видимость в каждом режиме
   // регулируется per-cell через colVisibilityClass (см. Interface.ts).
-  const renderedCols = columns.filter((c) => c.visibleScreen || c.visiblePrint);
+  const renderedCols = displayColumns.filter((c) => c.visibleScreen || c.visiblePrint);
+
+  // ✅ Единый порядок строк для стрелочной навигации — тот же порядок, в котором
+  // они реально рендерятся (сначала основные, потом комплектующие, потом бонусы).
+  const orderedRows = [...mainItems, ...bundleItems, ...promoItems];
+
+  // ✅ Клавиатурная навигация по ячейкам — тот же приём, что в Table.tsx/
+  // ProductTurnoverDetailPage.tsx (см. CLAUDE.md: любая таблица/список строк
+  // должна иметь такой же focus, как Table.tsx). Пока реальный DOM-фокус стоит
+  // в инпуте (qty/price и т.п.) — сюда не заходим: их собственная навигация
+  // стрелками (handleQtyKeyDown/handlePriceKeyDown в Mainrows.tsx) не трогается.
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (focusManager.getRegion() !== "table") return;
+      const active = document.activeElement;
+      if (active && ["INPUT", "SELECT", "TEXTAREA"].includes(active.tagName)) return;
+      if (!selectedCell) return;
+
+      const rowIdx = orderedRows.findIndex((r) => r._key === selectedCell.key);
+      if (rowIdx === -1) return;
+      const { colIndex } = selectedCell;
+
+      if (e.key === "ArrowDown") {
+        const next = Math.min(rowIdx + 1, orderedRows.length - 1);
+        if (next !== rowIdx) {
+          e.preventDefault();
+          playClickSound();
+          setSelectedCell({ key: orderedRows[next]._key, colIndex });
+          scrollToCell(orderedRows[next]._key, colIndex);
+        }
+      } else if (e.key === "ArrowUp") {
+        const prev = Math.max(rowIdx - 1, 0);
+        if (prev !== rowIdx) {
+          e.preventDefault();
+          playClickSound();
+          setSelectedCell({ key: orderedRows[prev]._key, colIndex });
+          scrollToCell(orderedRows[prev]._key, colIndex);
+        }
+      } else if (e.key === "ArrowRight") {
+        const next = Math.min(colIndex + 1, renderedCols.length - 1);
+        if (next !== colIndex) {
+          e.preventDefault();
+          playClickSound();
+          setSelectedCell({ key: selectedCell.key, colIndex: next });
+          scrollToCell(selectedCell.key, next);
+        }
+      } else if (e.key === "ArrowLeft") {
+        const prev = Math.max(colIndex - 1, 0);
+        if (prev !== colIndex) {
+          e.preventDefault();
+          playClickSound();
+          setSelectedCell({ key: selectedCell.key, colIndex: prev });
+          scrollToCell(selectedCell.key, prev);
+        }
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedCell, orderedRows.map((r) => r._key).join(","), renderedCols.length, scrollToCell]);
 
   // ── Итого доход по всем строкам ───────────────────────────────────────────
 
@@ -411,12 +506,12 @@ const ProductRow = forwardRef<ProductRowHandle, ProductRowProps>(({
   }
 
   return (
-    <div className="h-full flex flex-col border border-black rounded-lg overflow-hidden print:h-auto">
+    <div className={`${viewMode ? "h-auto" : "h-full print:h-auto"} flex flex-col border border-black rounded-lg overflow-hidden`}>
       {/* ── Заголовок блока ── */}
-      <div className="shrink-0 flex items-center justify-between px-3 py-1.5 print:px-0 print:py-0.5 bg-gray-200 dark:bg-slate-700/50 print:bg-transparent border-b border-black">
-        <h2 className="text-sm print:text-xs print:font-bold font-semibold text-gray-600 dark:text-gray-400">{t("Products")}</h2>
+      <div className={`shrink-0 flex items-center justify-between dark:bg-slate-700/50 border-b border-black ${viewMode ? "px-0 py-0.5 bg-transparent" : "px-3 py-1.5 bg-gray-200 print:px-0 print:py-0.5 print:bg-transparent"}`}>
+        <h2 className={`text-gray-600 dark:text-gray-400 ${viewMode ? "text-xs font-bold" : "text-sm font-semibold print:text-xs print:font-bold"}`}>{t("Products")}</h2>
         <div className="flex items-center gap-2">
-          <ColumnToggleDropdown columns={columns} onToggleScreen={toggleScreen} onTogglePrint={togglePrint} onReset={resetColumns} />
+          <ColumnToggleDropdown columns={displayColumns} onToggleScreen={toggleScreen} onTogglePrint={togglePrint} onReset={resetColumns} />
         </div>
       </div>
 
@@ -437,13 +532,18 @@ const ProductRow = forwardRef<ProductRowHandle, ProductRowProps>(({
         </div>
       )}
 
-      {/* ── Таблица: единственная скроллируемая часть, шапка (thead) прилипает сверху ── */}
+      {/* ── Таблица: единственная скроллируемая часть, шапка (thead) прилипает сверху.
+          Если товаров нет — вся таблица (thead+tbody+tfoot) вообще не рендерится, ни на
+          экране, ни в печати — вместо неё простой текст-подсказка (скрыт в печати). ── */}
       <div
         ref={scrollContainerRef}
         onScroll={updateScrollShadows}
-        className="flex-1 min-h-0 overflow-auto print:flex-none print:overflow-visible transition-shadow duration-150 print:!shadow-none"
-        style={{ boxShadow: scrollShadow || "none" }}
+        className={`transition-shadow duration-150 ${viewMode ? "flex-none overflow-visible !shadow-none" : "flex-1 min-h-0 overflow-auto print:flex-none print:overflow-visible print:!shadow-none"}`}
+        style={{ boxShadow: viewMode ? "none" : scrollShadow || "none" }}
       >
+        {items.length === 0 ? (
+          <p className={`text-center py-6 text-gray-400 text-sm ${printSize(viewMode, "print:hidden")}`}>{t("NoRows")}</p>
+        ) : (
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b-2 border-black divide-x divide-black">
@@ -451,29 +551,23 @@ const ProductRow = forwardRef<ProductRowHandle, ProductRowProps>(({
                 <th
                   key={col.key}
                   className={`
-                    sticky top-0 z-10 bg-gray-400 dark:bg-slate-700/60 print:bg-transparent
-                    px-2 py-1.5 print:px-1 print:py-0.5 print:text-xs font-semibold text-gray-600 dark:text-gray-300
-                    ${col.width ?? ""} print:!w-auto print:whitespace-normal print:break-words
+                    sticky top-0 z-10 dark:bg-slate-700/60
+                    font-semibold text-gray-600 dark:text-gray-300
+                    ${viewMode ? "bg-transparent px-1 py-0.5 text-xs" : "bg-gray-200 px-2 py-1.5 print:bg-transparent print:px-1 print:py-0.5 print:text-xs"}
+                    ${col.width ?? ""}
                     ${col.align === "right" ? "text-right" : col.align === "center" ? "text-center" : "text-left"}
                     ${colVisibilityClass(col)}
+                    ${printSize(viewMode, "print:!w-auto print:whitespace-normal print:break-words")}
                   `}
                 >
                   {col.key === "index" ? "#" : t(col.label)}
                 </th>
               ))}
-              {!isPosted && <th className="sticky top-0 z-10 bg-gray-400 dark:bg-slate-700/60 w-8 print:hidden" />}
+              {!isPosted && <th className="sticky top-0 z-10 bg-gray-200 dark:bg-slate-700/60 w-8 print:hidden" />}
             </tr>
           </thead>
 
           <tbody>
-            {items.length === 0 && (
-              <tr>
-                <td colSpan={renderedCols.length + (isPosted ? 0 : 1)} className="text-center py-6 text-gray-400 text-sm">
-                  {t("NoRows")}
-                </td>
-              </tr>
-            )}
-
             <MainRows
               ref={mainRowsRef}
               isPosted={isPosted}
@@ -485,9 +579,10 @@ const ProductRow = forwardRef<ProductRowHandle, ProductRowProps>(({
               onFocusAddSelect={focusAddSelect}
               columns={renderedCols}
               stockMap={stockMap}
-              selectedKey={selectedRowKey}
-              onSelectRow={setSelectedRowKey}
+              selectedCell={selectedCell}
+              onSelectCell={selectCell}
               onPreviewImage={handlePreviewProductImage}
+              viewMode={viewMode}
             />
 
             <BundleRows
@@ -497,9 +592,10 @@ const ProductRow = forwardRef<ProductRowHandle, ProductRowProps>(({
               updateItem={updateItem}
               onRemove={handleRemove}
               columns={renderedCols}
-              selectedKey={selectedRowKey}
-              onSelectRow={setSelectedRowKey}
+              selectedCell={selectedCell}
+              onSelectCell={selectCell}
               onPreviewImage={handlePreviewProductImage}
+              viewMode={viewMode}
             />
 
             <PromoRows
@@ -508,9 +604,10 @@ const ProductRow = forwardRef<ProductRowHandle, ProductRowProps>(({
               lineTotal={lineTotal}
               onRemove={handleRemove}
               columns={renderedCols}
-              selectedKey={selectedRowKey}
-              onSelectRow={setSelectedRowKey}
+              selectedCell={selectedCell}
+              onSelectCell={selectCell}
               onPreviewImage={handlePreviewProductImage}
+              viewMode={viewMode}
             />
           </tbody>
 
@@ -526,8 +623,10 @@ const ProductRow = forwardRef<ProductRowHandle, ProductRowProps>(({
             totalWidth={totalWidth}
             totalHeight={totalHeight}
             columns={renderedCols}
+            viewMode={viewMode}
           />
         </table>
+        )}
       </div>
 
       <ImagePreview src={previewImage} onClose={() => setPreviewImage(null)} />

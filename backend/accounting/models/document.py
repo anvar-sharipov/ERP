@@ -4,6 +4,7 @@ from decimal import Decimal
 
 from django.core.exceptions import ValidationError
 from django.core.validators import MinValueValidator
+from django.contrib.contenttypes.models import ContentType
 from django.contrib.postgres.indexes import GinIndex
 from django.db import models, transaction
 
@@ -13,6 +14,7 @@ from .stock import Warehouse, StockMovement
 from .company import Branch
 from .counterparty import Counterparty
 from .transaction import JournalEntry
+from .audit import AuditLog
 
 
 
@@ -197,33 +199,57 @@ class Document(models.Model):
         super().delete(*args, **kwargs)
 
     def recalculate(self):
-        from django.db.models import Sum, F, ExpressionWrapper
+        """
+        subtotal     — сумма БЕЗ каких-либо скидок (price × quantity), "по прайсу".
+        net_subtotal — после построчных скидок (акции по объёму/ручные), но ДО скидки
+                       документа — соответствует frontend `netSubtotal` (Vars.ts::lineTotal).
+        total        — net_subtotal минус скидка документа (discount_percent) — то, что
+                       реально должен клиент, и то, что идёт в проводку (Дт60/Кт90.1).
+        discount_amount — subtotal - total, т.е. ОБЩАЯ скидка (построчная + документа
+                       вместе) — раньше здесь учитывалась только скидка документа,
+                       построчные скидки визуально показывались на экране, но не влияли
+                       на total/проводку — это было исправлено по просьбе заказчика.
+        """
+        from django.db.models import Sum, F, ExpressionWrapper, Value
         from django.db.models import DecimalField as DF
         from django.db.models.functions import Coalesce
+
+        dec_field = DF(max_digits=15, decimal_places=2)
+        line_factor = Value(Decimal('1')) - F('discount_percent') / Value(Decimal('100'))
 
         agg = self.items.aggregate(
             subtotal=Coalesce(
                 Sum(ExpressionWrapper(
                     F('price') * F('quantity'),
-                    output_field=DF(max_digits=15, decimal_places=2)
+                    output_field=dec_field
                 )),
                 Decimal('0'),
-                output_field=DF(max_digits=15, decimal_places=2)
+                output_field=dec_field
+            ),
+            net_subtotal=Coalesce(
+                Sum(ExpressionWrapper(
+                    F('price') * F('quantity') * line_factor,
+                    output_field=dec_field
+                )),
+                Decimal('0'),
+                output_field=dec_field
             ),
             profit=Coalesce(
                 Sum(ExpressionWrapper(
-                    (F('price') - F('cost_price')) * F('quantity'),
-                    output_field=DF(max_digits=15, decimal_places=2)
+                    (F('price') * line_factor - F('cost_price')) * F('quantity'),
+                    output_field=dec_field
                 )),
                 Decimal('0'),
-                output_field=DF(max_digits=15, decimal_places=2)
+                output_field=dec_field
             ),
         )
 
-        subtotal        = agg['subtotal']
-        discount_amount = (subtotal * self.discount_percent / 100).quantize(Decimal('0.01'))
-        total           = subtotal - discount_amount
-        total_profit    = agg['profit'] if self.document_type in (
+        subtotal        = agg['subtotal'].quantize(Decimal('0.01'))
+        net_subtotal    = agg['net_subtotal'].quantize(Decimal('0.01'))
+        header_discount = (net_subtotal * self.discount_percent / 100).quantize(Decimal('0.01'))
+        total           = net_subtotal - header_discount
+        discount_amount = subtotal - total
+        total_profit    = agg['profit'].quantize(Decimal('0.01')) if self.document_type in (
             self.Type.OUT, self.Type.RETURN_IN
         ) else Decimal('0')
 
@@ -249,10 +275,286 @@ class Document(models.Model):
         # check_period_open(self.date)
         check_period_open(self.date, branch_id=self.branch_id, warehouse_id=self.warehouse_id)
         self._create_stock_movements()
+        if self.document_type == self.Type.IN:
+            self._update_product_cost_prices(user=user)
+            self._generate_in_posting(user=user)
+        if self.document_type == self.Type.OUT:
+            self._generate_out_posting(user=user)
+        if self.document_type == self.Type.RETURN_IN:
+            self._generate_return_in_posting(user=user)
+        if self.document_type == self.Type.RETURN_OUT:
+            self._generate_return_out_posting(user=user)
         self.status    = self.Status.POSTED
         self.posted_at = timezone.now()
         self.posted_by = user
-        self.save(update_fields=['status', 'posted_at', 'posted_by'])
+        self.save(update_fields=['status', 'posted_at', 'posted_by', 'journal_entry'])
+        self._write_audit_log(user, AuditLog.Action.POST)
+
+    def _update_product_cost_prices(self, user=None):
+        """
+        При проведении приходной накладной цена строки становится текущей
+        себестоимостью товара (модель "последняя цена закупки") — используется
+        затем в расходных документах для расчёта дохода/маржи. Каждое изменение
+        себестоимости пишется в AuditLog (см. CLAUDE.md: RBAC/Scope/Audit — товары
+        входят в список того, что обязательно аудировать).
+        """
+        from accounting.models import Product
+        for item in self.items.select_related('product'):
+            old_cost_price = item.product.cost_price
+            if old_cost_price == item.price:
+                continue
+            Product.objects.filter(pk=item.product_id).update(cost_price=item.price)
+            AuditLog.objects.create(
+                content_type=ContentType.objects.get_for_model(Product),
+                object_id=item.product_id,
+                object_repr=str(item.product)[:255],
+                action=AuditLog.Action.UPDATE,
+                user=user if user and user.is_authenticated else None,
+                changed_data={'cost_price': {'before': str(old_cost_price), 'after': str(item.price)}},
+            )
+
+    def _resolve_account_subcontos(self, account, counterparty=None, product=None):
+        """
+        Строит {slug: id} для всех субконто, настроенных на счёте (через AccountSubconto),
+        используя доступный контекст (контрагент документа / товар строки). Ничего не
+        подставляется "наугад" — если для какого-то субконто контекст недоступен или
+        субконто не привязано к модели данных, явная ошибка, а не тихая пропажа данных.
+        """
+        from django.contrib.contenttypes.models import ContentType
+        from accounting.models import Counterparty, Product as ProductModel
+
+        context = {}
+        if counterparty is not None:
+            context[ContentType.objects.get_for_model(Counterparty).id] = counterparty.pk
+        if product is not None:
+            context[ContentType.objects.get_for_model(ProductModel).id] = product.pk
+
+        result = {}
+        for st in account.subcontos.all():
+            if not st.content_type_id:
+                raise ValidationError(
+                    f"Субконто «{st.name}» счёта {account.code} не привязано к модели данных — "
+                    f"автоматическая проводка невозможна. Настройте «Какую модель подключаем» "
+                    f"у этого вида субконто."
+                )
+            value = context.get(st.content_type_id)
+            if value is None:
+                raise ValidationError(
+                    f"Не удалось определить значение субконто «{st.name}» для счёта {account.code} "
+                    f"при проведении документа №{self.number} — эта аналитика недоступна на этом "
+                    f"уровне проводки (например «Номенклатура» нельзя использовать на счёте расчётов "
+                    f"с покупателем/выручки — товар известен только по строкам)."
+                )
+            result[st.slug] = value
+        return result
+
+    def _generate_out_posting(self, user=None, sign=Decimal('1'), description=None):
+        """
+        Генерирует проводку для "Расхода" — счета берутся со СКЛАДА документа
+        (см. правило "1 накладная = 1 склад"), а не хардкодятся — пользователь сам
+        настраивает 4 счёта в карточке склада (см. CLAUDE.md).
+
+        Нога 1 (одна строка на весь документ): Дт receivable_account — Кт revenue_account,
+        на сумму документа (self.total) — субконто "Контрагент", если настроено.
+        Нога 2 (отдельная проводка на каждую строку товара): Дт cogs_account —
+        Кт inventory_account, на себестоимость строки — субконто "Номенклатура", если настроено.
+
+        ✅ sign=-1 используется для "Возврата от покупателя" (см. _generate_return_in_posting) —
+        те же счета и те же стороны (Дт/Кт), но с отрицательной суммой ("красное сторно" по
+        просьбе заказчика), а не разворот дебета/кредита. Баланс (Дт=Кт) при этом сходится
+        так же, как при обычном развороте, но оборот по счёту за период не раздувается.
+
+        ✅ Если на складе настроен discount_account И есть скидка (self.discount_amount != 0) —
+        receivable/revenue проводятся ПО ПОЛНОЙ цене (self.subtotal), а скидка — отдельной
+        строкой Дт discount_account / Кт receivable_account, чтобы в ОСВ было видно сумму
+        предоставленных скидок отдельно от выручки. Если счёт не настроен — поведение как
+        раньше: receivable/revenue = self.total (уже netted со скидкой).
+        """
+        from accounting.models import JournalEntry, TransactionLine
+        from accounting.utils import generate_journal_number
+
+        wh = self.warehouse
+        if wh is None:
+            raise ValidationError("У документа не указан склад — проводка невозможна.")
+
+        required = ['receivable_account_id', 'revenue_account_id', 'cogs_account_id', 'inventory_account_id']
+        missing = [f for f in required if getattr(wh, f, None) is None]
+        if missing:
+            raise ValidationError(
+                f"Для склада «{wh.name}» не настроены счета для проводки расхода: "
+                f"{', '.join(missing)}. Настройте их в карточке склада перед проведением."
+            )
+
+        entry = JournalEntry.objects.create(
+            number=generate_journal_number(),
+            date=self.date,
+            description=description or f"Реализация по документу №{self.number}",
+            branch=self.branch,
+            warehouse=self.warehouse,
+            source_document_type=ContentType.objects.get_for_model(Document),
+            source_document_id=self.pk,
+            created_by=user,
+        )
+
+        order = 1
+        discount_amount = (self.discount_amount * sign).quantize(Decimal('0.01'))
+        use_gross = wh.discount_account_id is not None and discount_amount != 0
+        total_amount = ((self.subtotal if use_gross else self.total) * sign).quantize(Decimal('0.01'))
+
+        if total_amount != 0:
+            ar_subcontos = self._resolve_account_subcontos(wh.receivable_account, counterparty=self.counterparty)
+            rev_subcontos = self._resolve_account_subcontos(wh.revenue_account, counterparty=self.counterparty)
+            TransactionLine.objects.create(
+                journal_entry=entry, order=order, side=TransactionLine.Side.DEBIT,
+                account=wh.receivable_account, amount=total_amount, subcontos=ar_subcontos,
+            )
+            order += 1
+            TransactionLine.objects.create(
+                journal_entry=entry, order=order, side=TransactionLine.Side.CREDIT,
+                account=wh.revenue_account, amount=total_amount, subcontos=rev_subcontos,
+            )
+            order += 1
+
+            if use_gross:
+                disc_subcontos = self._resolve_account_subcontos(wh.discount_account, counterparty=self.counterparty)
+                TransactionLine.objects.create(
+                    journal_entry=entry, order=order, side=TransactionLine.Side.DEBIT,
+                    account=wh.discount_account, amount=discount_amount, subcontos=disc_subcontos,
+                )
+                order += 1
+                TransactionLine.objects.create(
+                    journal_entry=entry, order=order, side=TransactionLine.Side.CREDIT,
+                    account=wh.receivable_account, amount=discount_amount, subcontos=ar_subcontos,
+                )
+                order += 1
+
+        for item in self.items.select_related('product'):
+            item_cost = (item.cost_price * item.quantity * sign).quantize(Decimal('0.01'))
+            if item_cost == 0:
+                continue
+            cogs_subcontos = self._resolve_account_subcontos(wh.cogs_account, counterparty=self.counterparty, product=item.product)
+            inv_subcontos = self._resolve_account_subcontos(wh.inventory_account, counterparty=self.counterparty, product=item.product)
+            TransactionLine.objects.create(
+                journal_entry=entry, order=order, side=TransactionLine.Side.DEBIT,
+                account=wh.cogs_account, amount=item_cost, subcontos=cogs_subcontos,
+            )
+            order += 1
+            TransactionLine.objects.create(
+                journal_entry=entry, order=order, side=TransactionLine.Side.CREDIT,
+                account=wh.inventory_account, amount=item_cost, subcontos=inv_subcontos,
+            )
+            order += 1
+
+        if order == 1:
+            # Ни одной строки не создано (нулевой документ) — проводка не нужна.
+            entry.delete()
+            return
+
+        entry.post()
+        self.journal_entry = entry
+
+    def _generate_return_in_posting(self, user=None):
+        """
+        "Возврат от покупателя" — те же счета и структура, что и в _generate_out_posting
+        (Дт receivable/Кт revenue, Дт cogs/Кт inventory), но с отрицательной суммой
+        ("красное сторно"): уменьшает выручку/долг клиента и уменьшает себестоимость,
+        одновременно возвращая товар на inventory_account.
+        """
+        self._generate_out_posting(
+            user=user, sign=Decimal('-1'),
+            description=f"Возврат от покупателя по документу №{self.number}",
+        )
+
+    def _generate_in_posting(self, user=None, sign=Decimal('1'), description=None):
+        """
+        Генерирует проводку для "Прихода" — счета берутся со СКЛАДА документа, как и в
+        _generate_out_posting. В отличие от Расхода, здесь нет ни выручки, ни себестоимости —
+        просто товар приходит на баланс, и растёт долг перед поставщиком:
+
+        Дт inventory_account (тот же счёт товара, что кредитуется в Расходе) —
+        Кт payable_account (задолженность перед поставщиком),
+        на сумму item.price × item.quantity по каждой строке — то, что реально указано
+        в документе (тот же принцип, что и в _update_product_cost_prices).
+
+        Строится по каждой позиции отдельно (а не одной строкой на документ), потому что
+        inventory_account обычно требует субконто "Номенклатура" — а в документе может
+        быть несколько разных товаров.
+
+        ✅ sign=-1 используется для "Возврата поставщику" (см. _generate_return_out_posting) —
+        те же счета и стороны, но с отрицательной суммой ("красное сторно"), а не разворот.
+        """
+        from accounting.models import JournalEntry, TransactionLine
+        from accounting.utils import generate_journal_number
+
+        wh = self.warehouse
+        if wh is None:
+            raise ValidationError("У документа не указан склад — проводка невозможна.")
+
+        required = ['inventory_account_id', 'payable_account_id']
+        missing = [f for f in required if getattr(wh, f, None) is None]
+        if missing:
+            raise ValidationError(
+                f"Для склада «{wh.name}» не настроены счета для проводки прихода: "
+                f"{', '.join(missing)}. Настройте их в карточке склада перед проведением."
+            )
+
+        entry = JournalEntry.objects.create(
+            number=generate_journal_number(),
+            date=self.date,
+            description=description or f"Приход по документу №{self.number}",
+            branch=self.branch,
+            warehouse=self.warehouse,
+            source_document_type=ContentType.objects.get_for_model(Document),
+            source_document_id=self.pk,
+            created_by=user,
+        )
+
+        order = 1
+        for item in self.items.select_related('product'):
+            item_amount = (item.price * item.quantity * sign).quantize(Decimal('0.01'))
+            if item_amount == 0:
+                continue
+            inv_subcontos = self._resolve_account_subcontos(wh.inventory_account, counterparty=self.counterparty, product=item.product)
+            payable_subcontos = self._resolve_account_subcontos(wh.payable_account, counterparty=self.counterparty, product=item.product)
+            TransactionLine.objects.create(
+                journal_entry=entry, order=order, side=TransactionLine.Side.DEBIT,
+                account=wh.inventory_account, amount=item_amount, subcontos=inv_subcontos,
+            )
+            order += 1
+            TransactionLine.objects.create(
+                journal_entry=entry, order=order, side=TransactionLine.Side.CREDIT,
+                account=wh.payable_account, amount=item_amount, subcontos=payable_subcontos,
+            )
+            order += 1
+
+        if order == 1:
+            # Ни одной строки не создано (нулевой документ) — проводка не нужна.
+            entry.delete()
+            return
+
+        entry.post()
+        self.journal_entry = entry
+
+    def _generate_return_out_posting(self, user=None):
+        """
+        "Возврат поставщику" — те же счета и структура, что и в _generate_in_posting
+        (Дт inventory/Кт payable), но с отрицательной суммой ("красное сторно"):
+        уменьшает остаток товара и уменьшает долг перед поставщиком.
+        """
+        self._generate_in_posting(
+            user=user, sign=Decimal('-1'),
+            description=f"Возврат поставщику по документу №{self.number}",
+        )
+
+    def _write_audit_log(self, user, action):
+        AuditLog.objects.create(
+            content_type=ContentType.objects.get_for_model(Document),
+            object_id=self.pk,
+            object_repr=str(self)[:255],
+            action=action,
+            user=user if user and user.is_authenticated else None,
+            changed_data={'status': {'after': self.status}},
+        )
 
     @transaction.atomic
     def unpost(self, user=None):
@@ -269,6 +571,7 @@ class Document(models.Model):
         self.posted_at = None
         self.posted_by = None
         self.save(update_fields=['status', 'posted_at', 'posted_by', 'journal_entry'])
+        self._write_audit_log(user, AuditLog.Action.UNPOST)
 
     def _stock_direction(self, reverse=False):
         fwd = {

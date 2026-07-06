@@ -24,18 +24,31 @@ class CurrencyViewSet(AuditMixin, viewsets.ModelViewSet):
         return qs.order_by('code')
 
 
+# ✅ Сортировка по клику на колонку в RatesPage.tsx (server-side пагинация) —
+# ключи совпадают 1:1 с accessor колонок там; currency_code/created_by_username —
+# сериализуются через join (currency.code / created_by.username), поэтому для
+# сортировки маппим на реальные ORM-пути, а не полагаемся на голый order_by(key).
+EXCHANGE_RATE_ORDERING_FIELDS = {
+    'date': ['date'],
+    'currency_code': ['currency__code'],
+    'rate': ['rate'],
+    'created_by_username': ['created_by__username'],
+    'created_at': ['created_at'],
+}
+
+
 class ExchangeRateViewSet(AuditMixin, ListModelMixin, CreateModelMixin, RetrieveModelMixin, GenericViewSet):
     """
     Только list, retrieve, create — без edit и delete.
     """
     # pagination_class = None
-    
+
     serializer_class = ExchangeRateSerializer
 
     def get_permissions(self):
         return _rbac(self.action, 'exchangerate')
 
-    
+
     def get_queryset(self):
         qs = ExchangeRate.objects.select_related('currency', 'created_by')
         params = self.request.query_params
@@ -56,6 +69,14 @@ class ExchangeRateViewSet(AuditMixin, ListModelMixin, CreateModelMixin, Retrieve
             qs = qs.filter(date__gte=date_from)
         if date_to := params.get('date_to'):
             qs = qs.filter(date__lte=date_to)
+
+        ordering_param = params.get('ordering')
+        if ordering_param:
+            desc = ordering_param.startswith('-')
+            key = ordering_param[1:] if desc else ordering_param
+            fields = EXCHANGE_RATE_ORDERING_FIELDS.get(key)
+            if fields:
+                return qs.order_by(*[f'-{f}' if desc else f for f in fields])
 
         return qs.order_by('-date', '-created_at')
 

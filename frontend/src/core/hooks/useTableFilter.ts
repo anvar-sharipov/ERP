@@ -33,17 +33,23 @@ export function useTableFilter<T extends object>(
     const searchFields = searchFieldsRef.current;
 
     if (options.search?.trim() && searchFields?.length) {
-      const q = options.search.toLowerCase();
+      // ✅ Разбиваем запрос на слова ("WHITE AK" → ["white", "ak"]) — каждое слово
+      // должно точным вхождением подстроки найтись хоть в одном из searchFields
+      // (не обязательно в одном и том же поле у каждого слова). Раньше искали весь
+      // запрос целиком одной строкой в одном поле — "WHITE AK" не находило товар,
+      // где "white" в названии, а "ak" в артикуле, хотя оба слова там реально есть.
+      const tokens = options.search
+        .toLowerCase()
+        .trim()
+        .split(/\s+/)
+        .filter(Boolean);
 
-      result = result.filter((item) =>
-        searchFields.some((field) => {
-          const value = getNestedValue(item, field);
-
-          return String(value ?? "")
-            .toLowerCase()
-            .includes(q);
-        }),
-      );
+      result = result.filter((item) => {
+        const haystack = searchFields
+          .map((field) => String(getNestedValue(item, field) ?? "").toLowerCase())
+          .join(" ");
+        return tokens.every((token) => haystack.includes(token));
+      });
     }
 
     return result;

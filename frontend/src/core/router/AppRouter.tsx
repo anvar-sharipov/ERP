@@ -16,6 +16,7 @@ import CompanyAdminUser from "../../features/users/components/pages/admin/Roles/
 import Roles from "../../features/users/components/pages/admin/Roles/Roles";
 import CompanyAdmin from "../../features/users/components/pages/admin/Roles/Company/Company";
 import Branchs from "../../features/users/components/pages/admin/Roles/Branchs/Branchs";
+import DocumentSettingsPage from "../../features/users/components/pages/admin/Roles/DocumentSettings/DocumentSettingsPage";
 import AccountPage from "../../features/accounting/pages/Accounting/AccountPage";
 import Directory from "../../features/accounting/pages/Directory/Directory";
 
@@ -41,6 +42,8 @@ import StockMovementsPage from "../../features/accounting/pages/Journal/StockMov
 import RoleFormPage from "../../features/users/components/pages/admin/Roles/RoleFormPage";
 import SubcontoTypesPage from "../../features/accounting/pages/Accounting/SubcontoTypesPage";
 import OSVPage from "../../features/accounting/pages/Accounting/OSVPage";
+import ProductTurnoverPage from "../../features/accounting/pages/Accounting/ProductTurnoverPage";
+import ProductTurnoverDetailPage from "../../features/accounting/pages/Accounting/ProductTurnoverDetailPage";
 import Employees from "../../features/accounting/pages/Employees/Employees";
 import EmployeesPage from "../../features/accounting/pages/Employees/EmployeesPage";
 import PositionsPage from "../../features/accounting/pages/Employees/PositionsPage";
@@ -50,6 +53,7 @@ import InvoicesPage from "../../features/accounting/pages/Documents/InvoicesPage
 import OrdersPage from "../../features/accounting/pages/Documents/OrdersPage";
 import ReturnsPage from "../../features/accounting/pages/Documents/ReturnsPage";
 import DocumentFormPage from "../../features/accounting/pages/Documents/Invoice/DocumentFormPage";
+import DocumentViewPage from "../../features/accounting/pages/Documents/Invoice/DocumentViewPage";
 import ChatPage from "../../features/chat/pages/ChatPage";
 import { PlatformContactPage } from "../../features/admin/components/PlatformContactPage";
 import ExchangeRates from "../../features/accounting/pages/ExchangeRates/ExchangeRates";
@@ -89,6 +93,7 @@ const AppRouter: React.FC = () => {
             <Route path={ROUTES.COMPANY_ADMIN.ROLES_EDIT} element={<RoleFormPage />} />
             <Route path={ROUTES.COMPANY_ADMIN.COMPANIES} element={<CompanyAdmin />} />
             <Route path={ROUTES.COMPANY_ADMIN.BRANCHS} element={<Branchs />} />
+            <Route path={ROUTES.COMPANY_ADMIN.DOCUMENT_SETTINGS} element={<DocumentSettingsPage />} />
           </Route>
           {/* ОБЫЧНЫЕ РОУТЫ (доступны всем) */}
           <Route path={ROUTES.APP.DASHBOARD} element={<Dashboard />} />
@@ -99,23 +104,26 @@ const AppRouter: React.FC = () => {
           </Route>
           {/* <Route path={ROUTES.APP.ACCOUNTING} element={<Accounting />} /> */}
 
-          {/* Бухгалтерия */}
-          <Route element={<PermissionRoute resource="account" action="GET" />}>
-            <Route path={ROUTES.APP.ACCOUNTING} element={<Accounting />}>
-              <Route index element={<Navigate to="accounts" replace />} />
-              <Route path="accounts" element={<AccountPage />} />
-              <Route path="subconto-types" element={<SubcontoTypesPage />} />
-              <Route path="osv" element={<OSVPage />} />
-              <Route path="audit-log" element={<AuditLogPage />} />
-            </Route>
+          {/* Бухгалтерия — без внешнего route-level гейта: у каждой вкладки свой
+              usePageAccess/RBACGuard с ПРАВИЛЬНЫМ для неё ресурсом (account,
+              journalentry, auditlog, document) — единый внешний PermissionRoute
+              resource="account" раньше блокировал доступ к osv/audit-log/
+              product-turnover для пользователей без прав именно на "account",
+              даже если у них были права на нужный именно этой вкладке ресурс. */}
+          <Route path={ROUTES.APP.ACCOUNTING} element={<Accounting />}>
+            <Route index element={<Navigate to="accounts" replace />} />
+            <Route path="accounts" element={<AccountPage />} />
+            <Route path="subconto-types" element={<SubcontoTypesPage />} />
+            <Route path="osv" element={<OSVPage />} />
+            <Route path="product-turnover" element={<ProductTurnoverPage />} />
+            <Route path="audit-log" element={<AuditLogPage />} />
           </Route>
+          <Route path={ROUTES.APP.ACCOUNTING_PRODUCT_TURNOVER_DETAIL} element={<ProductTurnoverDetailPage />} />
 
-          {/* Справочники */}
-          <Route element={<PermissionRoute resource="directory" action="GET" />}>
-            <Route path={ROUTES.APP.DIRECTORY} element={<Directory />}>
-              <Route index element={<Navigate to="create-fields-for-directory" replace />} />
-              <Route path="create-fields-for-directory" element={<CreateField />} />
-            </Route>
+          {/* Справочники — тот же принцип: свой resource на каждой вложенной странице */}
+          <Route path={ROUTES.APP.DIRECTORY} element={<Directory />}>
+            <Route index element={<Navigate to="create-fields-for-directory" replace />} />
+            <Route path="create-fields-for-directory" element={<CreateField />} />
           </Route>
           <Route path={ROUTES.APP.DIRECTORY_FIELDS} element={<DirectoryFieldsPage />} />
           <Route path={ROUTES.APP.DIRECTORY_RECORDS} element={<DirectoryRecordsPage />} />
@@ -140,24 +148,21 @@ const AppRouter: React.FC = () => {
             <Route path="stocks" element={<WarehouseStocksPage />} />
           </Route>
 
-          {/* Журнал */}
-          <Route element={<PermissionRoute resource="journalentry" action="GET" />}>
-            <Route path={ROUTES.APP.JOURNAL} element={<Journal />}>
-              <Route index element={<Navigate to="entries" replace />} />
-              <Route path="entries" element={<JournalPage />} />
-              <Route path="movements" element={<StockMovementsPage />} />
-            </Route>
+          {/* Журнал — entries проверяет journalentry, movements проверяет
+              stockmovement (см. StockMovementsPage.tsx) — свой resource на странице */}
+          <Route path={ROUTES.APP.JOURNAL} element={<Journal />}>
+            <Route index element={<Navigate to="entries" replace />} />
+            <Route path="entries" element={<JournalPage />} />
+            <Route path="movements" element={<StockMovementsPage />} />
           </Route>
 
           <Route path={ROUTES.APP.CHAT} element={<ChatPage />} />
         </Route>
 
-        <Route element={<PermissionRoute resource="employee" action="GET" />}>
-          <Route path={ROUTES.APP.EMPLOYEES} element={<Employees />}>
-            <Route index element={<Navigate to="list" replace />} />
-            <Route path="list" element={<EmployeesPage />} />
-            <Route path="positions" element={<PositionsPage />} />
-          </Route>
+        <Route path={ROUTES.APP.EMPLOYEES} element={<Employees />}>
+          <Route index element={<Navigate to="list" replace />} />
+          <Route path="list" element={<EmployeesPage />} />
+          <Route path="positions" element={<PositionsPage />} />
         </Route>
 
         <Route path={ROUTES.APP.DOCUMENTS} element={<Documents />}>
@@ -168,6 +173,7 @@ const AppRouter: React.FC = () => {
         </Route>
         <Route path={ROUTES.APP.DOCUMENTS_CREATE} element={<DocumentFormPage />} />
         <Route path={ROUTES.APP.DOCUMENTS_EDIT} element={<DocumentFormPage />} />
+        <Route path={ROUTES.APP.DOCUMENTS_VIEW} element={<DocumentViewPage />} />
       </Route>
 
       {/* ================= FALLBACK ZONE ================= */}

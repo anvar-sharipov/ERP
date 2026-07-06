@@ -160,51 +160,60 @@ const ProductFormPage = () => {
 
   return (
     <RBACGuard isLoading={isEdit ? productLoading : false} error={isEdit ? productError : null} canView={isEdit ? canPut : canPost} forbiddenText={t("ForbiddenText")}>
-      {/* Шапка */}
-      <div className="flex items-center gap-3 mb-4">
-        <BackButton id={productId ?? 0} getBackProps={getBackProps} className="!px-2" />
-        <div>
-          <h1 className="text-xl font-bold">{isEdit ? `Товар: ${product?.name ?? "..."}` : "Новый товар"}</h1>
-          {isEdit && product && <p className="text-sm text-gray-500">Артикул: {product.sku}</p>}
+      {/* ✅ Карточка-"окно" в духе Windows — тот же приём, что и в Modal.tsx:
+          цветная титульная строка + рамка + приподнимающая тень вместо голого
+          контента прямо на фоне страницы. */}
+      <div className="rounded-xl border border-slate-200/80 dark:border-slate-700 shadow-[0_20px_60px_-15px_rgba(0,0,0,0.35)] bg-white dark:bg-slate-800 overflow-hidden">
+        {/* Титульная строка */}
+        <div className="flex items-center gap-3 px-4 py-3 bg-gradient-to-r from-indigo-600 to-indigo-700 dark:from-slate-900 dark:to-slate-800 border-b border-indigo-800/60 dark:border-slate-600">
+          <BackButton id={productId ?? 0} getBackProps={getBackProps} className="!bg-white/10 !text-white !border-white/20 hover:!bg-white/20 !px-2 shrink-0" />
+          <div className="min-w-0">
+            <h1 className="text-base font-semibold text-white truncate">{isEdit ? `Товар: ${product?.name ?? "..."}` : "Новый товар"}</h1>
+            {isEdit && product && <p className="text-xs text-indigo-100/80">Артикул: {product.sku}</p>}
+          </div>
         </div>
-      </div>
 
-      {/* Табы — показываем "Изображения" и "Цены" только при редактировании */}
-      <SegmentedControl options={isEdit ? toOptions(TABS) : toOptions(["Основное"] as const)} value={activeTab} onChange={(v) => setActiveTab(v as Tab)} />
+        {/* Панель вкладок — показываем "Изображения" и "Цены" только при редактировании */}
+        <div className="px-4 py-3 bg-gray-50 dark:bg-slate-900/40 border-b border-gray-200 dark:border-slate-700">
+          <SegmentedControl options={isEdit ? toOptions(TABS) : toOptions(["Основное"] as const)} value={activeTab} onChange={(v) => setActiveTab(v as Tab)} />
+        </div>
 
-      {/* Контент табов */}
-      <div className="max-w-2xl">
-        {activeTab === "Основное" && (
-          <>
-            <MainTab form={form} setForm={setForm} units={units} brands={brands} tags={tags} categories={categories} isEdit={isEdit} />;
-            <div className="flex gap-2 mt-6">
-              <Button text={saveMutation.isPending ? t("Saving") : isEdit ? t("Save") : t("Create")} onClick={() => saveMutation.mutate(form)} />
-              <Button text={t("Cancel")} variant="secondary" onClick={() => navigate(ROUTES.APP.PRODUCTS_LIST)} />
-            </div>
-          </>
-        )}
+        {/* Контент табов */}
+        <div className="p-4 md:p-6">
+          <div className="max-w-2xl">
+            {activeTab === "Основное" && (
+              <>
+                <MainTab form={form} setForm={setForm} units={units} brands={brands} tags={tags} categories={categories} isEdit={isEdit} />;
+                <div className="flex gap-2 mt-6">
+                  <Button text={saveMutation.isPending ? t("Saving") : isEdit ? t("Save") : t("Create")} onClick={() => saveMutation.mutate(form)} />
+                  <Button text={t("Cancel")} variant="secondary" onClick={() => navigate(ROUTES.APP.PRODUCTS_LIST)} />
+                </div>
+              </>
+            )}
 
-        {activeTab === "Характеристики" && (
-          <>
-            <SpecsTab form={form} setForm={setForm} product={product} />
-            <div className="flex gap-2 mt-6">
-              <Button text={saveMutation.isPending ? t("Saving") : t("Save")} onClick={() => saveMutation.mutate(form)} />
-              <Button text={t("Cancel")} variant="secondary" onClick={() => navigate(ROUTES.APP.PRODUCTS_LIST)} />
-            </div>
-          </>
-        )}
+            {activeTab === "Характеристики" && (
+              <>
+                <SpecsTab form={form} setForm={setForm} product={product} />
+                <div className="flex gap-2 mt-6">
+                  <Button text={saveMutation.isPending ? t("Saving") : t("Save")} onClick={() => saveMutation.mutate(form)} />
+                  <Button text={t("Cancel")} variant="secondary" onClick={() => navigate(ROUTES.APP.PRODUCTS_LIST)} />
+                </div>
+              </>
+            )}
 
-        {activeTab === "Изображения" && isEdit && product && <ImagesTab productId={product.id} images={product.images} imageMode={form.image_mode} onRefresh={refreshProduct} />}
+            {activeTab === "Изображения" && isEdit && product && <ImagesTab productId={product.id} images={product.images} imageMode={form.image_mode} onRefresh={refreshProduct} />}
 
-        {activeTab === "Цены" && isEdit && product && (
-          <PricesTab productId={product.id} prices={product.prices} priceTypes={priceTypes as PriceType[]} warehouses={warehouses} onRefresh={refreshProduct} />
-        )}
+            {activeTab === "Цены" && isEdit && product && (
+              <PricesTab productId={product.id} prices={product.prices} priceTypes={priceTypes as PriceType[]} warehouses={warehouses} onRefresh={refreshProduct} />
+            )}
 
-        {activeTab === "Комплектующие" && isEdit && product && <BundlesTab productId={product.id} />}
+            {activeTab === "Комплектующие" && isEdit && product && <BundlesTab productId={product.id} />}
 
-        {activeTab === "Скидки" && isEdit && product && <DiscountsTab productId={product.id} priceTypes={priceTypes as PriceType[]} />}
+            {activeTab === "Скидки" && isEdit && product && <DiscountsTab productId={product.id} priceTypes={priceTypes as PriceType[]} />}
 
-        {activeTab === "Акции" && isEdit && product && <PromotionsTab productId={product.id} priceTypes={priceTypes as PriceType[]} />}
+            {activeTab === "Акции" && isEdit && product && <PromotionsTab productId={product.id} priceTypes={priceTypes as PriceType[]} />}
+          </div>
+        </div>
       </div>
     </RBACGuard>
   );

@@ -1,6 +1,6 @@
 # backend/accounting/serializers/company_serializers.py
 from rest_framework import serializers
-from ..models import CompanyProfile, Branch, UserScope
+from ..models import CompanyProfile, Branch, UserScope, DocumentSettings, PriceType
 
 
 
@@ -109,8 +109,8 @@ class BranchUserSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Branch
-        fields = ['id', 'name', 'address', 'city', 'phone', 'email', 'website', 
-                  'manager_name', 'is_head_office', 'is_active',
+        fields = ['id', 'name', 'address', 'city', 'phone', 'email', 'website',
+                  'manager_name', 'is_head_office', 'is_active', 'slogan',
                   'logo', 'logo_thumbnail', 'signature_image', 'signature_image_thumbnail']
         
     def get_logo(self, obj):
@@ -205,6 +205,20 @@ class UserScopeSerializer(serializers.ModelSerializer):
         if not attrs.get('branch') and not attrs.get('warehouse'):
             raise serializers.ValidationError("Укажите хотя бы филиал или склад.")
         return attrs
+
+
+class PriceTypeShortSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PriceType
+        fields = ['id', 'name']
+
+
+class DocumentSettingsSerializer(serializers.ModelSerializer):
+    purchase_price_type_detail = PriceTypeShortSerializer(source='purchase_price_type', read_only=True)
+
+    class Meta:
+        model = DocumentSettings
+        fields = ['id', 'purchase_price_type', 'purchase_price_type_detail']
 
 
 

@@ -1,6 +1,5 @@
 // frontend/src/components/ui/UserProfileBlock.tsx
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { ChevronDown } from "lucide-react";
 import { Avatar } from "./Avatar";
@@ -11,9 +10,8 @@ import { Input } from "./Input";
 import { useUser } from "../../core/context/UserContext";
 import { useNotify } from "../../core/context/NotificationContext";
 import { updateProfile } from "../../features/users/services/userApi";
-import { logoutRequest } from "../../features/auth/services/authApi";
+import { useLogout } from "../../core/hooks/useLogout";
 import { playAside2Sound } from "../../core/utils/sound";
-import { ROUTES } from "../../core/router/routes";
 
 interface UserProfileBlockProps {
   showName?: boolean;
@@ -22,9 +20,9 @@ interface UserProfileBlockProps {
 
 export const UserProfileBlock: React.FC<UserProfileBlockProps> = ({ showName = true, variant = "inline" }) => {
   const { user: currentUser } = useUser();
-  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const notify = useNotify();
+  const handleLogout = useLogout();
   // console.log("photo_thumbnail:", currentUser?.photo_thumbnail);
 
   const [menuOpen, setMenuOpen] = useState(false);
@@ -74,12 +72,6 @@ export const UserProfileBlock: React.FC<UserProfileBlockProps> = ({ showName = t
     data.append("position", formData.position);
     if (formData.photo) data.append("photo", formData.photo);
     mutation.mutate(data);
-  };
-
-  const handleLogout = async () => {
-    await logoutRequest();
-    queryClient.clear();
-    navigate(ROUTES.AUTH.LOGIN, { replace: true });
   };
 
   const avatarSrc = currentUser?.photo_thumbnail || currentUser?.photo ? `${currentUser.photo_thumbnail || currentUser.photo}?t=${Date.now()}` : null;

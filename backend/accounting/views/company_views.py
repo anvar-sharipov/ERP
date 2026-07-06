@@ -1,15 +1,15 @@
 # backend/accounting/views/company_views.py
 from rest_framework import viewsets
-from ..models import CompanyProfile, Branch
+from ..models import CompanyProfile, Branch, DocumentSettings
 from users.models import UserRole
 from accounting.mixins import AuditMixin
 from ..serializers.company_serializers import (
-    CompanyProfileAdminSerializer, 
+    CompanyProfileAdminSerializer,
     CompanyProfileUserSerializer,
     BranchAdminSerializer,
     BranchUserSerializer,
-    UserScopeSerializer
-    
+    UserScopeSerializer,
+    DocumentSettingsSerializer,
 )
 from users.permissions import _rbac
 
@@ -76,6 +76,19 @@ class UserScopeViewSet(viewsets.ModelViewSet):
         if user_id:
             qs = qs.filter(user_id=user_id)
         return qs
+
+
+class DocumentSettingsViewSet(AuditMixin, viewsets.ModelViewSet):
+    """
+    Общие настройки документов (singleton по конвенции, как CompanyProfile) —
+    фронтенд берёт [0] из списка, либо создаёт первую запись, если её ещё нет.
+    """
+    pagination_class = None
+    queryset = DocumentSettings.objects.select_related('purchase_price_type').all()
+    serializer_class = DocumentSettingsSerializer
+
+    def get_permissions(self):
+        return _rbac(self.action, "documentsettings")
  
  
  

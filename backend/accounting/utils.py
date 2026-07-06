@@ -9,6 +9,19 @@ from django.contrib.contenttypes.models import ContentType
 
 
 
+def get_last_closed_date(warehouse_id):
+    """
+    Последняя закрытая дата конкретного склада, либо None если по этому складу
+    ещё ни разу не закрывали ни один день.
+    """
+    from accounting.models import ClosedPeriod
+
+    if not warehouse_id:
+        return None
+    last = ClosedPeriod.objects.filter(warehouse_id=warehouse_id).order_by('-date').first()
+    return last.date if last else None
+
+
 def check_period_open(date, branch_id=None, warehouse_id=None):
     """
     Проверяет что период открыт для данной даты.
@@ -43,8 +56,27 @@ def check_period_open(date, branch_id=None, warehouse_id=None):
 
     if ClosedPeriod.objects.filter(q).exists():
         raise ValidationError(
-            f"Период {date.strftime('%d.%m.%Y')} закрыт — операции запрещены."
+            f"Операция запрещена: день {date.strftime('%d.%m.%Y')} закрыт — период закрыт для проведения операций."
         )
+
+    # ✅ Жёсткое последовательное правило по складу (см. CLAUDE.md / обсуждение
+    # с пользователем): операции разрешены ТОЛЬКО датой "последний закрытый день
+    # склада + 1" — не раньше (нельзя задним числом) и не позже (нельзя наперёд).
+    # Если по складу ещё ни разу не закрывали ни один день — разрешена любая дата.
+    # Сообщение объясняет причину явно, а не просто "запрещено" — см. просьбу
+    # пользователя про понятный UX.
+    if warehouse_id:
+        last_closed = get_last_closed_date(warehouse_id)
+        if last_closed is not None:
+            required_date = last_closed + datetime.timedelta(days=1)
+            if date != required_date:
+                wh = Warehouse.objects.filter(pk=warehouse_id).first()
+                wh_name = wh.name if wh else f"#{warehouse_id}"
+                raise ValidationError(
+                    f"Операция запрещена: склад «{wh_name}» закрыт по {last_closed.strftime('%d.%m.%Y')} включительно. "
+                    f"Разрешена только дата {required_date.strftime('%d.%m.%Y')} (день, следующий за последним закрытым). "
+                    f"Вы указали {date.strftime('%d.%m.%Y')}."
+                )
         
 def generate_journal_number():
     year = now().year

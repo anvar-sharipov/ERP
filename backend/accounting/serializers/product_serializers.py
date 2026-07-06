@@ -337,10 +337,26 @@ class CounterpartySerializer(serializers.ModelSerializer):
 
 class WarehouseSerializer(serializers.ModelSerializer):
     branch_name = serializers.CharField(source="branch.name", read_only=True)
+    # ✅ Счета для автогенерации проводки при проведении "Расхода" с этого склада —
+    # заполняются вручную пользователем в форме склада, ничего не подставляется по умолчанию.
+    receivable_account_name = serializers.CharField(source="receivable_account.name", read_only=True, default=None)
+    revenue_account_name = serializers.CharField(source="revenue_account.name", read_only=True, default=None)
+    cogs_account_name = serializers.CharField(source="cogs_account.name", read_only=True, default=None)
+    inventory_account_name = serializers.CharField(source="inventory_account.name", read_only=True, default=None)
+    payable_account_name = serializers.CharField(source="payable_account.name", read_only=True, default=None)
+    discount_account_name = serializers.CharField(source="discount_account.name", read_only=True, default=None)
 
     class Meta:
         model = Warehouse
-        fields = ["id", "name", "branch", "branch_name", "address", "is_active", "is_main"]
+        fields = [
+            "id", "name", "branch", "branch_name", "address", "is_active", "is_main",
+            "receivable_account", "receivable_account_name",
+            "revenue_account", "revenue_account_name",
+            "cogs_account", "cogs_account_name",
+            "inventory_account", "inventory_account_name",
+            "payable_account", "payable_account_name",
+            "discount_account", "discount_account_name",
+        ]
 
 
 class WarehouseStockSerializer(serializers.ModelSerializer):

@@ -20,6 +20,7 @@ import {
   ArrowUturnRightIcon,
   ChatBubbleLeftRightIcon,
   // ChatBubbleLeftIcon,
+  Cog6ToothIcon,
 } from "@heroicons/react/24/outline";
 
 // Добавляем эффект свечения и чуть более светлые тона для темных тем
@@ -28,6 +29,7 @@ const iconClassName = "w-5 h-5 transition-all duration-300 group-hover:scale-110
 export const ADMIN_ICON = <ShieldCheckIcon className={`${iconClassName} text-purple-400`} />;
 export const COMPANY_ICON = <BuildingOfficeIcon className={`${iconClassName} text-blue-400`} />;
 export const BRANCH_ICON = <BriefcaseIcon className={`${iconClassName} text-indigo-400`} />;
+export const DOCUMENT_SETTINGS_ICON = <Cog6ToothIcon className={`${iconClassName} text-gray-400`} />;
 export const USERS_ICON = <UserGroupIcon className={`${iconClassName} text-sky-400`} />;
 export const ACCOUNT_ICON = <DocumentChartBarIcon className={`${iconClassName} text-emerald-400`} />;
 export const DIRECTORY_ICON = <QueueListIcon className={`${iconClassName} text-purple-400`} />;

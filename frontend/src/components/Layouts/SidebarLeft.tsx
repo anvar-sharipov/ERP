@@ -8,6 +8,7 @@ import {
   COMPANY_ICON,
   USERS_ICON,
   BRANCH_ICON,
+  DOCUMENT_SETTINGS_ICON,
   ACCOUNT_ICON,
   DIRECTORY_ICON,
   COUNTERPARTY_ICON,
@@ -56,6 +57,7 @@ const NAV_ITEMS = {
     { name: "Roles", path: ROUTES.COMPANY_ADMIN.ROLES, icon: ROLES_ICON },
     { name: "Company", path: ROUTES.COMPANY_ADMIN.COMPANIES, icon: COMPANY_ICON },
     { name: "Branchs", path: ROUTES.COMPANY_ADMIN.BRANCHS, icon: BRANCH_ICON },
+    { name: "DocumentSettings", path: ROUTES.COMPANY_ADMIN.DOCUMENT_SETTINGS, icon: DOCUMENT_SETTINGS_ICON },
   ],
 };
 

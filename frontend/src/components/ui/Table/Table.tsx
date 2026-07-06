@@ -10,6 +10,9 @@ import { addExcelHeader } from "../../../core/utils/excelHelpers";
 import { iconFileName } from "../Icon/iconFileName";
 import { useTranslation } from "react-i18next";
 import { focusManager } from "../../../core/utils/focusManager";
+import { ConfirmModal } from "../Modal/ConfirmModal";
+import { Loader } from "../Loader";
+import { Trash2, FileSpreadsheet, X as XIcon } from "lucide-react";
 
 export interface Column<T> {
   header: string;
@@ -40,6 +43,14 @@ interface ServerPagination {
   total: number;
   onPageChange: (page: number) => void;
   onPageSizeChange: (size: number) => void;
+  // ✅ Сортировка при серверной пагинации — data содержит только ТЕКУЩУЮ страницу,
+  // поэтому локальный .sort() (как при client-пагинации) сортировал бы только её,
+  // а не весь список (см. CLAUDE.md/обсуждение). При server-режиме handleSort не
+  // трогает данные сам — вызывает onSortChange, а состояние сортировки (для стрелки
+  // в заголовке и для запроса на бэкенд) держит и передаёт сама страница.
+  sortBy?: string | null;
+  sortDir?: "asc" | "desc";
+  onSortChange?: (key: string, direction: "asc" | "desc") => void;
 }
 
 type PaginationConfig = ServerPagination | { mode?: "client" };
@@ -57,6 +68,13 @@ interface TableProps<T> {
   isLoading?: boolean;
   pagination?: PaginationConfig;
   onFetchAllData?: () => Promise<T[]>;
+  // ✅ Массовое удаление/скачивание через чекбоксы (см. CLAUDE.md). Опционально —
+  // существующие страницы, не передающие selectable, работают как раньше.
+  // Выбор хранится как Map(id -> item), а не просто Set(id) — так выбранные
+  // строки остаются доступны для Excel-экспорта, даже если пользователь после
+  // выбора перешёл на другую страницу (server-пагинация) и строка пропала из data.
+  selectable?: boolean;
+  onBulkDelete?: (ids: (string | number)[]) => Promise<void> | void;
 }
 
 function usePersistedSet(key: string, defaultIndices: number[]): [Set<number>, (i: number) => void] {
@@ -118,11 +136,30 @@ export const Table = <T extends { id: string | number }>({
   isLoading = false,
   pagination,
   onFetchAllData,
+  selectable = false,
+  onBulkDelete,
 }: TableProps<T>) => {
   const isServer = pagination?.mode === "server";
   const searchInputRef = useRef<HTMLInputElement>(null);
   const [selectedRow, setSelectedRow] = useState<string | number | null>(null);
   const [selectedCell, setSelectedCell] = useState<{ rowId: string | number; colIndex: number } | null>(null);
+
+  // ✅ Массовый выбор — Map(id -> item), не Set(id) (см. комментарий у TableProps).
+  const [checkedItems, setCheckedItems] = useState<Map<string | number, T>>(new Map());
+  const [bulkDeleteConfirmOpen, setBulkDeleteConfirmOpen] = useState(false);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
+
+  const toggleChecked = useCallback((item: T) => {
+    playClickSound();
+    setCheckedItems((prev) => {
+      const next = new Map(prev);
+      if (next.has(item.id)) next.delete(item.id);
+      else next.set(item.id, item);
+      return next;
+    });
+  }, []);
+
+  const clearChecked = useCallback(() => setCheckedItems(new Map()), []);
   // const [currentPage, setCurrentPage] = useState(1);
   const [clientPage, setClientPage] = useState(1);
 
@@ -261,9 +298,11 @@ export const Table = <T extends { id: string | number }>({
   }, []);
 
   const sortedData = useMemo(() => {
-    // if (isServer) return data;
-    // if (isServer) return data ?? [];
     const source = data ?? [];
+    // ✅ При server-пагинации бэкенд уже вернул страницу в нужном порядке
+    // (см. onSortChange ниже) — сортировать на клиенте нельзя, data здесь это
+    // только текущая страница, а не весь список.
+    if (isServer) return source;
     if (!sortConfig.key) return source;
     return [...source].sort((a, b) => {
       const col = columns.find((c) => c.accessor === sortConfig.key);
@@ -274,7 +313,7 @@ export const Table = <T extends { id: string | number }>({
       const comparison = aVal! < bVal! ? -1 : 1;
       return sortConfig.direction === "asc" ? comparison : -comparison;
     });
-  }, [data, sortConfig, columns]);
+  }, [data, sortConfig, columns, isServer]);
 
   // useEffect(() => {
   //   setCurrentPage(1);
@@ -294,6 +333,13 @@ export const Table = <T extends { id: string | number }>({
 
   const totalPages = isServer ? Math.ceil((pagination as ServerPagination).total / pageSize) : pageSize ? Math.ceil(sortedData.length / pageSize) : 1;
 
+  // ✅ Число рядом с кнопкой "Excel — вся выгрузка" — при server-пагинации
+  // sortedData/paginatedData это только ТЕКУЩАЯ страница (данные всех страниц
+  // на клиенте просто нет), поэтому sortedData.length там всегда равен размеру
+  // страницы. Реальное количество, которое реально скачается (через
+  // onFetchAllData — см. handleExcelExport), это pagination.total.
+  const allDataCount = isServer ? (pagination as ServerPagination).total : sortedData.length;
+
   const paginatedData = useMemo(() => {
     // if (isServer) return data;
     // if (isServer) return data ?? [];
@@ -303,7 +349,39 @@ export const Table = <T extends { id: string | number }>({
     return sortedData.slice(start, start + pageSize);
   }, [isServer, data, sortedData, currentPage, pageSize]);
 
+  // ✅ Чекбокс "выбрать всё" в шапке — относится к строкам ТЕКУЩЕЙ страницы
+  // (выбор через несколько страниц server-пагинации накапливается отдельно,
+  // просто листая страницы и отмечая чекбоксы — Map переживает смену страницы).
+  const selectAllRef = useRef<HTMLInputElement>(null);
+  const allOnPageSelected = paginatedData.length > 0 && paginatedData.every((item) => checkedItems.has(item.id));
+  const someOnPageSelected = paginatedData.some((item) => checkedItems.has(item.id));
+
+  useEffect(() => {
+    if (selectAllRef.current) selectAllRef.current.indeterminate = someOnPageSelected && !allOnPageSelected;
+  }, [someOnPageSelected, allOnPageSelected]);
+
+  const toggleSelectAllOnPage = useCallback(() => {
+    playClickSound();
+    setCheckedItems((prev) => {
+      const next = new Map(prev);
+      if (allOnPageSelected) {
+        paginatedData.forEach((item) => next.delete(item.id));
+      } else {
+        paginatedData.forEach((item) => next.set(item.id, item));
+      }
+      return next;
+    });
+  }, [allOnPageSelected, paginatedData]);
+
   const handleSort = (key: keyof T) => {
+    // ✅ Server-режим — не сортируем на клиенте, а просим родительскую страницу
+    // переспросить сервер с новым ordering (см. ServerPagination.onSortChange).
+    if (isServer) {
+      const sp = pagination as ServerPagination;
+      const direction: "asc" | "desc" = sp.sortBy === key && sp.sortDir === "asc" ? "desc" : "asc";
+      sp.onSortChange?.(String(key), direction);
+      return;
+    }
     setSortConfig((current) => {
       const next = {
         key,
@@ -317,6 +395,12 @@ export const Table = <T extends { id: string | number }>({
       return next;
     });
   };
+
+  // ✅ Единый источник для стрелки-индикатора в заголовке — при server-режиме
+  // "текущая сортировка" приходит снаружи (sortBy/sortDir), а не из локального
+  // sortConfig (который для server-режима вообще не обновляется).
+  const effectiveSortKey = isServer ? ((pagination as ServerPagination).sortBy ?? null) : sortConfig.key;
+  const effectiveSortDir = isServer ? ((pagination as ServerPagination).sortDir ?? "asc") : sortConfig.direction;
 
   const userSelectedCell = useRef(false);
 
@@ -348,7 +432,13 @@ export const Table = <T extends { id: string | number }>({
     setSelectedRowSync(selectedRowId);
     const visibleCols = columns.map((_, i) => i).filter((i) => !hiddenInView.has(i));
     if (visibleCols.length > 0) {
-      setSelectedCell({ rowId: selectedRowId, colIndex: visibleCols[0] });
+      // ✅ Как и при ArrowDown из search / ArrowUp из пагинации — фокусируем
+      // колонку "name", если она есть, иначе первую видимую (см. handleSearchKeyDown
+      // / focusLastTableRow). Тот же принцип нужен и при восстановлении выделения
+      // после возврата через BackButton (см. CLAUDE.md).
+      const nameColIndex = visibleCols.find((i) => columns[i].accessor === "name");
+      const targetColIndex = nameColIndex ?? visibleCols[0];
+      setSelectedCell({ rowId: selectedRowId, colIndex: targetColIndex });
       onHighlightConsumed?.();
       focusManager.setRegion("table");
       requestAnimationFrame(() => {
@@ -416,10 +506,14 @@ export const Table = <T extends { id: string | number }>({
     if (paginatedData.length === 0) return;
     const visibleCols = columns.map((_, i) => i).filter((i) => !hiddenInView.has(i));
     if (visibleCols.length === 0) return;
+    // ✅ Как и при ArrowDown из search — фокусируем колонку "name", если она есть,
+    // иначе первую видимую (см. handleSearchKeyDown).
+    const nameColIndex = visibleCols.find((i) => columns[i].accessor === "name");
+    const targetColIndex = nameColIndex ?? visibleCols[0];
 
     const lastItem = paginatedData[paginatedData.length - 1];
     setSelectedRowSync(lastItem.id);
-    setSelectedCell({ rowId: lastItem.id, colIndex: visibleCols[0] });
+    setSelectedCell({ rowId: lastItem.id, colIndex: targetColIndex });
     focusManager.setRegion("table");
     setPaginationFocusIndex(-1);
 
@@ -760,7 +854,11 @@ export const Table = <T extends { id: string | number }>({
 
       playClickSound();
       const visibleCols = columns.map((_, i) => i).filter((i) => !hiddenInView.has(i));
-      const firstColIndex = visibleCols[0]; // ← вот здесь берётся первая колонка
+      // ✅ Если среди колонок есть "name" (accessor === "name") — фокусируем именно
+      // её (там обычно самая важная инфа о строке), иначе — как раньше, первая
+      // видимая колонка.
+      const nameColIndex = visibleCols.find((i) => columns[i].accessor === "name");
+      const firstColIndex = nameColIndex ?? visibleCols[0];
       // // Последняя видимая колонка:
       // const targetColIndex = visibleCols[visibleCols.length - 1];
       // Предпоследняя:
@@ -929,6 +1027,30 @@ export const Table = <T extends { id: string | number }>({
     [columns, hiddenInPrint, currentCompany, currentUser, t, tableId],
   );
 
+  // ✅ Массовые действия по выбранным строкам (чекбоксы) — см. CLAUDE.md.
+  // Печать — через Ctrl+P/кнопку "Печать" (window.print()); какие именно строки
+  // попадут на бумагу, решает print:hidden на невыбранных <tr> в рендере ниже
+  // (тот же экран/печать/Excel никогда не расходятся принцип, что и у колонок).
+  const handleBulkExcelExport = useCallback(() => {
+    handleExcelExport(Array.from(checkedItems.values()));
+  }, [handleExcelExport, checkedItems]);
+
+  const handlePrintSelected = useCallback(() => {
+    window.print();
+  }, []);
+
+  const handleConfirmBulkDelete = useCallback(async () => {
+    if (!onBulkDelete) return;
+    setBulkDeleting(true);
+    try {
+      await onBulkDelete(Array.from(checkedItems.keys()));
+      clearChecked();
+      setBulkDeleteConfirmOpen(false);
+    } finally {
+      setBulkDeleting(false);
+    }
+  }, [onBulkDelete, checkedItems, clearChecked]);
+
   useEffect(() => {
     const handleGlobalKeyDown = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "e") {
@@ -973,9 +1095,11 @@ export const Table = <T extends { id: string | number }>({
   // Считаем left-offset для каждой frozen-колонки.
   // Колонка "№" всегда frozen и занимает 40px (w-10).
   const NUMBER_COL_WIDTH = 40;
+  // Чекбокс-колонка (если selectable) — тоже sticky при hasFrozen, стоит перед "№".
+  const CHECKBOX_COL_WIDTH = 36;
   const frozenOffsets = useMemo(() => {
     const offsets: Record<number, number> = {};
-    let accumulated = NUMBER_COL_WIDTH;
+    let accumulated = NUMBER_COL_WIDTH + (selectable ? CHECKBOX_COL_WIDTH : 0);
     columns.forEach((col, i) => {
       if (!col.frozen) return;
       offsets[i] = accumulated;
@@ -984,7 +1108,7 @@ export const Table = <T extends { id: string | number }>({
       accumulated += w;
     });
     return offsets;
-  }, [columns]);
+  }, [columns, selectable]);
 
   const hasFrozen = columns.some((c) => c.frozen);
 
@@ -1024,16 +1148,30 @@ export const Table = <T extends { id: string | number }>({
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center py-12 text-gray-400 border border-gray-300 dark:border-gray-700 rounded">
-        <span className="text-sm">Загрузка...</span>
+      <div className="rounded-xl border border-slate-200/80 dark:border-slate-700 shadow-sm bg-white dark:bg-slate-800 py-10">
+        <Loader text={t("Loading")} progress="indeterminate" />
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col gap-2">
-      {/* Тулбар */}
-      <div className="flex items-center gap-2 print:hidden">
+    <div className="flex flex-col shadow-[0_12px_35px_-15px_rgba(0,0,0,0.3)] print:shadow-none rounded-xl">
+      {/* ✅ Тулбар — верхняя "титульная" полоса окна (в духе Modal.tsx/ProductFormPage.tsx):
+          светлый градиент + скруглённые верхние углы, визуально продолжается рамкой
+          в область таблицы/пагинации ниже — единая карточка-"окно", а не голый контент.
+          ✅ relative-обёртка + панель массовых действий абсолютным слоем ПОВЕРХ (не под)
+          тулбара — иначе появление галочки добавляло бы новую строку и "прыгало" бы
+          содержимое страницы вниз (см. жалобу пользователя). Сам тулбар при активном
+          выборе становится invisible (не hidden!), чтобы сохранить высоту блока —
+          именно высота invisible-тулбара и задаёт размер, который абсолютный слой
+          заполняет через inset-0. Оверлей — с overflow-x-auto (не flex-wrap), чтобы
+          при нехватке места он не перенёсся на вторую строку и не увеличил высоту. */}
+      <div className="relative rounded-t-xl border border-slate-200/80 dark:border-slate-700">
+        <div
+          className={`flex items-center gap-2 px-3 py-2.5 print:hidden print:px-0 rounded-t-xl bg-gradient-to-r from-slate-50 to-slate-100/70 dark:from-slate-800 dark:to-slate-800/60 ${
+            selectable && checkedItems.size > 0 ? "invisible" : ""
+          }`}
+        >
         {onSearchChange !== undefined && (
           <div className="flex-1 min-w-0">
             <Input
@@ -1099,7 +1237,7 @@ export const Table = <T extends { id: string | number }>({
                   }}
                   className="w-full text-left px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center gap-2"
                 >
-                  <span>📊</span> {t("ExcelAllData")} ({sortedData.length})
+                  <span>📊</span> {t("ExcelAllData")} ({allDataCount})
                 </button>
               </div>
             )}
@@ -1189,7 +1327,7 @@ export const Table = <T extends { id: string | number }>({
                     }}
                     className="w-full text-left px-2 py-1.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 rounded flex items-center gap-2"
                   >
-                    <span>📊</span> {t("ExcelAllData")} ({sortedData.length})
+                    <span>📊</span> {t("ExcelAllData")} ({allDataCount})
                   </button>
                 </div>
               </div>
@@ -1210,10 +1348,45 @@ export const Table = <T extends { id: string | number }>({
             </div>
           )}
         </div>
+        </div>
+
+        {/* ✅ Панель массовых действий — абсолютный слой ПОВЕРХ тулбара (см. комментарий
+            в начале блока про invisible-тулбар), а не отдельная строка под ним. */}
+        {selectable && checkedItems.size > 0 && (
+          <div className="absolute inset-0 rounded-t-xl flex items-center gap-2 px-3 overflow-x-auto whitespace-nowrap bg-indigo-50 dark:bg-indigo-900/20 print:hidden">
+            <span className="text-sm font-medium text-indigo-700 dark:text-indigo-300 shrink-0">{t("SelectedCount", { count: checkedItems.size })}</span>
+            <button onClick={clearChecked} className="flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400 hover:text-red-500 transition shrink-0">
+              <XIcon size={14} /> {t("ClearSelection")}
+            </button>
+            <div className="ml-auto flex items-center gap-2 shrink-0">
+              <button
+                onClick={handleBulkExcelExport}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded border border-green-300 dark:border-green-700 bg-white dark:bg-gray-800 text-green-600 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/20 transition text-sm"
+              >
+                <FileSpreadsheet size={14} /> {t("ExcelSelected")}
+              </button>
+              <button
+                onClick={handlePrintSelected}
+                title={`${t("PrintSelected")} (Ctrl + P)`}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition text-sm"
+              >
+                <Printer size={14} /> {t("PrintSelected")}
+              </button>
+              {onBulkDelete && (
+                <button
+                  onClick={() => setBulkDeleteConfirmOpen(true)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded border border-red-300 dark:border-red-700 bg-white dark:bg-gray-800 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition text-sm"
+                >
+                  <Trash2 size={14} /> {t("DeleteSelected")}
+                </button>
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
       {data.length > 0 ? (
-        <div className="overflow-auto border border-gray-300 dark:border-gray-700 shadow-xl" ref={containerRef}>
+        <div className="overflow-auto rounded-b-xl border-x border-b border-slate-200/80 dark:border-slate-700 print:border-black" ref={containerRef}>
           <table
             className="w-full text-left border-collapse min-w-max"
             onFocus={() => {
@@ -1225,10 +1398,19 @@ export const Table = <T extends { id: string | number }>({
           >
             <thead className="border-b border-gray-300 dark:border-gray-700">
               <tr>
+                {selectable && (
+                  <th
+                    className={`px-2 py-2 bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 print:hidden ${hasFrozen ? "sticky left-0 z-20" : ""}`}
+                    style={{ width: CHECKBOX_COL_WIDTH }}
+                  >
+                    <input ref={selectAllRef} type="checkbox" checked={allOnPageSelected} onChange={toggleSelectAllOnPage} className="cursor-pointer" title={t("SelectAllOnPage")} />
+                  </th>
+                )}
                 <th
                   className={`px-2 py-2 bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 font-medium text-gray-500 w-10
-                    ${hasFrozen ? "sticky left-0 z-20" : ""}
+                    ${hasFrozen ? "sticky z-20" : ""}
                   `}
+                  style={hasFrozen ? { left: selectable ? CHECKBOX_COL_WIDTH : 0 } : undefined}
                 >
                   №
                 </th>
@@ -1252,7 +1434,7 @@ export const Table = <T extends { id: string | number }>({
                       onClick={() => col.sortable && col.accessor && handleSort(col.accessor)}
                     >
                       {col.header}
-                      {col.sortable && sortConfig.key === col.accessor && <span>{sortConfig.direction === "asc" ? "▲" : "▼"}</span>}
+                      {col.sortable && effectiveSortKey === col.accessor && <span>{effectiveSortDir === "asc" ? "▲" : "▼"}</span>}
                     </div>
                   </th>
                 ))}
@@ -1262,13 +1444,29 @@ export const Table = <T extends { id: string | number }>({
             <tbody className="divide-y divide-gray-200 dark:divide-gray-700 bg-white dark:bg-gray-900">
               {paginatedData.map((item, index) => {
                 const isRowSelected = selectedRow === item.id;
+                const isChecked = checkedItems.has(item.id);
                 const displayIndex = pageSize ? (currentPage - 1) * pageSize + index + 1 : index + 1;
                 return (
-                  <tr key={item.id} data-row-id={item.id} className={`${isRowSelected ? "bg-yellow-100 dark:bg-yellow-900/30" : "hover:bg-gray-50 dark:hover:bg-gray-800/60"} transition-colors`}>
+                  <tr
+                    key={item.id}
+                    data-row-id={item.id}
+                    className={`${isRowSelected ? "bg-yellow-100 dark:bg-yellow-900/30" : "hover:bg-gray-50 dark:hover:bg-gray-800/60"} transition-colors
+                      ${selectable && checkedItems.size > 0 && !isChecked ? "print:hidden" : ""}
+                    `}
+                  >
+                    {selectable && (
+                      <td
+                        className={`px-2 py-1 border border-gray-200 dark:border-gray-700 text-center bg-gray-50/50 dark:bg-gray-800/30 print:hidden ${hasFrozen ? "sticky left-0 z-10" : ""}`}
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <input type="checkbox" checked={isChecked} onChange={() => toggleChecked(item)} className="cursor-pointer" />
+                      </td>
+                    )}
                     <td
                       className={`px-2 py-1 border border-gray-200 dark:border-gray-700 text-center text-gray-400 bg-gray-50/50 dark:bg-gray-800/30
-                      ${hasFrozen ? "sticky left-0 z-10" : ""}
+                      ${hasFrozen ? "sticky z-10" : ""}
                     `}
+                      style={hasFrozen ? { left: selectable ? CHECKBOX_COL_WIDTH : 0 } : undefined}
                     >
                       {displayIndex}
                     </td>
@@ -1386,7 +1584,22 @@ export const Table = <T extends { id: string | number }>({
           )}
         </div>
       ) : (
-        <EmptyState />
+        <div className="rounded-b-xl border-x border-b border-slate-200/80 dark:border-slate-700 px-2">
+          <EmptyState />
+        </div>
+      )}
+
+      {selectable && onBulkDelete && (
+        <ConfirmModal
+          isOpen={bulkDeleteConfirmOpen}
+          type="delete"
+          title={t("DeleteSelected")}
+          message={t("ConfirmBulkDeleteMessage", { count: checkedItems.size })}
+          confirmText={t("Delete")}
+          loading={bulkDeleting}
+          onClose={() => setBulkDeleteConfirmOpen(false)}
+          onConfirm={handleConfirmBulkDelete}
+        />
       )}
     </div>
   );

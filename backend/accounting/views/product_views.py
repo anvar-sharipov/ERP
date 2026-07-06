@@ -3,7 +3,7 @@ from rest_framework import viewsets, status, mixins
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.parsers import MultiPartParser, FormParser
-from accounting.mixins import AuditMixin
+from accounting.mixins import AuditMixin, BulkDestroyMixin
 # from django.db.models import F
 from django.db import models
 from accounting.utils import resolve_product_price
@@ -63,7 +63,7 @@ class ProductCategoryViewSet(AuditMixin, viewsets.ModelViewSet):
         return _rbac(self.action, "productcategory")
 
 
-class ProductViewSet(AuditMixin, viewsets.ModelViewSet):
+class ProductViewSet(AuditMixin, BulkDestroyMixin, viewsets.ModelViewSet):
     pagination_class = None
     serializer_class = ProductSerializer
 

@@ -58,6 +58,7 @@ const Branches = () => {
     website: "",
     manager_name: "",
     manager_position: "",
+    slogan: "",
     logo: null as File | null,
     signature_image: null as File | null,
   };
@@ -96,6 +97,7 @@ const Branches = () => {
         website: editingBranch.website || "",
         manager_name: editingBranch.manager_name || "",
         manager_position: editingBranch.manager_position || "",
+        slogan: editingBranch.slogan || "",
         logo: null,
         signature_image: null,
       });
@@ -193,7 +195,7 @@ const Branches = () => {
 
   const filtered = useTableFilter(branches || [], {
     search: searchQuery,
-    searchFields: ["name", "city", "manager_name"],
+    searchFields: ["name", "city", "manager_name", "slogan"],
     filterKey: activeFilter,
     filters: [
       (b) => {
@@ -228,6 +230,7 @@ const Branches = () => {
     { header: t("Address"), accessor: "address", sortable: true, excelWidth: 18 },
     { header: t("Phone"), accessor: "phone", sortable: true },
     { header: t("Manager"), accessor: "manager_name", sortable: true, excelWidth: 12 },
+    { header: t("Slogan"), accessor: "slogan", sortable: true, excelWidth: 25 },
     {
       header: t("Logo"),
       excelWidth: 6,
@@ -319,6 +322,7 @@ const Branches = () => {
           <Input label={t("Website")} value={formData.website} onChange={(e) => setFormData({ ...formData, website: e.target.value })} />
           <Input label={t("Manager")} value={formData.manager_name} onChange={(e) => setFormData({ ...formData, manager_name: e.target.value })} />
           <Input label={t("ManagerPosition")} value={formData.manager_position} onChange={(e) => setFormData({ ...formData, manager_position: e.target.value })} />
+          <Input label={t("Slogan")} value={formData.slogan} onChange={(e) => setFormData({ ...formData, slogan: e.target.value })} />
 
           <div className="grid grid-cols-2 gap-4">
             {(["logo", "signature_image"] as const).map((field) => {

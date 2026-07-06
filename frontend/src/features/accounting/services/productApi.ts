@@ -39,6 +39,13 @@ export const productApi = {
   save: (id: number | null, data: any) =>
     id ? api.put(`/accounting/products/${id}/`, data) : api.post("/accounting/products/", data),
   delete: (id: number) => api.delete(`/accounting/products/${id}/`),
+  // ✅ Массовое удаление (см. Table.tsx — чекбоксы + "Удалить выбранные") — один
+  // запрос на бэкенд (accounting/mixins.py::BulkDestroyMixin.bulk_destroy),
+  // каждая запись аудируется отдельно там же, где и обычное удаление.
+  bulkDelete: (ids: (number | string)[]) =>
+    api
+      .delete<{ deleted_ids: number[]; errors: { id: number; detail: string }[]; missing_ids: number[] }>("/accounting/products/bulk-destroy/", { data: { ids } })
+      .then((r) => r.data),
 };
 
 export const productImageApi = {

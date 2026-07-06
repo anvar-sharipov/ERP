@@ -25,6 +25,13 @@ interface ConfirmModalProps {
   variant?: "primary" | "danger";
 
   type?: ConfirmModalType;
+
+  // ✅ Доп. контент между текстом сообщения и кнопками — например обязательное
+  // поле "примечание" перед подтверждением (см. WorkDateWidget.tsx::reopen).
+  children?: ReactNode;
+  // Кнопка подтверждения недоступна, пока не выполнено доп. условие (например
+  // не заполнено обязательное поле в children).
+  confirmDisabled?: boolean;
 }
 
 export const ConfirmModal = ({
@@ -44,6 +51,9 @@ export const ConfirmModal = ({
   variant,
 
   type = "info",
+
+  children,
+  confirmDisabled = false,
 }: ConfirmModalProps) => {
   const { t } = useTranslation();
   const presets = {
@@ -80,15 +90,21 @@ export const ConfirmModal = ({
         <div className="flex items-start gap-4">
           {icon || current.icon}
 
-          <div>
+          <div className="flex-1 min-w-0">
             <p className="text-sm text-slate-600 dark:text-slate-300">{t(message)}</p>
+            {children}
           </div>
         </div>
 
         <div className="flex justify-end gap-2">
           <Button text={t(cancelText)} onClick={onClose} />
 
-          <Button text={loading ? t("PleaseWait") : confirmText ? t(confirmText) : t(current.confirmText)} variant={variant || current.variant} onClick={onConfirm} />
+          <Button
+            disabled={confirmDisabled}
+            text={loading ? t("PleaseWait") : confirmText ? t(confirmText) : t(current.confirmText)}
+            variant={variant || current.variant}
+            onClick={onConfirm}
+          />
         </div>
       </div>
     </Modal>

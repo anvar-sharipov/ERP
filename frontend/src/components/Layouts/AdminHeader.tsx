@@ -1,21 +1,15 @@
 // frontend/src/components/Layouts/AdminHeader.tsx
 import React from "react";
-import { useNavigate } from "react-router-dom";
 import { ThemeToggle } from "../ui/ThemeToggle";
-import { logoutRequest } from "../../features/auth/services/authApi";
-import { ROUTES } from "../../core/router/routes";
+import { useLogout } from "../../core/hooks/useLogout";
 
 
 export const AdminHeader: React.FC = () => {
-  const navigate = useNavigate();
-
-  const handleLogout = async () => {
-    await logoutRequest();
-    // localStorage.removeItem("access_token");
-    // localStorage.removeItem("refresh_token");
-    // navigate("/Login", { replace: true });
-    navigate(ROUTES.AUTH.LOGIN, { replace: true });
-  };
+  // ✅ Раньше logout здесь не чистил React Query кэш вообще (в отличие от
+  // UserProfileBlock.tsx) — выход из системы через админ-хедер оставлял данные
+  // предыдущего пользователя закэшированными для следующего логина в этой же
+  // вкладке. Единый useLogout() устраняет расхождение.
+  const handleLogout = useLogout();
 
   return (
     <header className="h-16 bg-white dark:bg-slate-800 border-b border-gray-200 dark:border-slate-700 flex items-center justify-between px-6 z-10">

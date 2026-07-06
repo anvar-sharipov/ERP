@@ -17,7 +17,7 @@
 
 # accounting/models/__init__.py
 from .company import (
-    CompanyProfile, Branch,
+    CompanyProfile, Branch, DocumentSettings,
     company_logo_directory_path,
     company_logo2_directory_path,
     stamps_directory_path,
@@ -29,7 +29,7 @@ from .directory import Directory, DirectoryField, DirectoryRecord
 from .subconto import SubcontoType
 from .account import Account, AccountSubconto
 from .transaction import JournalEntry, TransactionLine, ClosedPeriod
-from .stock import StockMovement, Warehouse, WarehouseStock
+from .stock import StockMovement, Warehouse, WarehouseStock, WarehouseProductSnapshot
 from .product import (
     Product, ProductCategory, Brand, Tag, Unit,
     ProductImage, PriceType, ProductPrice, ProductBundle, ProductBundle,
@@ -79,12 +79,12 @@ def product_image_path(instance, filename):
 # Также экспортируем все функции для прямого доступа
 __all__ = [
     # Модели
-    'CompanyProfile', 'Branch',
+    'CompanyProfile', 'Branch', 'DocumentSettings',
     'Directory', 'DirectoryField', 'DirectoryRecord',
     'SubcontoType',
     'Account', 'AccountSubconto',
     'JournalEntry', 'TransactionLine', 'ClosedPeriod',
-    'StockMovement', 'Warehouse', 'WarehouseStock',
+    'StockMovement', 'Warehouse', 'WarehouseStock', 'WarehouseProductSnapshot',
     'Product', 'ProductCategory', 'Brand', 'Tag', 'Unit',
     'ProductImage', 'PriceType', 'ProductPrice',
     'Counterparty',

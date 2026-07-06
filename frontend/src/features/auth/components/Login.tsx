@@ -1,10 +1,13 @@
 // frontend/src/features/auth/components/Login.tsx
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
 import { api } from "../../../core/api/axiosInstance";
 import { API_ENDPOINTS } from "../../../core/api/endpoints";
 import { ROUTES } from "../../../core/router/routes";
 import { getTenantInfo } from "../../../core/utils/tenant";
+import { useAuthStore } from "../../../core/store/authStore";
+import { fetchCurrentUser } from "../../../core/context/UserContext";
 import { Button } from "../../../components/ui/Button";
 import { Input } from "../../../components/ui/Input";
 import { LogIn, User, Key } from "lucide-react";
@@ -16,6 +19,8 @@ export const Login: React.FC = () => {
   const [loading, setLoading] = useState(false);
 
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const setAuthenticated = useAuthStore((s) => s.setAuthenticated);
   const { isSubdomain } = getTenantInfo();
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -32,6 +37,17 @@ export const Login: React.FC = () => {
       localStorage.setItem("access_token", access);
       localStorage.setItem("refresh_token", refresh);
       localStorage.setItem("session_expires_at", String(Date.now() + 2 * 60 * 1000));
+
+      // ✅ Раньше тут просто ставились токены и сразу шёл navigate() — RBAC/scope
+      // из ПРЕДЫДУЩЕЙ сессии (или пустое состояние, если это первый логин за
+      // вкладку) оставались в React Query кэше/Context до полной перезагрузки
+      // страницы (см. authStore.ts). Теперь: чистим кэш от чужой сессии, явно
+      // помечаем "авторизован" (реактивно включает useQuery в UserProvider) и
+      // ЖДЁМ свежие данные пользователя/прав ДО перехода на страницу — страница
+      // открывается уже с готовыми permissions, а не проверяет их в фоне после.
+      queryClient.clear();
+      setAuthenticated(true);
+      await queryClient.fetchQuery({ queryKey: ["user-me"], queryFn: fetchCurrentUser });
 
       if (!isSubdomain) {
         navigate("/admin-panel", { replace: true });

@@ -12,23 +12,16 @@ from django.db.models import QuerySet
 def get_user_scope(user):
     if user.is_superuser:
         return [], []
-    
 
     from accounting.models import UserScope
     scopes = UserScope.objects.filter(user=user).select_related('branch', 'warehouse')
-    
-    print("scopes count:", scopes.count())  # ← добавь
-    print("user.pk:", user.pk)              # ← добавь
 
     if not scopes.exists():
         return [], []
 
     branch_ids    = list(scopes.filter(branch__isnull=False).values_list('branch_id', flat=True))
     warehouse_ids = list(scopes.filter(warehouse__isnull=False).values_list('warehouse_id', flat=True))
-    
-    print("branch_ids:", branch_ids)        # ← добавь
-    print("warehouse_ids:", warehouse_ids)  # ← добавь
-    
+
     return branch_ids, warehouse_ids
 
 

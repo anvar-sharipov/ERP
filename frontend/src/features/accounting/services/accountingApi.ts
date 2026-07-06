@@ -58,17 +58,28 @@ export const accountApi = {
     return res.data;
   },
 
-  // getOSV: async (params: { date_from: string; date_to: string; show_zero?: boolean }) => {
-  //   const res = await api.get('/accounting/journal-entries/osv/', { params });
-  //   return res.data;
-  // },
-  getOSV: async (params: { date_from: string; date_to: string; show_zero?: boolean }) => {
+  getOSV: async (params: { date_from: string; date_to: string; show_zero?: boolean; warehouse?: string; branch?: string }) => {
     const res = await api.get('/accounting/journal-entries/osv/', { params });
     return res.data;
   },
 
+  getProductTurnover: async (params: { date_from: string; date_to: string; warehouse?: string; branch?: string }) => {
+    const res = await api.get('/accounting/reports/product-turnover/', { params });
+    return res.data;
+  },
+
+  getProductTurnoverDetail: async (params: { product: number | string; date_from: string; date_to: string; warehouse?: string; branch?: string }) => {
+    const res = await api.get('/accounting/reports/product-turnover-detail/', { params });
+    return res.data;
+  },
+
+  getStockBalance: async (params: { warehouse?: string; branch?: string }) => {
+    const res = await api.get('/accounting/reports/stock-balance/', { params });
+    return res.data as Record<string, { quantity: string; reserved: string; available: string }>;
+  },
+
   // est backend paginasiya
-  getAuditLogs: async (params?: { page?: number; page_size?: number; action?: string; user?: number }) => {
+  getAuditLogs: async (params?: { page?: number; page_size?: number; action?: string; user?: number; ordering?: string }) => {
     const res = await api.get('/accounting/audit-logs/', { params })
     return res.data
   },

@@ -68,6 +68,16 @@ export const DEFAULT_COLUMNS: ColumnDef[] = [
 // кнопке "Колонки") — колонка может быть скрыта на экране, но включена в печать/Excel
 // (например SKU), и наоборот. Список колонок для рендера — объединение обоих флагов,
 // а видимость в каждом режиме регулируется этим классом.
+// ✅ Некоторые ячейки увеличены крупнее ТОЛЬКО в реальной печати (классы вида
+// "print:text-xl") — тот же самый "бумажный" вид нужен и на read-only странице
+// просмотра фактуры (DocumentViewPage.tsx), но без реального @media print.
+// Вместо копирования разметки/классов в отдельный компонент (см. запрет в
+// CLAUDE.md на расходящиеся копии экран/печать) — превращаем "print:"-классы
+// в обычные, когда явно передан viewMode, из того же самого className.
+export function printSize(viewMode: boolean | undefined, cls: string): string {
+  return viewMode ? cls.replace(/print:/g, "") : cls;
+}
+
 export function colVisibilityClass(col: ColumnDef): string {
   const parts: string[] = [];
   if (!col.visibleScreen) parts.push("hidden");
@@ -205,11 +215,22 @@ export interface ProductRowProps {
   total: number;
   disabled?: boolean;
   defaultPriceType?: number | null;
+  // ✅ "Приход" — если тип цены не выбран (нет настройки в админке), цена строки
+  // при добавлении товара берётся из себестоимости (cost_price), а не из price_type.
+  isPurchase?: boolean;
+  // ✅ Для типов документа, которые СПИСЫВАЮТ товар со склада (Расход, Перемещение,
+  // Возврат поставщику) — в выборе товара показываем только то, что физически есть
+  // в наличии (available > 0) на выбранном складе. Для Прихода/Возврата от покупателя
+  // (склад пополняется) фильтр не нужен — там должен быть виден весь каталог.
+  filterByStock?: boolean;
   // колонки
   columns: ColumnDef[];
   onColumnsChange: (cols: ColumnDef[]) => void;
   warehouseId?: number | null;
   onBack?: () => void;
+  // ✅ Read-only "красивый" просмотр фактуры (DocumentViewPage.tsx) — те же ячейки,
+  // что и в isPosted, но с постоянно применённым "печатным" масштабом (см. printSize).
+  viewMode?: boolean;
 }
 
 export const DOC_TYPE_ICONS: Record<string, JSX.Element> = {

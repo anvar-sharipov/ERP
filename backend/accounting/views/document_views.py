@@ -24,6 +24,25 @@ def _get_error_detail(e: ValidationError) -> str:
         return str(e)
 
 
+# ✅ Сортировка при server-side пагинации (InvoicesPage.tsx использует Table.tsx
+# с pagination.mode="server") — ключи здесь ДОЛЖНЫ совпадать с accessor колонок в
+# InvoicesPage.tsx::columns (frontend отправляет ?ordering=<accessor> либо
+# ?ordering=-<accessor>), а значения — реальные ORM-пути, в том числе через join
+# для колонок, показывающих вложенный объект (counterparty_detail и т.п.).
+DOCUMENT_ORDERING_FIELDS = {
+    'number': ['number'],
+    'document_type_display': ['document_type'],
+    'date': ['date'],
+    'counterparty_detail': ['counterparty__name'],
+    'branch_detail': ['branch__name'],
+    'warehouse_detail': ['warehouse__name'],
+    'total': ['total'],
+    'status': ['status'],
+    'created_by_name': ['created_by__last_name', 'created_by__first_name'],
+    'posted_by_name': ['posted_by__last_name', 'posted_by__first_name'],
+}
+
+
 class DocumentViewSet(viewsets.ModelViewSet):
     """
     Универсальный вьюсет для всех типов документов.
@@ -78,6 +97,16 @@ class DocumentViewSet(viewsets.ModelViewSet):
         if counterparty:
             qs = qs.filter(counterparty_id=counterparty)
 
+        # ✅ Фильтр по автору (created_by) / по тому, кто провёл (posted_by) —
+        # см. InvoicesPage.tsx, значения выбираются из filter_users() ниже.
+        created_by = self.request.query_params.get('created_by')
+        if created_by:
+            qs = qs.filter(created_by_id=created_by)
+
+        posted_by = self.request.query_params.get('posted_by')
+        if posted_by:
+            qs = qs.filter(posted_by_id=posted_by)
+
         # Фильтр по дате
         date_from = self.request.query_params.get('date_from')
         date_to   = self.request.query_params.get('date_to')
@@ -85,6 +114,28 @@ class DocumentViewSet(viewsets.ModelViewSet):
             qs = qs.filter(date__gte=date_from)
         if date_to:
             qs = qs.filter(date__lte=date_to)
+
+        # ✅ Фильтры "со скидкой / с комплектующими / с подарком" для InvoicesPage —
+        # используют тот же признак (extra_data.row_type), что и
+        # DocumentListSerializer.get_has_gift/get_has_bundle. Если меняете семантику
+        # там — поменяйте и здесь, иначе фильтр и бейджи в списке разъедутся.
+        truthy = ('1', 'true', 'True')
+        if self.request.query_params.get('has_discount') in truthy:
+            qs = qs.filter(discount_amount__gt=0)
+        if self.request.query_params.get('has_gift') in truthy:
+            qs = qs.filter(items__extra_data__row_type='promo').distinct()
+        if self.request.query_params.get('has_bundle') in truthy:
+            qs = qs.filter(items__extra_data__row_type='bundle').distinct()
+
+        # ✅ Сортировка по клику на колонку (см. DOCUMENT_ORDERING_FIELDS выше) —
+        # без параметра остаётся дефолтный order_by('-date', '-id') с самого начала.
+        ordering_param = self.request.query_params.get('ordering')
+        if ordering_param:
+            desc = ordering_param.startswith('-')
+            key = ordering_param[1:] if desc else ordering_param
+            fields = DOCUMENT_ORDERING_FIELDS.get(key)
+            if fields:
+                qs = qs.order_by(*[f'-{f}' if desc else f for f in fields])
 
         return qs
 
@@ -102,6 +153,29 @@ class DocumentViewSet(viewsets.ModelViewSet):
     
     
 
+
+    @action(detail=False, methods=['get'], url_path='filter-users')
+    def filter_users(self, request):
+        """
+        Список пользователей для фильтров "Создал"/"Провёл" в InvoicesPage.tsx —
+        ТОЛЬКО те, кто реально создавал/проводил документы в рамках текущего scope
+        пользователя (не весь справочник пользователей — см. RBAC: этот action
+        гейтится тем же 'document'/GET, что и list, а не отдельным правом 'user').
+        """
+        qs = apply_scope(Document.objects.all(), request.user)
+        user_ids = set(
+            qs.exclude(created_by__isnull=True).values_list('created_by_id', flat=True).distinct()
+        ) | set(
+            qs.exclude(posted_by__isnull=True).values_list('posted_by_id', flat=True).distinct()
+        )
+        from django.contrib.auth import get_user_model
+        User = get_user_model()
+        users = User.objects.filter(id__in=user_ids).order_by('username')
+        data = [
+            {'id': u.id, 'name': u.get_full_name() or u.username}
+            for u in users
+        ]
+        return Response(data)
 
     @action(detail=True, methods=['post'], url_path='post')
     def post_document(self, request, pk=None):

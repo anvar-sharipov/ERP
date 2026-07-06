@@ -74,9 +74,20 @@ class WarehouseShortSerializer(serializers.ModelSerializer):
 
 
 class CounterpartyShortSerializer(serializers.ModelSerializer):
+    photo_thumbnail = serializers.SerializerMethodField()
+
     class Meta:
         model = Counterparty
-        fields = ['id', 'name']
+        fields = ['id', 'name', 'phone', 'photo', 'photo_thumbnail']
+
+    def get_photo_thumbnail(self, obj):
+        return obj.photo_thumbnail.url if obj.photo_thumbnail else None
+
+    def to_representation(self, instance):
+        representation = super().to_representation(instance)
+        if instance.photo and hasattr(instance.photo, 'url'):
+            representation['photo'] = instance.photo.url
+        return representation
 
 
 class EmployeeShortSerializer(serializers.ModelSerializer):
@@ -159,6 +170,10 @@ class DocumentSerializer(serializers.ModelSerializer):
     # Сальдо контрагента — считаем на лету
     counterparty_balance = serializers.SerializerMethodField()
 
+    # ✅ Кто провёл документ — логин или ФИО (см. HeadDocument.tsx print-блок /
+    # DocumentViewPage.tsx / exportDocumentExcel.ts, где это отображается).
+    posted_by_name = serializers.SerializerMethodField()
+
     class Meta:
         model = Document
         fields = [
@@ -183,7 +198,7 @@ class DocumentSerializer(serializers.ModelSerializer):
             'items',
             'participants',
 
-            'posted_at', 'posted_by',
+            'posted_at', 'posted_by', 'posted_by_name',
             'created_by', 'created_at', 'updated_at',
         ]
         read_only_fields = [
@@ -218,6 +233,27 @@ class DocumentSerializer(serializers.ModelSerializer):
 
         return out - inp
 
+    def get_posted_by_name(self, obj):
+        if not obj.posted_by_id:
+            return None
+        return obj.posted_by.get_full_name() or obj.posted_by.username
+
+    def validate(self, attrs):
+        # ✅ Раньше check_period_open вызывался только при проведении (post()),
+        # а сам черновик можно было создать/сохранить с любой датой — включая
+        # закрытые и вообще любые прошлые дни. Теперь то же жёсткое правило
+        # ("последний закрытый день склада + 1", см. utils.py) действует уже
+        # при создании/редактировании самого черновика фактуры.
+        date = attrs.get('date') or (self.instance.date if self.instance else None)
+        warehouse = attrs.get('warehouse') or (self.instance.warehouse if self.instance else None)
+        if date and warehouse:
+            from accounting.utils import check_period_open
+            try:
+                check_period_open(date, warehouse_id=warehouse.id)
+            except Exception as e:
+                raise serializers.ValidationError({'date': str(e)})
+        return attrs
+
 
 # ── DocumentListSerializer (лёгкий, без items/participants) ───────────────────
 
@@ -226,7 +262,38 @@ class DocumentListSerializer(serializers.ModelSerializer):
     status_display        = serializers.CharField(source='get_status_display', read_only=True)
     counterparty_detail   = CounterpartyShortSerializer(source='counterparty', read_only=True)
     warehouse_detail      = WarehouseShortSerializer(source='warehouse', read_only=True)
-    branch_detail         = BranchShortSerializer(source='branch', read_only=True) 
+    branch_detail         = BranchShortSerializer(source='branch', read_only=True)
+    created_by_name       = serializers.CharField(source='created_by.get_full_name', read_only=True, default=None)
+    posted_by_name        = serializers.SerializerMethodField()
+
+    def get_posted_by_name(self, obj):
+        if not obj.posted_by_id:
+            return None
+        return obj.posted_by.get_full_name() or obj.posted_by.username
+
+    # ✅ Признаки для фильтра/бейджей в списке фактур (InvoicesPage) — считаются из уже
+    # предзагруженных items/product (ViewSet.get_queryset() делает prefetch_related,
+    # поэтому здесь никаких дополнительных SQL-запросов не возникает).
+    has_discount = serializers.SerializerMethodField()
+    has_gift     = serializers.SerializerMethodField()
+    has_bundle   = serializers.SerializerMethodField()
+
+    def get_has_discount(self, obj):
+        return obj.discount_amount > 0
+
+    def get_has_gift(self, obj):
+        # ✅ Смотрим именно на маркер row_type в extra_data (та же метка, что
+        # frontend сам пишет/читает для is_promo — см. DocumentFormPage.tsx),
+        # а не на price==0: строка комплектующей тоже стоит 0, но это не подарок.
+        return any(item.extra_data.get('row_type') == 'promo' for item in obj.items.all())
+
+    def get_has_bundle(self, obj):
+        # ✅ Смотрим на маркер row_type=='bundle' у СТРОК документа, а не на то,
+        # настроены ли у товара комплектующие в каталоге — иначе обычная продажа
+        # товара, который где-то в каталоге является "родителем" комплекта (но без
+        # добавленной строки-комплектующей в этом документе), ошибочно считалась бы
+        # "с комплектующими".
+        return any(item.extra_data.get('row_type') == 'bundle' for item in obj.items.all())
 
     class Meta:
         model = Document
@@ -238,6 +305,11 @@ class DocumentListSerializer(serializers.ModelSerializer):
             'branch', 'branch_detail',
             'counterparty', 'counterparty_detail',
             'warehouse', 'warehouse_detail',
-            'total',
+            'subtotal', 'discount_percent', 'discount_amount',
+            'total', 'total_profit',
+            'has_discount', 'has_gift', 'has_bundle',
+            'note',
+            'created_by', 'created_by_name',
+            'posted_by', 'posted_by_name',
             'created_at',
         ]

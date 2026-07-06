@@ -49,6 +49,10 @@ export default function RatesPage() {
   });
   const [searchQuery, setSearchQuery] = useState("");
   const [formOpen, setFormOpen] = useState(false);
+  // ✅ Сортировка при server-пагинации — уходит на бэкенд (см. currency_views.py::
+  // EXCHANGE_RATE_ORDERING_FIELDS), а не сортируется на клиенте.
+  const [sortBy, setSortBy] = useState<string | null>(null);
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
 
   const { workDate, workBranch, workWarehouse, periodFrom, periodTo } = useDateStore();
   const { isClosed } = useClosedPeriod({
@@ -69,13 +73,14 @@ export default function RatesPage() {
   });
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ["exchange-rates", page, pageSize, periodFrom, periodTo],
+    queryKey: ["exchange-rates", page, pageSize, periodFrom, periodTo, sortBy, sortDir],
     queryFn: () =>
       accountApi.getExchangeRates({
         page,
         page_size: pageSize,
         ...(periodFrom && { date_from: periodFrom }),
         ...(periodTo && { date_to: periodTo }),
+        ...(sortBy && { ordering: sortDir === "desc" ? `-${sortBy}` : sortBy }),
       }),
     enabled: canView,
     placeholderData: (prev) => prev,
@@ -85,7 +90,7 @@ export default function RatesPage() {
   // сбрасывай страницу при смене периода
   useEffect(() => {
     setPage(1);
-  }, [periodFrom, periodTo]);
+  }, [periodFrom, periodTo, sortBy, sortDir]);
 
   const mutation = useMutation({
     mutationFn: () =>
@@ -201,6 +206,12 @@ export default function RatesPage() {
               localStorage.setItem("table:exchange_rates:pageSize", String(size));
             } catch {}
           },
+          sortBy,
+          sortDir,
+          onSortChange: (key, direction) => {
+            setSortBy(key);
+            setSortDir(direction);
+          },
         }}
         onFetchAllData={async () => {
           const res = await accountApi.getExchangeRates({
@@ -208,6 +219,7 @@ export default function RatesPage() {
             page_size: 10000,
             ...(periodFrom && { date_from: periodFrom }),
             ...(periodTo && { date_to: periodTo }),
+            ...(sortBy && { ordering: sortDir === "desc" ? `-${sortBy}` : sortBy }),
           });
           return res.results ?? [];
         }}

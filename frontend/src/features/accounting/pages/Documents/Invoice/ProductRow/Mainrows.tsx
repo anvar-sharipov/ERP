@@ -2,7 +2,7 @@
 import { useRef, useCallback, forwardRef, useImperativeHandle } from "react";
 import { useTranslation } from "react-i18next";
 import { Trash2 } from "lucide-react";
-import { type ItemRow, type ColumnDef, colVisibilityClass } from "../Interface";
+import { type ItemRow, type ColumnDef, colVisibilityClass, printSize } from "../Interface";
 
 const inputCell =
   "w-full px-2 py-1 text-sm border border-gray-300 dark:border-slate-600 hover:border-indigo-400 dark:hover:border-indigo-500 " +
@@ -19,9 +19,10 @@ interface MainRowsProps {
   onFocusAddSelect: () => void;
   columns: ColumnDef[];
   stockMap?: Map<number, { quantity: number; reserved: number; available: number }>;
-  selectedKey: string | null;
-  onSelectRow: (key: string) => void;
+  selectedCell: { key: string; colIndex: number } | null;
+  onSelectCell: (key: string, colIndex: number) => void;
   onPreviewImage: (productId: number | null) => void;
+  viewMode?: boolean;
 }
 
 export interface MainRowsHandle {
@@ -73,6 +74,7 @@ const CellContent = ({
   onPriceKeyDown,
   stockMap,
   onPreviewImage,
+  viewMode,
 }: {
   col: ColumnDef;
   row: ItemRow;
@@ -94,6 +96,7 @@ const CellContent = ({
     }
   >;
   onPreviewImage: (productId: number | null) => void;
+  viewMode?: boolean;
 }) => {
   const { t } = useTranslation();
 
@@ -129,9 +132,9 @@ const CellContent = ({
 
       return (
         <div>
-          <span className="text-lg print:text-xl font-medium">{row.product_name}</span>
+          <span className={`${viewMode ? "text-xl" : "text-lg print:text-xl"} font-medium`}>{row.product_name}</span>
           {stock != null && (
-            <div className="print:hidden flex items-center gap-1.5 text-[10px] mt-0.5 text-gray-400">
+            <div className={`flex items-center gap-1.5 text-[10px] mt-0.5 text-gray-400 ${printSize(viewMode, "print:hidden")}`}>
               <span>
                 {t("InStock")}: {fmt3(stock.quantity)}
               </span>
@@ -148,7 +151,7 @@ const CellContent = ({
 
     case "quantity":
       return isPosted ? (
-        <span className="block text-right text-base print:text-xl">{row.quantity}</span>
+        <span className={`block text-right ${viewMode ? "text-xl" : "text-base print:text-xl"}`}>{row.quantity}</span>
       ) : (
         <>
           <input
@@ -167,7 +170,7 @@ const CellContent = ({
 
     case "cost_price":
       return isPosted ? (
-        <span className="block text-right font-mono print:text-xl">{fmt(parseFloat(row.cost_price) || 0)}</span>
+        <span className={`block text-right font-mono ${printSize(viewMode, "print:text-xl")}`}>{fmt(parseFloat(row.cost_price) || 0)}</span>
       ) : (
         <>
           <input type="number" value={row.cost_price} min="0" step="0.01" onChange={(e) => updateItem(row._key, "cost_price", e.target.value)} className={`${inputCell} print:hidden`} />
@@ -177,7 +180,7 @@ const CellContent = ({
 
     case "price":
       return isPosted ? (
-        <span className="block text-right font-mono text-base print:text-xl font-semibold">{fmt(parseFloat(row.price) || 0)}</span>
+        <span className={`block text-right font-mono font-semibold ${viewMode ? "text-xl" : "text-base print:text-xl"}`}>{fmt(parseFloat(row.price) || 0)}</span>
       ) : (
         <>
           <input
@@ -196,7 +199,7 @@ const CellContent = ({
 
     case "discount_percent":
       return isPosted ? (
-        <span className="block text-right print:text-xl">{row.discount_percent}</span>
+        <span className={`block text-right ${printSize(viewMode, "print:text-xl")}`}>{row.discount_percent}</span>
       ) : (
         <>
           <input
@@ -216,10 +219,10 @@ const CellContent = ({
       );
 
     case "discount_amount":
-      return <span className="block text-right font-mono print:text-xl text-orange-500 dark:text-orange-400">{fmt(calcDiscountAmount(row))}</span>;
+      return <span className={`block text-right font-mono text-orange-500 dark:text-orange-400 ${printSize(viewMode, "print:text-xl")}`}>{fmt(calcDiscountAmount(row))}</span>;
 
     case "total":
-      return <span className="block text-right font-mono text-base print:text-xl font-semibold">{fmt(lineTotal(row))}</span>;
+      return <span className={`block text-right font-mono font-semibold ${viewMode ? "text-xl" : "text-base print:text-xl"}`}>{fmt(lineTotal(row))}</span>;
 
     case "income": {
       const income = calcIncome(row);
@@ -253,7 +256,7 @@ const CellContent = ({
 
 // ── Основной компонент ────────────────────────────────────────────────────────
 
-const MainRows = forwardRef<MainRowsHandle, MainRowsProps>(({ isPosted, mainItems, lineTotal, updateItem, onQtyChange, onRemove, onFocusAddSelect, columns, stockMap, selectedKey, onSelectRow, onPreviewImage }, ref) => {
+const MainRows = forwardRef<MainRowsHandle, MainRowsProps>(({ isPosted, mainItems, lineTotal, updateItem, onQtyChange, onRemove, onFocusAddSelect, columns, stockMap, selectedCell, onSelectCell, onPreviewImage, viewMode }, ref) => {
   const qtyRefs = useRef<(HTMLInputElement | null)[]>([]);
   const priceRefs = useRef<(HTMLInputElement | null)[]>([]);
 
@@ -326,43 +329,52 @@ const MainRows = forwardRef<MainRowsHandle, MainRowsProps>(({ isPosted, mainItem
         <tr
           key={row._key}
           data-selectable-row
-          onClick={() => onSelectRow(row._key)}
           className={`border-b border-black divide-x divide-black hover:bg-indigo-50/60 dark:hover:bg-slate-700/30 transition-colors
             focus-within:bg-indigo-100/80 dark:focus-within:bg-indigo-900/30 focus-within:ring-2 focus-within:ring-inset focus-within:ring-indigo-400 dark:focus-within:ring-indigo-500
-            print:!bg-transparent print:!ring-0 ${
-            selectedKey === row._key ? "bg-indigo-100/80 dark:bg-indigo-900/30 ring-2 ring-inset ring-indigo-400 dark:ring-indigo-500" : mIdx % 2 === 1 ? "bg-gray-50/70 dark:bg-slate-800/20" : "bg-white dark:bg-transparent"
+            ${printSize(viewMode, "print:!bg-transparent print:!ring-0")} ${
+            selectedCell?.key === row._key ? "bg-indigo-100/80 dark:bg-indigo-900/30 ring-2 ring-inset ring-indigo-400 dark:ring-indigo-500" : mIdx % 2 === 1 ? "bg-gray-50/70 dark:bg-slate-800/20" : "bg-white dark:bg-transparent"
           }`}
         >
-          {columns.map((col) => (
-            <td
-              key={col.key}
-              className={`
-                px-2 py-1 print:px-1 print:py-0.5
-                ${col.align === "right" ? "text-right" : col.align === "center" ? "text-center" : ""}
-                ${colVisibilityClass(col)}
-              `}
-            >
-              <CellContent
-                col={col}
-                row={row}
-                mIdx={mIdx}
-                stockMap={stockMap}
-                isPosted={isPosted}
-                lineTotal={lineTotal}
-                updateItem={updateItem}
-                onQtyChange={onQtyChange}
-                qtyRef={(el) => {
-                  qtyRefs.current[mIdx] = el;
-                }}
-                priceRef={(el) => {
-                  priceRefs.current[mIdx] = el;
-                }}
-                onPreviewImage={onPreviewImage}
-                onQtyKeyDown={(e) => handleQtyKeyDown(e, row._key)}
-                onPriceKeyDown={(e) => handlePriceKeyDown(e, row._key)}
-              />
-            </td>
-          ))}
+          {columns.map((col, colIdx) => {
+            const isCellSelected = selectedCell?.key === row._key && selectedCell?.colIndex === colIdx;
+            return (
+              <td
+                key={col.key}
+                data-row-key={row._key}
+                data-col-idx={colIdx}
+                onClick={() => onSelectCell(row._key, colIdx)}
+                className={`
+                  cursor-pointer
+                  ${viewMode ? "px-1 py-0.5" : "px-2 py-1 print:px-1 print:py-0.5"}
+                  ${col.align === "right" ? "text-right" : col.align === "center" ? "text-center" : ""}
+                  ${colVisibilityClass(col)}
+                  ${printSize(viewMode, "print:!bg-transparent print:!ring-0")}
+                  ${isCellSelected ? "ring-2 ring-inset ring-indigo-600 bg-indigo-200/70 dark:bg-indigo-800/40" : ""}
+                `}
+              >
+                <CellContent
+                  col={col}
+                  row={row}
+                  mIdx={mIdx}
+                  stockMap={stockMap}
+                  isPosted={isPosted}
+                  lineTotal={lineTotal}
+                  updateItem={updateItem}
+                  onQtyChange={onQtyChange}
+                  qtyRef={(el) => {
+                    qtyRefs.current[mIdx] = el;
+                  }}
+                  priceRef={(el) => {
+                    priceRefs.current[mIdx] = el;
+                  }}
+                  onPreviewImage={onPreviewImage}
+                  onQtyKeyDown={(e) => handleQtyKeyDown(e, row._key)}
+                  onPriceKeyDown={(e) => handlePriceKeyDown(e, row._key)}
+                  viewMode={viewMode}
+                />
+              </td>
+            );
+          })}
 
           {!isPosted && (
             <td className="px-1 py-1 print:hidden">

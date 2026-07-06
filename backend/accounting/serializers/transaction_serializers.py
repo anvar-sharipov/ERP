@@ -94,6 +94,7 @@ class JournalEntrySerializer(serializers.ModelSerializer):
     lines = TransactionLineSerializer(many=True)
     # branch_name = serializers.CharField(source='branch.name', read_only=True)
     branch_name = serializers.CharField(source='branch.name', read_only=True, default=None)
+    warehouse_name = serializers.CharField(source='warehouse.name', read_only=True, default=None)
 
     # Read-only поля для отображения
     created_by_name = serializers.CharField(
@@ -102,6 +103,13 @@ class JournalEntrySerializer(serializers.ModelSerializer):
     status_display = serializers.CharField(
         source='get_status_display', read_only=True
     )
+    # ✅ Ручная проводка (создана вручную через журнал) vs проводка, сгенерированная
+    # документом (Document.post() → _generate_out_posting/_generate_in_posting и т.д.) —
+    # см. is_manual в JournalEntryListSerializer ниже и UI-фильтр в JournalPage.tsx.
+    is_manual = serializers.SerializerMethodField()
+
+    def get_is_manual(self, obj):
+        return obj.source_document_id is None
 
     class Meta:
         model  = JournalEntry
@@ -109,7 +117,8 @@ class JournalEntrySerializer(serializers.ModelSerializer):
             'id', 'number', 'date', 'status', 'status_display',
             'description', 'lines',
             'branch', 'branch_name',
-            'source_document_type', 'source_document_id',
+            'warehouse', 'warehouse_name',
+            'source_document_type', 'source_document_id', 'is_manual',
             'created_by', 'created_by_name', 'created_at',
         ]
         read_only_fields = ['status', 'created_by', 'created_at', 'number']
@@ -170,6 +179,14 @@ class JournalEntrySerializer(serializers.ModelSerializer):
 
     @transaction.atomic
     def update(self, instance, validated_data):
+        # ✅ Проводки, сгенерированные документом, редактируются только через сам
+        # документ (см. CLAUDE.md/обсуждение: изменение document-проводок из журнала
+        # запрещено) — иначе журнал и документ разойдутся (документ думает, что он
+        # всё ещё проведён с определённой суммой, а проводка под ним уже другая).
+        if instance.source_document_id:
+            raise serializers.ValidationError(
+                "Эта проводка создана документом — редактируйте сам документ, а не проводку в журнале."
+            )
         if instance.status == JournalEntry.Status.POSTED:
             raise serializers.ValidationError(
                 "Нельзя редактировать проведённую операцию. Сначала отмените проведение."
@@ -200,9 +217,14 @@ class JournalEntrySerializer(serializers.ModelSerializer):
         TransactionLine.objects.bulk_create(lines)
 
     def validate_date(self, value):
-        # При создании и редактировании проверяем дату
+        # При создании и редактировании проверяем дату — включая жёсткое
+        # последовательное правило по складу (см. check_period_open), поэтому
+        # warehouse нужно взять из сырых входных данных (validate_<field>
+        # вызывается раньше object-level validate(), self.instance/warehouse
+        # ещё не гарантированно установлены).
+        warehouse_id = self.initial_data.get('warehouse') or (self.instance.warehouse_id if self.instance else None)
         try:
-            check_period_open(value)
+            check_period_open(value, warehouse_id=warehouse_id)
         except Exception as e:
             raise serializers.ValidationError(str(e))
         return value
@@ -260,10 +282,16 @@ class JournalEntryListSerializer(serializers.ModelSerializer):
 
         return ", ".join(parts)
 
+    # ✅ Ручная проводка vs сгенерированная документом — см. JournalEntrySerializer.is_manual.
+    is_manual = serializers.SerializerMethodField()
+
+    def get_is_manual(self, obj):
+        return obj.source_document_id is None
+
     class Meta:
         model  = JournalEntry
 
-        
+
         # fields = [
         #     'id', 'number', 'date', 
         #     'debit_accounts', 'debit_subcontos',   # добавить
@@ -294,6 +322,7 @@ class JournalEntryListSerializer(serializers.ModelSerializer):
             'debit_total',
             'created_by_name',
             'created_at',
+            'is_manual',
         ]
 
     def get_debit_total(self, obj):
@@ -302,6 +331,38 @@ class JournalEntryListSerializer(serializers.ModelSerializer):
     
 
     
+    def _get_subconto_type_map(self):
+        # ✅ TransactionLine.subcontos хранится как {slug: pk} (см. Document.
+        # _resolve_account_subcontos) — plain int, а не {"name": ...}. Чтобы вывести
+        # читаемое значение (имя контрагента/товара/склада), нужно по slug узнать
+        # content_type и подтянуть объект. Кэшируем на инстансе сериализатора —
+        # он один на весь list-запрос, так что справочник субконто читается 1 раз.
+        if not hasattr(self, '_subconto_type_map'):
+            from accounting.models.subconto import SubcontoType
+            self._subconto_type_map = {
+                st.slug: st.content_type for st in SubcontoType.objects.select_related('content_type').all()
+            }
+        return self._subconto_type_map
+
+    def _resolve_subconto_label(self, slug, pk):
+        if not hasattr(self, '_subconto_label_cache'):
+            self._subconto_label_cache = {}
+        cache_key = (slug, pk)
+        if cache_key in self._subconto_label_cache:
+            return self._subconto_label_cache[cache_key]
+
+        label = None
+        content_type = self._get_subconto_type_map().get(slug)
+        if content_type is not None:
+            model = content_type.model_class()
+            if model is not None:
+                instance = model.objects.filter(pk=pk).first()
+                if instance is not None:
+                    label = str(instance)
+
+        self._subconto_label_cache[cache_key] = label
+        return label
+
     def _get_subcontos(self, obj, side):
         result = []
 
@@ -312,13 +373,12 @@ class JournalEntryListSerializer(serializers.ModelSerializer):
             if not line.subcontos:
                 continue
 
-            names = [
-                v.get('name')
-                for v in line.subcontos.values()
-                if v and v.get('name')
-            ]
-
-            result.extend(names)
+            for slug, pk in line.subcontos.items():
+                if pk is None:
+                    continue
+                label = self._resolve_subconto_label(slug, pk)
+                if label:
+                    result.append(label)
 
         while len(result) < 3:
             result.append("")

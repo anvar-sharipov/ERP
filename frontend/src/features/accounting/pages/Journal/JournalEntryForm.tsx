@@ -33,10 +33,21 @@ export default function JournalEntryForm({ initial, onSuccess, onCancel }: Props
 
   const workDate = useDateStore((s) => s.workDate);
   const workBranch = useDateStore((s) => s.workBranch);
+  const workWarehouse = useDateStore((s) => s.workWarehouse);
   const { isClosed } = useClosedPeriod();
   // const [date, setDate] = useState(initial?.date?.slice(0, 10) ?? workDate);
 
   // console.log("isClosed", isClosed);
+
+  // ✅ Только просмотр — проводка либо уже проведена (тогда правка возможна
+  // только после отмены проведения), либо сгенерирована документом (тогда правка
+  // вообще запрещена, редактируется только сам документ — см. JournalPage.tsx).
+  // Бэкенд уже блокирует сохранение в обоих случаях (JournalEntrySerializer.update),
+  // но форма должна явно показывать, что это read-only, а не давать печатать в поля,
+  // которые всё равно не сохранятся.
+  const isDocumentEntry = isEdit && initial?.is_manual === false;
+  const isPostedEntry = isEdit && initial?.status === "posted";
+  const isReadOnly = isDocumentEntry || isPostedEntry;
 
   const [description, setDescription] = useState(initial?.description ?? "");
   const [lines, setLines] = useState<Omit<TransactionLine, "id">[]>(
@@ -66,7 +77,7 @@ export default function JournalEntryForm({ initial, onSuccess, onCancel }: Props
     });
   }
 
-  function SubcontoField({ subcontoType, value, onChange }: { subcontoType: any; value: any; onChange: (val: any) => void }) {
+  function SubcontoField({ subcontoType, value, onChange, disabled }: { subcontoType: any; value: any; onChange: (val: any) => void; disabled?: boolean }) {
     const { data: records = [] } = useSubcontoRecords(subcontoType.id);
 
     return (
@@ -78,11 +89,13 @@ export default function JournalEntryForm({ initial, onSuccess, onCancel }: Props
             const record = records.find((r: any) => r.id === Number(e.target.value));
             onChange(record ? { id: record.id, name: record.name } : null);
           }}
+          disabled={disabled}
           className="flex-1 px-2 py-1 rounded border text-xs outline-none
           bg-white dark:bg-slate-950
           text-gray-900 dark:text-indigo-100
           border-gray-300 dark:border-indigo-900/50
-          focus:border-indigo-500 dark:focus:border-indigo-500/50"
+          focus:border-indigo-500 dark:focus:border-indigo-500/50
+          disabled:opacity-60 disabled:cursor-not-allowed"
         >
           <option value="">{t("Select")}</option>
           {records.map((r: any) => (
@@ -110,7 +123,16 @@ export default function JournalEntryForm({ initial, onSuccess, onCancel }: Props
     },
     onError: (err: any) => {
       if (err._handled) return;
-      const detail = err?.response?.data?.lines ?? err?.response?.data?.detail ?? err?.response?.data ?? t("ErrorSaving");
+      // ✅ Ошибка "период закрыт" (validate_date на бэкенде) приходит как
+      // {"date": ["текст"]}, а не {"detail": ...} — без этого фолбэка в тост
+      // улетал бы сырой JSON вместо понятного сообщения (см. CLAUDE.md/просьбу
+      // про читаемые сообщения об ошибках закрытого периода).
+      const detail =
+        err?.response?.data?.lines ??
+        err?.response?.data?.detail ??
+        err?.response?.data?.date?.[0] ??
+        err?.response?.data ??
+        t("ErrorSaving");
       notify("error", typeof detail === "string" ? detail : JSON.stringify(detail));
     },
   });
@@ -157,17 +179,27 @@ export default function JournalEntryForm({ initial, onSuccess, onCancel }: Props
       date: workDate,
       description,
       branch: workBranch?.id ?? null, // ✅ из глобального стора
+      // ✅ Без warehouse строгая проверка "последний закрытый день склада + 1"
+      // (check_period_open) не срабатывала для ручных проводок вообще — warehouse
+      // нигде не передавался. Берём из того же WorkDateWidget, что и документы.
+      warehouse: workWarehouse?.id ?? null,
       lines: lines as TransactionLine[],
     });
   };
 
   return (
     <div className="space-y-4">
+      {isReadOnly && (
+        <div className="px-3 py-2 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 text-sm text-amber-700 dark:text-amber-300">
+          {isDocumentEntry ? t("EntryReadOnlyDocument") : t("EntryReadOnlyPosted")}
+        </div>
+      )}
+
       {/* Шапка */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         {/* <Input label="Дата" type="date" value={date} onChange={(e) => setDate(e.target.value)} /> */}
         <Input label={t("Date")} type="date" value={workDate} disabled />
-        <Input label={t("Description")} value={description} onChange={(e) => setDescription(e.target.value)} />
+        <Input label={t("Description")} value={description} onChange={(e) => setDescription(e.target.value)} disabled={isReadOnly} />
       </div>
 
       {/* Таблица строк */}
@@ -195,7 +227,8 @@ export default function JournalEntryForm({ initial, onSuccess, onCancel }: Props
                       <select
                         value={line.side}
                         onChange={(e) => setLine(idx, { side: e.target.value as TransactionSide, subcontos: {} })}
-                        className="w-full px-2 py-1 rounded-lg border text-sm outline-none bg-white dark:bg-slate-950 text-gray-900 dark:text-indigo-100 border-gray-300 dark:border-indigo-900/50 focus:border-indigo-500 dark:focus:border-indigo-500/50"
+                        disabled={isReadOnly}
+                        className="w-full px-2 py-1 rounded-lg border text-sm outline-none bg-white dark:bg-slate-950 text-gray-900 dark:text-indigo-100 border-gray-300 dark:border-indigo-900/50 focus:border-indigo-500 dark:focus:border-indigo-500/50 disabled:opacity-60 disabled:cursor-not-allowed"
                       >
                         <option value="debit">{t("Debit")}</option>
                         <option value="credit">{t("Credit")}</option>
@@ -212,7 +245,8 @@ export default function JournalEntryForm({ initial, onSuccess, onCancel }: Props
                             subcontos: {}, // сбрасываем субконто при смене счёта
                           })
                         }
-                        className="w-full px-2 py-1 rounded-lg border text-sm outline-none bg-white dark:bg-slate-950 text-gray-900 dark:text-indigo-100 border-gray-300 dark:border-indigo-900/50 focus:border-indigo-500 dark:focus:border-indigo-500/50"
+                        disabled={isReadOnly}
+                        className="w-full px-2 py-1 rounded-lg border text-sm outline-none bg-white dark:bg-slate-950 text-gray-900 dark:text-indigo-100 border-gray-300 dark:border-indigo-900/50 focus:border-indigo-500 dark:focus:border-indigo-500/50 disabled:opacity-60 disabled:cursor-not-allowed"
                       >
                         <option value="">{t("SelectAccount")}</option>
                         {(accounts as any[])
@@ -233,12 +267,13 @@ export default function JournalEntryForm({ initial, onSuccess, onCancel }: Props
                         min="0"
                         value={line.amount}
                         onChange={(e) => setLine(idx, { amount: e.target.value })}
-                        className="w-full px-2 py-1 rounded-lg border text-sm text-right outline-none bg-white dark:bg-slate-950 text-gray-900 dark:text-indigo-100 border-gray-300 dark:border-indigo-900/50 focus:border-indigo-500 dark:focus:border-indigo-500/50"
+                        disabled={isReadOnly}
+                        className="w-full px-2 py-1 rounded-lg border text-sm text-right outline-none bg-white dark:bg-slate-950 text-gray-900 dark:text-indigo-100 border-gray-300 dark:border-indigo-900/50 focus:border-indigo-500 dark:focus:border-indigo-500/50 disabled:opacity-60 disabled:cursor-not-allowed"
                       />
                     </td>
 
                     <td className="px-2 py-1.5 text-center">
-                      {lines.length > 2 && (
+                      {lines.length > 2 && !isReadOnly && (
                         <button onClick={() => removeLine(idx)} className="text-gray-400 hover:text-red-500 transition-colors text-xs">
                           ✕
                         </button>
@@ -267,6 +302,7 @@ export default function JournalEntryForm({ initial, onSuccess, onCancel }: Props
                                     },
                                   })
                                 }
+                                disabled={isReadOnly}
                               />
                             ))}
                         </div>
@@ -282,14 +318,16 @@ export default function JournalEntryForm({ initial, onSuccess, onCancel }: Props
       </div>
 
       {/* Добавить строку */}
-      <div className="flex gap-3">
-        <button onClick={() => addLine("debit")} className="text-xs text-blue-600 dark:text-blue-400 hover:underline">
-          + {t("AddDebitLine")}
-        </button>
-        <button onClick={() => addLine("credit")} className="text-xs text-red-500 dark:text-red-400 hover:underline">
-          + {t("AddCreditLine")}
-        </button>
-      </div>
+      {!isReadOnly && (
+        <div className="flex gap-3">
+          <button onClick={() => addLine("debit")} className="text-xs text-blue-600 dark:text-blue-400 hover:underline">
+            + {t("AddDebitLine")}
+          </button>
+          <button onClick={() => addLine("credit")} className="text-xs text-red-500 dark:text-red-400 hover:underline">
+            + {t("AddCreditLine")}
+          </button>
+        </div>
+      )}
 
       {/* Сводка баланса */}
       <div className="flex items-center gap-6 text-sm px-4 py-3 rounded-lg bg-gray-50 dark:bg-slate-900/60 border dark:border-gray-700/50">
@@ -306,7 +344,9 @@ export default function JournalEntryForm({ initial, onSuccess, onCancel }: Props
       <div className="flex justify-end gap-2 pt-1">
         <Button text={t("Cancel")} onClick={onCancel} variant="ghost" />
         {/* <Button text={isEdit ? t("Save") : t("Create")} onClick={handleSubmit} disabled={!balanced || mutation.isPending} /> */}
-        <Button text={isEdit ? t("Save") : t("Create")} onClick={handleSubmit} disabled={!balanced || mutation.isPending || isClosed} title={isClosed ? t("DayClosedMessage") : undefined} />
+        {!isReadOnly && (
+          <Button text={isEdit ? t("Save") : t("Create")} onClick={handleSubmit} disabled={!balanced || mutation.isPending || isClosed} title={isClosed ? t("DayClosedMessage") : undefined} />
+        )}
       </div>
     </div>
   );

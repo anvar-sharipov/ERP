@@ -1,7 +1,8 @@
 // frontend/src/features/accounting/pages/Products/ProductsListPage.tsx
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { productApi, productCategoryApi, priceTypeApi, productPriceApi } from "../../services/productApi";
+import { productApi, productCategoryApi, priceTypeApi, productPriceApi, brandApi } from "../../services/productApi";
+import { accountApi } from "../../services/accountingApi";
 import { useDateStore } from "../../../../core/store/dateStore";
 import { useNotify } from "../../../../core/context/NotificationContext";
 import { usePageAccess } from "../../../../core/hooks/usePageAccess";
@@ -11,6 +12,8 @@ import { Button } from "../../../../components/ui/Button";
 import { ConfirmModal } from "../../../../components/ui/Modal/ConfirmModal";
 import { RBACGuard } from "../../../../components/ui/RBACGuard";
 import { StatusBadge } from "../../../../components/ui/StatusBadge";
+import { ImagePreview } from "../../../../components/ui/ImagePreview";
+import SearchableSelect from "../../../../components/ui/SearchableSelect";
 import { Plus } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
@@ -36,21 +39,74 @@ const ProductsListPage = () => {
   const [deleteModal, setDeleteModal] = useState(false);
   const [deleteId, setDeleteId] = useState<number | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [previewGallery, setPreviewGallery] = useState<string[]>([]);
+  const [previewIndex, setPreviewIndex] = useState(0);
   const [categoryFilter, setCategoryFilter] = useState<number | null>(null);
+  const [brandFilter, setBrandFilter] = useState<number | null>(null);
   const [activeFilter, setActiveFilter] = useState<"all" | "active" | "inactive">("all");
-  const { workBranch, workWarehouse } = useDateStore();
+  const { workBranch, workWarehouse, periodFrom, periodTo } = useDateStore();
+
+  const goToTurnover = (item: any) => {
+    if (!periodFrom || !periodTo) {
+      notify("error", t("SpecifyPeriod"));
+      return;
+    }
+    const params = new URLSearchParams({
+      date_from: periodFrom,
+      date_to: periodTo,
+      from: "products",
+      ...(workWarehouse?.id ? { warehouse: String(workWarehouse.id) } : workBranch?.id ? { branch: String(workBranch.id) } : {}),
+    });
+    navigate(`${ROUTES.APP.ACCOUNTING_PRODUCT_TURNOVER_DETAIL.replace(":id", String(item.id))}?${params.toString()}`);
+  };
 
   // ── запросы ─────────────────────────────────────────────────────────────────
 
-  const { data: priceTypes = [] } = useQuery({
+  const { data: priceTypes = [], isLoading: isLoadingPriceTypes } = useQuery({
     queryKey: ["price-types"],
     queryFn: priceTypeApi.getAll,
   });
 
-  const { data: pricesMap = {} } = useQuery({
+  // ✅ Мини-таблица оборота в колонке списка — один общий запрос на весь список
+  // (тот же product_turnover, что и ProductTurnoverPage.tsx), а не по запросу на
+  // товар, иначе было бы N+1. Реагирует на branch/warehouse/период из WorkDateWidget,
+  // как и любой другой отчёт (см. CLAUDE.md).
+  const turnoverEnabled = !!periodFrom && !!periodTo;
+  const { data: turnoverRows = [] } = useQuery({
+    queryKey: ["products-turnover-map", periodFrom, periodTo, workWarehouse?.id, workBranch?.id],
+    queryFn: () =>
+      accountApi.getProductTurnover({
+        date_from: periodFrom!,
+        date_to: periodTo!,
+        ...(workWarehouse?.id ? { warehouse: String(workWarehouse.id) } : workBranch?.id ? { branch: String(workBranch.id) } : {}),
+      }),
+    enabled: turnoverEnabled,
+  });
+
+  const turnoverMap = useMemo(() => {
+    const map: Record<number, any> = {};
+    for (const row of turnoverRows as any[]) map[row.id] = row;
+    return map;
+  }, [turnoverRows]);
+
+  const pricesMapEnabled = !!(workWarehouse?.id || workBranch?.id);
+  const { data: pricesMap = {}, isLoading: isLoadingPricesMap } = useQuery({
     queryKey: ["products-prices-map", workWarehouse?.id, workBranch?.id],
     queryFn: () => productPriceApi.getPricesMap(workWarehouse?.id ? { warehouse: workWarehouse.id } : workBranch?.id ? { branch: workBranch.id } : {}),
-    enabled: !!(workWarehouse?.id || workBranch?.id),
+    enabled: pricesMapEnabled,
+  });
+
+  // ✅ Остаток на складе для колонки Name — один bulk-запрос (backend сам сводит
+  // склад/филиал/весь scope компании, см. report_views.py::stock_balance +
+  // _resolve_warehouse_ids), поэтому enabled всегда true, в отличие от pricesMap
+  // (там при пустом выборе просто нет цены, а остаток обязан показываться всегда —
+  // см. CLAUDE.md про branch/warehouse/scope fallback для отчётов).
+  const { data: stockBalance = {}, isLoading: isLoadingStock } = useQuery({
+    queryKey: ["products-stock-balance", workWarehouse?.id, workBranch?.id],
+    queryFn: () =>
+      accountApi.getStockBalance({
+        ...(workWarehouse?.id ? { warehouse: String(workWarehouse.id) } : workBranch?.id ? { branch: String(workBranch.id) } : {}),
+      }),
   });
 
   const {
@@ -64,7 +120,14 @@ const ProductsListPage = () => {
     retry: false,
   });
 
-  const { data: categories = [] } = useQuery({ queryKey: ["product-categories"], queryFn: productCategoryApi.getAll });
+  const { data: categories = [], isLoading: isLoadingCategories } = useQuery({ queryKey: ["product-categories"], queryFn: productCategoryApi.getAll });
+  const { data: brands = [], isLoading: isLoadingBrands } = useQuery({ queryKey: ["brands"], queryFn: brandApi.getAll });
+
+  // ✅ Прогресс загрузки страницы — доля уже завершённых запросов из тех, что реально
+  // задействованы (pricesMap считается только если выбран филиал/склад) — не фейковая
+  // анимация, а честная доля выполненного, см. CLAUDE.md про Loader.
+  const loadingSteps = [!isLoading, !isLoadingCategories, !isLoadingBrands, !isLoadingPriceTypes, !isLoadingStock, ...(pricesMapEnabled ? [!isLoadingPricesMap] : [])];
+  const loadingProgress = Math.round((loadingSteps.filter(Boolean).length / loadingSteps.length) * 100);
 
   const deleteMutation = useMutation({
     mutationFn: (id: number) => productApi.delete(id),
@@ -78,6 +141,19 @@ const ProductsListPage = () => {
       notify("error", t("ErrorDeleting"));
     },
   });
+
+  // ✅ Массовое удаление через чекбоксы в Table.tsx — один запрос на бэкенд
+  // (accounting/mixins.py::BulkDestroyMixin), каждая запись аудируется отдельно
+  // там же, где и обычное удаление (см. CLAUDE.md).
+  const handleBulkDelete = async (ids: (string | number)[]) => {
+    const res = await productApi.bulkDelete(ids);
+    queryClient.invalidateQueries({ queryKey: ["products"] });
+    if (res.errors.length > 0) {
+      notify("error", t("BulkDeletePartialError", { deleted: res.deleted_ids.length, failed: res.errors.length }));
+    } else {
+      notify("success", t("SuccessDeleted"));
+    }
+  };
 
   // ── сайдбар ──────────────────────────────────────────────────────────────────
 
@@ -106,25 +182,38 @@ const ProductsListPage = () => {
         </div>
         {categories.length > 0 && (
           <div className="pt-4 border-t border-indigo-900/30">
-            <h4 className="font-bold text-indigo-300 mb-2">Категория</h4>
-            <div className="flex flex-col gap-1">
-              <Button text={t("All")} variant="ghost" dark={true} isActive={categoryFilter === null} className="w-full justify-start" onClick={() => setCategoryFilter(null)} />
-              {(categories as any[]).map((c) => (
-                <Button key={c.id} text={c.name} variant="ghost" dark={true} isActive={categoryFilter === c.id} className="w-full justify-start" onClick={() => setCategoryFilter(c.id)} />
-              ))}
-            </div>
+            <h4 className="font-bold text-indigo-300 mb-2">{t("Category")}</h4>
+            <SearchableSelect
+              theme="sidebar"
+              options={(categories as any[]).map((c) => ({ id: c.id, label: c.name }))}
+              value={categoryFilter}
+              onChange={setCategoryFilter}
+              placeholder={t("AllCategories")}
+            />
+          </div>
+        )}
+        {brands.length > 0 && (
+          <div className="pt-4 border-t border-indigo-900/30">
+            <h4 className="font-bold text-indigo-300 mb-2">{t("Brand")}</h4>
+            <SearchableSelect
+              theme="sidebar"
+              options={(brands as any[]).map((b) => ({ id: b.id, label: b.name }))}
+              value={brandFilter}
+              onChange={setBrandFilter}
+              placeholder={t("AllBrands")}
+            />
           </div>
         )}
       </div>,
     );
-  }, [setSidebarContent, canPost, activeFilter, categoryFilter, categories, t]);
+  }, [setSidebarContent, canPost, activeFilter, categoryFilter, categories, brandFilter, brands, t]);
 
   // ── фильтрация ───────────────────────────────────────────────────────────────
 
   const filtered = useTableFilter(products as any[], {
     search: searchQuery,
     searchFields: ["name", "sku", "barcode"],
-    filterKey: `${activeFilter}:${categoryFilter}`,
+    filterKey: `${activeFilter}:${categoryFilter}:${brandFilter}`,
     filters: [
       (p) => {
         if (activeFilter === "active") return p.is_active;
@@ -132,6 +221,7 @@ const ProductsListPage = () => {
         return true;
       },
       (p) => categoryFilter === null || p.category === categoryFilter,
+      (p) => brandFilter === null || p.brand === brandFilter,
     ],
   });
 
@@ -144,32 +234,176 @@ const ProductsListPage = () => {
     },
   });
 
-  const priceColumns: Column<any>[] = (priceTypes as any[]).map((pt) => ({
-    header: pt.name,
-    sortable: true,
-    excelWidth: 12,
-    sortValue: (item: any) => pricesMap[item.id]?.[pt.id] ?? -1,
-    render: (item: any) => {
-      const price = pricesMap[item.id]?.[pt.id];
-      return <span className="font-medium">{price !== undefined ? Number(price).toLocaleString() : <span className="text-gray-300">—</span>}</span>;
-    },
-    excelValue: (item: any) => pricesMap[item.id]?.[pt.id] ?? "",
-  }));
-
   const columns: Column<any>[] = [
     { header: t("ID"), accessor: "id", sortable: true, excelWidth: 5 },
-    { header: t("Name"), accessor: "name", sortable: true, excelWidth: 30 },
-    { header: "Артикул", accessor: "sku", sortable: true, excelWidth: 15 },
     {
-      header: "Категория",
-      sortable: true,
-      excelWidth: 18,
-      sortValue: (item) => item.category_detail?.name ?? "",
-      render: (item) => <span className="text-sm text-gray-500">{item.category_detail?.name ?? "—"}</span>,
-      excelValue: (item) => item.category_detail?.name ?? "—",
+      header: t("Photo"),
+      excelWidth: 14,
+      excelImageUrl: (item) => item.main_image?.thumbnail_url || null,
+      render: (item) => (
+        <div className="flex justify-center">
+          {item.main_image?.thumbnail_url ? (
+            <img
+              src={item.main_image.thumbnail_url}
+              alt={item.name}
+              className="w-20 h-20 rounded object-cover cursor-zoom-in"
+              onClick={(e) => {
+                e.stopPropagation();
+                const gallery = [...(item.images ?? [])].sort((a: any, b: any) => a.sort_order - b.sort_order);
+                const idx = Math.max(0, gallery.findIndex((img: any) => img.id === item.main_image?.id));
+                setPreviewGallery(gallery.map((img: any) => img.image_url ?? img.thumbnail_url));
+                setPreviewIndex(idx);
+              }}
+            />
+          ) : (
+            <div className="w-20 h-20 rounded bg-gray-200 dark:bg-slate-700" />
+          )}
+        </div>
+      ),
     },
     {
-      header: "Бренд",
+      header: t("Name"),
+      accessor: "name",
+      sortable: true,
+      excelWidth: 42,
+      excelWrapText: true,
+      // ✅ Категория, цены (по всем price type) и остаток на складе — вместе с
+      // названием, единой карточкой, вместо отдельных Категория/Цена*/Ед.изм
+      // колонок. excelValue/print получают тот же текст, чтобы экран/печать/Excel
+      // не расходились (см. CLAUDE.md).
+      render: (item) => {
+        const stock = stockBalance[item.id];
+        const unit = item.unit_detail?.short_name ?? "";
+        const qty = Number(stock?.quantity ?? 0);
+        const reserved = Number(stock?.reserved ?? 0);
+        const available = stock ? Number(stock.available) : 0;
+        const priceChips = (priceTypes as any[])
+          .map((pt) => ({ name: pt.name, price: pricesMap[item.id]?.[pt.id] }))
+          .filter((p) => p.price !== undefined);
+        return (
+          <div className="flex flex-col gap-1.5 py-1">
+            <span className="font-semibold text-base md:text-lg">{item.name}</span>
+            <div className="flex flex-wrap gap-1.5">
+              {item.category_detail && (
+                <span className="px-2 py-1 rounded text-xs md:text-sm font-medium bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300">
+                  {item.category_detail.name}
+                </span>
+              )}
+              <span className="px-2 py-1 rounded text-xs md:text-sm font-medium bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-300">
+                {t("Incoming")}: {Number(item.cost_price).toLocaleString("ru-RU")}
+              </span>
+              {priceChips.map((p) => (
+                <span key={p.name} className="px-2 py-1 rounded text-xs md:text-sm font-medium bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">
+                  {p.name}: {Number(p.price).toLocaleString("ru-RU")}
+                </span>
+              ))}
+            </div>
+            <div className="flex flex-row flex-wrap gap-1.5">
+              <span className="px-2 py-1 rounded text-xs md:text-sm font-medium bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">
+                {t("Stock")}: {qty.toLocaleString("ru-RU")} {unit}
+              </span>
+              {reserved > 0 && (
+                <span className="px-2 py-1 rounded text-xs md:text-sm font-medium bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300">
+                  {t("Reserved")}: {reserved.toLocaleString("ru-RU")} {unit}
+                </span>
+              )}
+              <span
+                className={`px-2 py-1 rounded text-xs md:text-sm font-medium ${
+                  available <= 0
+                    ? "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300"
+                    : "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300"
+                }`}
+              >
+                {t("Available")}: {available.toLocaleString("ru-RU")} {unit}
+              </span>
+            </div>
+          </div>
+        );
+      },
+      excelValue: (item) => {
+        const stock = stockBalance[item.id];
+        const unit = item.unit_detail?.short_name ?? "";
+        const qty = Number(stock?.quantity ?? 0);
+        const reserved = Number(stock?.reserved ?? 0);
+        const available = stock ? Number(stock.available) : 0;
+        const priceParts = (priceTypes as any[])
+          .map((pt) => ({ name: pt.name, price: pricesMap[item.id]?.[pt.id] }))
+          .filter((p) => p.price !== undefined)
+          .map((p) => `${p.name}: ${Number(p.price).toLocaleString("ru-RU")}`);
+        const lines = [
+          item.name,
+          item.category_detail?.name ? `${t("Category")}: ${item.category_detail.name}` : null,
+          `${t("Incoming")}: ${Number(item.cost_price).toLocaleString("ru-RU")}`,
+          ...priceParts,
+          `${t("Stock")}: ${qty.toLocaleString("ru-RU")} ${unit}`,
+          reserved > 0 ? `${t("Reserved")}: ${reserved.toLocaleString("ru-RU")} ${unit}` : null,
+          `${t("Available")}: ${available.toLocaleString("ru-RU")} ${unit}`,
+        ].filter(Boolean);
+        return lines.join("\n");
+      },
+    },
+    {
+      header: t("Turnovers"),
+      hideInPrint: true,
+      render: (item) => {
+        if (!turnoverEnabled) {
+          return <span className="text-xs md:text-sm text-gray-400">{t("SpecifyPeriod")}</span>;
+        }
+        const row = turnoverMap[item.id];
+        const openQty = Number(row?.opening_qty ?? 0);
+        const openSum = Number(row?.opening_value ?? 0);
+        const moveQty = Number(row?.move_qty ?? 0);
+        const moveSum = Number(row?.move_value ?? 0);
+        const inQty = Number(row?.in_qty ?? 0) + Number(row?.return_in_qty ?? 0) + Math.max(moveQty, 0);
+        const inSum = Number(row?.in_value ?? 0) + Number(row?.return_in_value ?? 0) + Math.max(moveSum, 0);
+        const outQty = Number(row?.out_qty ?? 0) + Number(row?.return_out_qty ?? 0) + Math.max(-moveQty, 0);
+        const outSum = Number(row?.out_after_discount ?? 0) + Number(row?.return_out_value ?? 0) + Math.max(-moveSum, 0);
+        const closeQty = row ? Number(row.closing_qty) : openQty;
+        const closeSum = row ? Number(row.closing_value) : openSum;
+        const fmt = (v: number) => v.toLocaleString("ru-RU", { maximumFractionDigits: 2 });
+        const groups = [
+          { label: t("Opening"), qty: openQty, sum: openSum },
+          { label: t("Incoming"), qty: inQty, sum: inSum },
+          { label: t("Outgoing"), qty: outQty, sum: outSum },
+          { label: t("Closing"), qty: closeQty, sum: closeSum },
+        ];
+        return (
+          <table className="border-collapse text-xs md:text-sm leading-tight">
+            <thead>
+              <tr>
+                <th className="border border-gray-300 dark:border-slate-600 px-2 py-1" />
+                {groups.map((g) => (
+                  <th key={g.label} className="border border-gray-300 dark:border-slate-600 px-2 py-1 font-semibold whitespace-nowrap">
+                    {g.label}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td className="border border-gray-300 dark:border-slate-600 px-2 py-1 text-gray-500 whitespace-nowrap">{t("QtyShort")}</td>
+                {groups.map((g) => (
+                  <td key={g.label} className="border border-gray-300 dark:border-slate-600 px-2 py-1 text-center font-medium">
+                    {fmt(g.qty)}
+                  </td>
+                ))}
+              </tr>
+              <tr>
+                <td className="border border-gray-300 dark:border-slate-600 px-2 py-1 text-gray-500 whitespace-nowrap">{t("SumShort")}</td>
+                {groups.map((g) => (
+                  <td key={g.label} className="border border-gray-300 dark:border-slate-600 px-2 py-1 text-center font-medium">
+                    {fmt(g.sum)}
+                  </td>
+                ))}
+              </tr>
+            </tbody>
+          </table>
+        );
+      },
+    },
+    { header: t("SKU"), accessor: "sku", sortable: true, excelWidth: 15 },
+    {
+      header: t("Brand"),
       sortable: true,
       excelWidth: 15,
       sortValue: (item) => item.brand_detail?.name ?? "",
@@ -177,36 +411,13 @@ const ProductsListPage = () => {
       excelValue: (item) => item.brand_detail?.name ?? "—",
     },
     {
-      header: "Ед.изм",
+      header: t("Unit"),
       sortable: true,
       excelWidth: 8,
       sortValue: (item) => item.unit_detail?.short_name ?? "",
       render: (item) => <span className="text-sm">{item.unit_detail?.short_name ?? "—"}</span>,
       excelValue: (item) => item.unit_detail?.short_name ?? "—",
     },
-    ...priceColumns,
-    {
-      header: "Цена Приход.",
-      sortable: true,
-      accessor: "cost_price",
-      excelWidth: 10,
-    },
-    // {
-    //   header: "Цена розн.",
-    //   sortable: true,
-    //   excelWidth: 12,
-    //   sortValue: (item) => Number(item.price_retail),
-    //   render: (item) => <span className="font-medium">{Number(item.price_retail).toLocaleString()}</span>,
-    //   excelValue: (item) => item.price_retail,
-    // },
-    // {
-    //   header: "Цена опт",
-    //   sortable: true,
-    //   excelWidth: 12,
-    //   sortValue: (item) => Number(item.price_wholesale),
-    //   render: (item) => <span>{Number(item.price_wholesale).toLocaleString()}</span>,
-    //   excelValue: (item) => item.price_wholesale,
-    // },
     {
       header: t("Status"),
       accessor: "is_active",
@@ -225,18 +436,28 @@ const ProductsListPage = () => {
           <Button
             disabled={!canPut}
             variant="1c"
-            icon={<span>✏️</span>}
-            className="md:h-6 md:w-8 md:!p-0"
+            icon={<span className="text-base">✏️</span>}
+            className="md:h-8 md:w-10 md:!p-0"
             onClick={(e) => {
               e.stopPropagation();
               navigate(ROUTES.APP.PRODUCTS_EDIT.replace(":id", String(item.id)));
             }}
           />
           <Button
+            variant="1c"
+            icon={<span className="text-base">📊</span>}
+            className="md:h-8 md:w-10 md:!p-0"
+            title={t("ProductTurnover")}
+            onClick={(e) => {
+              e.stopPropagation();
+              goToTurnover(item);
+            }}
+          />
+          <Button
             disabled={!canDelete}
             variant="1c"
-            icon={<span>🗑️</span>}
-            className="md:h-6 md:w-8 md:!p-0"
+            icon={<span className="text-base">🗑️</span>}
+            className="md:h-8 md:w-10 md:!p-0"
             onClick={(e) => {
               e.stopPropagation();
               setDeleteId(item.id);
@@ -253,10 +474,10 @@ const ProductsListPage = () => {
   // ── рендер ───────────────────────────────────────────────────────────────────
 
   return (
-    <RBACGuard isLoading={isLoading} error={error} canView={canView} forbiddenText={t("ForbiddenText")}>
+    <RBACGuard isLoading={isLoading} error={error} canView={canView} forbiddenText={t("ForbiddenText")} loadingText={t("LoadingProducts")} loadingProgress={loadingProgress}>
       {!workWarehouse?.id && !workBranch?.id && (
         <div className="mb-2 px-3 py-2 text-sm bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 rounded-lg">
-          Выберите филиал или склад в правой панели, чтобы увидеть цены товаров.
+          {t("SelectBranchOrWarehouseForPrices")}
         </div>
       )}
       <Table
@@ -265,9 +486,11 @@ const ProductsListPage = () => {
         tableId="products_list"
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
-        onRowDoubleClick={(item) => navigate(ROUTES.APP.PRODUCTS_EDIT.replace(":id", String(item.id)))}
+        onRowDoubleClick={(item) => goToTurnover(item)}
         selectedRowId={highlightedId}
         onHighlightConsumed={() => setHighlightedId(null)}
+        selectable
+        onBulkDelete={canDelete ? handleBulkDelete : undefined}
       />
 
       <ConfirmModal
@@ -282,6 +505,13 @@ const ProductsListPage = () => {
             setDeleteModal(false);
           }
         }}
+      />
+
+      <ImagePreview
+        src={previewGallery[previewIndex] ?? null}
+        images={previewGallery}
+        startIndex={previewIndex}
+        onClose={() => setPreviewGallery([])}
       />
     </RBACGuard>
   );

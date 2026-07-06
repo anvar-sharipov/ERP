@@ -1,4 +1,7 @@
-﻿├── .pytest_cache
+﻿├── .claude
+│   ├── scheduled_tasks.lock
+│   └── settings.local.json
+├── .pytest_cache
 │   ├── v
 │   │   └── cache
 │   │       └── nodeids
@@ -31,6 +34,20 @@
 │   │   │   ├── 0009_volumediscount.py
 │   │   │   ├── 0010_alter_warehouse_branch.py
 │   │   │   ├── 0011_remove_productprice_unique_active_product_price_and_more.py
+│   │   │   ├── 0012_currency_exchangerate.py
+│   │   │   ├── 0013_alter_exchangerate_unique_together.py
+│   │   │   ├── 0014_subcontotype_content_type_filter.py
+│   │   │   ├── 0015_journalentry_branch.py
+│   │   │   ├── 0016_employee_counterparty_photo.py
+│   │   │   ├── 0017_quantity_promotion.py
+│   │   │   ├── 0018_documentparticipant_role_freetext.py
+│   │   │   ├── 0019_branch_slogan.py
+│   │   │   ├── 0020_documentsettings.py
+│   │   │   ├── 0021_journalentry_warehouse.py
+│   │   │   ├── 0022_warehouse_cogs_account_warehouse_inventory_account_and_more.py
+│   │   │   ├── 0023_warehouse_payable_account.py
+│   │   │   ├── 0024_alter_transactionline_amount.py
+│   │   │   ├── 0025_warehouse_discount_account.py
 │   │   │   └── __init__.py
 │   │   ├── mixins
 │   │   │   └── audit_mixin.py
@@ -40,6 +57,7 @@
 │   │   │   ├── audit.py
 │   │   │   ├── company.py
 │   │   │   ├── counterparty.py
+│   │   │   ├── currency.py
 │   │   │   ├── directory.py
 │   │   │   ├── document.py
 │   │   │   ├── employee.py
@@ -53,16 +71,25 @@
 │   │   │   ├── account_serializers.py
 │   │   │   ├── audit_serializers.py
 │   │   │   ├── company_serializers.py
+│   │   │   ├── currency_serializers.py
 │   │   │   ├── directory_serializers.py
 │   │   │   ├── document_serializers.py
 │   │   │   ├── employee_serializers.py
 │   │   │   ├── product_serializers.py
 │   │   │   └── transaction_serializers.py
 │   │   ├── tests
+│   │   │   ├── __pycache__
 │   │   │   ├── base.py
 │   │   │   ├── test_audit.py
+│   │   │   ├── test_document_discount_posting.py
+│   │   │   ├── test_document_in_posting.py
+│   │   │   ├── test_document_out_posting.py
+│   │   │   ├── test_document_posting.py
+│   │   │   ├── test_document_return_posting.py
+│   │   │   ├── test_osv.py
 │   │   │   ├── test_rbac_all.py
 │   │   │   ├── test_rbac_branches.py
+│   │   │   ├── test_rbac_document_settings.py
 │   │   │   ├── test_users_permissions.py
 │   │   │   └── __init__.py
 │   │   ├── views
@@ -70,10 +97,12 @@
 │   │   │   ├── account_views.py
 │   │   │   ├── audit_views.py
 │   │   │   ├── company_views.py
+│   │   │   ├── currency_views.py
 │   │   │   ├── directory_views.py
 │   │   │   ├── document_views.py
 │   │   │   ├── employee_views.py
 │   │   │   ├── product_views.py
+│   │   │   ├── report_views.py
 │   │   │   ├── transaction_views.py
 │   │   │   └── __init__.py
 │   │   ├── __pycache__
@@ -90,6 +119,7 @@
 │   │   ├── migrations
 │   │   │   ├── __pycache__
 │   │   │   ├── 0001_initial.py
+│   │   │   ├── 0002_message_attachment.py
 │   │   │   └── __init__.py
 │   │   ├── __pycache__
 │   │   ├── admin.py
@@ -167,6 +197,7 @@
 │   ├── utils
 │   │   ├── ws
 │   │   │   ├── __pycache__
+│   │   │   ├── closed_period_consumer.py
 │   │   │   ├── consumers.py
 │   │   │   ├── jwt_auth_middleware.py
 │   │   │   ├── rbac_consumer.py
@@ -179,15 +210,42 @@
 │   ├── Dockerfile
 │   ├── entrypoint.sh
 │   ├── init_tenant.py
-│   └── manage.py
+│   ├── manage.py
+│   └── structure.txt
 ├── frontend
+│   ├── dist
+│   │   ├── assets
+│   │   │   ├── index-BHilziTs.js
+│   │   │   └── index-EOeZIE0P.css
+│   │   ├── icons
+│   │   ├── sounds
+│   │   │   ├── aside.mp3
+│   │   │   ├── aside2.mp3
+│   │   │   ├── click.mp3
+│   │   │   ├── click2.mp3
+│   │   │   ├── error.mp3
+│   │   │   ├── error3.mp3
+│   │   │   ├── info.mp3
+│   │   │   ├── message-out.mp3
+│   │   │   ├── message-out2.mp3
+│   │   │   ├── modal-open.mp3
+│   │   │   ├── modal-open2.mp3
+│   │   │   ├── modal-open3.mp3
+│   │   │   ├── modal-open4.mp3
+│   │   │   ├── modal-open5.mp3
+│   │   │   ├── success.mp3
+│   │   │   ├── success2.mp3
+│   │   │   ├── success3.mp3
+│   │   │   └── warning.mp3
+│   │   ├── favicon.svg
+│   │   ├── index.html
+│   │   └── logo.jpg
 │   ├── node_modules
 │   ├── public
 │   ├── src
 │   │   ├── assets
 │   │   ├── components
 │   │   │   ├── Icons
-│   │   │   │   └── LeftBarIcons.tsx
 │   │   │   ├── Layouts
 │   │   │   │   ├── AdminHeader.tsx
 │   │   │   │   ├── AdminSidebarLeft.tsx
@@ -240,7 +298,9 @@
 │   │   │       ├── CompanyHeaderInfo.tsx
 │   │   │       ├── EmptyState.tsx
 │   │   │       ├── ErrMsg.tsx
+│   │   │       ├── ExchangeRateWidget.tsx
 │   │   │       ├── Forbidden403Text.tsx
+│   │   │       ├── HelpButton.tsx
 │   │   │       ├── ImagePreview.tsx
 │   │   │       ├── Input.tsx
 │   │   │       ├── LanguageSwitcher.tsx
@@ -266,6 +326,7 @@
 │   │   │   ├── hooks
 │   │   │   │   ├── useAccess.ts
 │   │   │   │   ├── useClosedPeriod.ts
+│   │   │   │   ├── useClosedPeriodSocket.ts
 │   │   │   │   ├── useHotkeys.ts
 │   │   │   │   ├── useInitScope.ts
 │   │   │   │   ├── usePageAccess.ts
@@ -292,6 +353,7 @@
 │   │   │       ├── documentNumber.ts
 │   │   │       ├── excelHelpers.ts
 │   │   │       ├── focusManager.ts
+│   │   │       ├── formatDate.ts
 │   │   │       ├── icons.ts
 │   │   │       ├── media.ts
 │   │   │       ├── slugify.ts
@@ -304,9 +366,9 @@
 │   │   │   │   ├── pages
 │   │   │   │   │   ├── Accounting
 │   │   │   │   │   │   ├── Accounting.tsx
-│   │   │   │   │   │   ├── AccountingLayout.tsx
 │   │   │   │   │   │   ├── AccountPage.tsx
 │   │   │   │   │   │   ├── AuditLogPage.tsx
+│   │   │   │   │   │   ├── exportOSVExcel.ts
 │   │   │   │   │   │   ├── OSVPage.tsx
 │   │   │   │   │   │   └── SubcontoTypesPage.tsx
 │   │   │   │   │   ├── Counterparties
@@ -325,9 +387,11 @@
 │   │   │   │   │   │   │   │   ├── Bundlerows.tsx
 │   │   │   │   │   │   │   │   ├── Mainrows.tsx
 │   │   │   │   │   │   │   │   ├── ProductRow.tsx
+│   │   │   │   │   │   │   │   ├── PromoRows.tsx
 │   │   │   │   │   │   │   │   └── Tablefooter.tsx
 │   │   │   │   │   │   │   ├── ColumnToggleDropdown.tsx
 │   │   │   │   │   │   │   ├── DocumentFormPage.tsx
+│   │   │   │   │   │   │   ├── exportDocumentExcel.ts
 │   │   │   │   │   │   │   ├── HeadDocument.tsx
 │   │   │   │   │   │   │   ├── HeaderPage.tsx
 │   │   │   │   │   │   │   ├── Interface.ts
@@ -343,6 +407,10 @@
 │   │   │   │   │   │   ├── Employees.tsx
 │   │   │   │   │   │   ├── EmployeesPage.tsx
 │   │   │   │   │   │   └── PositionsPage.tsx
+│   │   │   │   │   ├── ExchangeRates
+│   │   │   │   │   │   ├── CurrenciesPage.tsx
+│   │   │   │   │   │   ├── ExchangeRates.tsx
+│   │   │   │   │   │   └── RatesPage.tsx
 │   │   │   │   │   ├── Journal
 │   │   │   │   │   │   ├── Journal.tsx
 │   │   │   │   │   │   ├── JournalEntryForm.tsx
@@ -357,6 +425,7 @@
 │   │   │   │   │   │   │   ├── MainTab.tsx
 │   │   │   │   │   │   │   ├── PricesTab.tsx
 │   │   │   │   │   │   │   ├── ProductFormPage.tsx
+│   │   │   │   │   │   │   ├── PromotionsTab.tsx
 │   │   │   │   │   │   │   └── SpecsTab.tsx
 │   │   │   │   │   │   ├── BrandsPage.tsx
 │   │   │   │   │   │   ├── CategoriesPage.tsx
@@ -378,6 +447,7 @@
 │   │   │   │       ├── counterpartyApi.ts
 │   │   │   │       ├── directoryApi.ts
 │   │   │   │       ├── documentApi.ts
+│   │   │   │       ├── documentSettingsApi.ts
 │   │   │   │       ├── employeeApi.ts
 │   │   │   │       ├── productApi.ts
 │   │   │   │       ├── rolesApi.ts
@@ -428,6 +498,8 @@
 │   │   │       │           │   │   └── Branchs.tsx
 │   │   │       │           │   ├── Company
 │   │   │       │           │   │   └── Company.tsx
+│   │   │       │           │   ├── DocumentSettings
+│   │   │       │           │   │   └── DocumentSettingsPage.tsx
 │   │   │       │           │   ├── AssignRolesModal.tsx
 │   │   │       │           │   ├── CompanyAdminUser.tsx
 │   │   │       │           │   ├── RoleFormPage.tsx
@@ -473,6 +545,7 @@
 ├── .env
 ├── .env.example
 ├── .gitignore
+├── CLAUDE.md
 ├── code.txt
 ├── dnsmasq.conf
 ├── docker-compose.yml

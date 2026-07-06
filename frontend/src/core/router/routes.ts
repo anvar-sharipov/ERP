@@ -36,6 +36,8 @@ export const ROUTES = {
     ACCOUNTING_SUBCONTO_TYPES: '/accounting/subconto-types', // добавить
 
     ACCOUNTING_OSV: '/accounting/osv',
+    ACCOUNTING_PRODUCT_TURNOVER: '/accounting/product-turnover',
+    ACCOUNTING_PRODUCT_TURNOVER_DETAIL: '/accounting/product-turnover/:id',
 
 
     EMPLOYEES: '/employees',
@@ -50,6 +52,7 @@ export const ROUTES = {
     DOCUMENTS_RETURNS: '/documents/returns',
     DOCUMENTS_CREATE: '/documents/create',
     DOCUMENTS_EDIT: '/documents/:id/edit',
+    DOCUMENTS_VIEW: '/documents/:id/view',
 
     CHAT: '/chat',
     EXCHANGE_RATES: '/exchange-rates', 
@@ -65,6 +68,7 @@ export const ROUTES = {
     ROLES_EDIT:   '/admin/roles/:id/edit',
     COMPANIES:  '/admin/companies',
     BRANCHS:    '/admin/branchs',
+    DOCUMENT_SETTINGS: '/admin/document-settings',
   },
   ADMIN: {
     DASHBOARD: '/admin/dashboard',

@@ -3,8 +3,8 @@ import { type ItemRow, type ParticipantRow, type Product } from "./Interface";
 
 
 export const DOC_TYPES = [
-  { value: "in", label: "IncomingInvoice" },
   { value: "out", label: "OutgoingInvoice" },
+  { value: "in", label: "IncomingInvoice" },
   { value: "move", label: "Move" },
   { value: "return_in", label: "ReturnIn" },
   { value: "return_out", label: "ReturnOut" },

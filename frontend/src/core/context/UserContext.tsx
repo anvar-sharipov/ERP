@@ -2,6 +2,7 @@
 import React, { createContext, useContext, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "../api/axiosInstance";
+import { useAuthStore } from "../store/authStore";
 import { useRBACSocket } from "../hooks/useRBACSocket";
 import { useScopeSocket } from "../hooks/useScopeSocket";
 import { useClosedPeriodSocket } from "../hooks/useClosedPeriodSocket";
@@ -14,14 +15,22 @@ interface UserContextType {
 
 const UserContext = createContext<UserContextType | undefined>(undefined);
 
+// ✅ Экспортируется отдельно, чтобы Login.tsx мог дождаться (await) свежих
+// данных пользователя/прав ДО навигации на страницу приложения — см. правку
+// в Login.tsx: "проверить все permissions/scope и только потом открыть
+// страницу" — вместо того чтобы полагаться на то, что useQuery когда-нибудь
+// доедет в фоне уже после того, как страница отрендерилась.
+export const fetchCurrentUser = async () => {
+  const res = await api.get("/users/me/");
+  return res.data;
+};
+
 export const UserProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const { data, isLoading, refetch } = useQuery({
     queryKey: ["user-me"],
-    queryFn: async () => {
-      const res = await api.get("/users/me/");
-      return res.data;
-    },
-    enabled: !!localStorage.getItem("access_token"),
+    queryFn: fetchCurrentUser,
+    enabled: isAuthenticated,
     staleTime: 1000 * 60 * 5,
   });
 

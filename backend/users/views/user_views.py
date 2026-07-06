@@ -163,7 +163,7 @@ class MyScopeView(APIView):
 
         if not scopes.exists():
             warehouses = list(Warehouse.objects.filter(is_active=True).values('id', 'name', 'branch'))
-            branches   = list(Branch.objects.filter(is_active=True).values('id', 'name'))
+            branches   = list(Branch.objects.filter(is_active=True).values('id', 'name', 'slogan'))
             return Response({
                 'is_global':  True,
                 'warehouses': warehouses,
@@ -174,7 +174,7 @@ class MyScopeView(APIView):
         branch_ids    = scopes.filter(branch__isnull=False).values_list('branch_id', flat=True)
 
         warehouses = list(Warehouse.objects.filter(id__in=warehouse_ids).values('id', 'name', 'branch'))
-        branches   = list(Branch.objects.filter(id__in=branch_ids).values('id', 'name'))
+        branches   = list(Branch.objects.filter(id__in=branch_ids).values('id', 'name', 'slogan'))
 
         return Response({
             'is_global':  False,

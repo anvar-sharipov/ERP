@@ -3,7 +3,6 @@ import datetime
 
 from django.contrib.postgres.indexes import GinIndex
 from django.core.exceptions import ValidationError
-from django.core.validators import MinValueValidator
 from decimal import Decimal
 from django.db import models
 
@@ -25,7 +24,18 @@ class JournalEntry(models.Model):
         related_name='journal_entries',
         verbose_name="Филиал"
     )
-    
+
+    # ✅ Склад проводки — один на документ (правило "1 накладная = 1 склад"),
+    # заполняется из document.warehouse при генерации проводки; нужен, чтобы
+    # apply_scope(qs, user, branch_field=..., warehouse_field=...) мог фильтровать
+    # журнал операций по складу так же, как уже фильтруются Document/StockMovement.
+    warehouse = models.ForeignKey(
+        'Warehouse', on_delete=models.PROTECT,
+        null=True, blank=True,
+        related_name='journal_entries',
+        verbose_name="Склад"
+    )
+
     source_document_type = models.ForeignKey(
         'contenttypes.ContentType',  # ✅ ПРАВИЛЬНАЯ ССЫЛКА
         on_delete=models.SET_NULL, 
@@ -61,7 +71,10 @@ class JournalEntry(models.Model):
         from accounting.utils import check_period_open
         if self.status == self.Status.POSTED:
             raise ValidationError("Операция уже проведена")
-        check_period_open(self.date)
+        # ✅ Раньше сюда не передавался warehouse_id — жёсткое правило
+        # "последний закрытый день склада + 1" (см. check_period_open) не
+        # применялось к проводкам вообще, только к документам/движениям склада.
+        check_period_open(self.date, branch_id=self.branch_id, warehouse_id=self.warehouse_id)
         self.check_balance()
         self.status = self.Status.POSTED
         self.save(update_fields=['status'])
@@ -70,7 +83,7 @@ class JournalEntry(models.Model):
         from accounting.utils import check_period_open
         if self.status == self.Status.DRAFT:
             raise ValidationError("Операция ещё не проведена")
-        check_period_open(self.date)
+        check_period_open(self.date, branch_id=self.branch_id, warehouse_id=self.warehouse_id)
         self.status = self.Status.DRAFT
         self.save(update_fields=['status'])
 
@@ -83,9 +96,22 @@ class JournalEntry(models.Model):
         return f"Операция №{self.number} от {self.date:%d.%m.%Y}"
 
 
+def validate_nonzero_amount(value):
+    if value == 0:
+        raise ValidationError("Сумма проводки не может быть равна нулю.")
+
+
 class TransactionLine(models.Model):
     """
     Одна строка бухгалтерской операции.
+
+    ✅ amount может быть отрицательным — это "красное сторно" (принято по просьбе
+    заказчика): "Возврат от покупателя"/"Возврат поставщику" пишутся ТЕМИ ЖЕ счетами
+    и той же стороной (side), что и обычный Расход/Приход, но с отрицательной суммой,
+    а не разворотом Дт/Кт. Так итоговый баланс (Дт=Кт) сходится и остатки корректны,
+    но оборот по счёту за период не раздувается искусственно (Document._generate_out_posting/
+    _generate_in_posting принимают sign=-1 для возвратов — см. _generate_return_in_posting/
+    _generate_return_out_posting).
     """
     class Side(models.TextChoices):
         DEBIT = 'debit', 'Дебет'
@@ -101,7 +127,7 @@ class TransactionLine(models.Model):
     )
     amount = models.DecimalField(
         max_digits=15, decimal_places=2,
-        validators=[MinValueValidator(Decimal('0.01'))]
+        validators=[validate_nonzero_amount]
     )
     subcontos = models.JSONField(default=dict, blank=True)
 
