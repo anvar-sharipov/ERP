@@ -15,6 +15,10 @@ const Employees = () => {
       to: "positions",
       label: t("Positions"),
     },
+    {
+      to: "agents",
+      label: t("Agents"),
+    },
   ];
 
   return (

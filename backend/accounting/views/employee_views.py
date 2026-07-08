@@ -2,12 +2,13 @@
 from rest_framework import viewsets
 from django.db.models import Q
 
-from ..models import Position, Employee
+from ..models import Position, Employee, Agent
 from ..serializers.employee_serializers import (
     PositionSerializer,
     EmployeeSerializer,
+    AgentSerializer,
 )
-from accounting.mixins import AuditMixin
+from accounting.mixins import AuditMixin, BulkDestroyMixin
 from users.permissions import _rbac
 from users.scoping import apply_scope
 from users.scoping import get_user_scope
@@ -83,16 +84,41 @@ class EmployeeViewSet(AuditMixin, viewsets.ModelViewSet):
     
     def perform_create(self, serializer):
         branch_ids, _ = get_user_scope(self.request.user)
-        
+
         branch = serializer.validated_data.get('branch')
-        
+
         # Если у пользователя есть ограничения — нельзя создавать общего сотрудника
         if branch_ids and not branch:
             from rest_framework.exceptions import ValidationError
             raise ValidationError("Укажите филиал сотрудника.")
-        
+
         serializer.save()
-        
-    
-    
-    
+
+
+class AgentViewSet(AuditMixin, BulkDestroyMixin, viewsets.ModelViewSet):
+    """
+    Профили агентов (Employee + район) — то, на что ссылается Counterparty.agent.
+    Один Employee может иметь несколько Agent-профилей (разные районы), см.
+    accounting/models/employee.py::Agent.
+    """
+    pagination_class = None
+    serializer_class = AgentSerializer
+
+    def get_permissions(self):
+        return _rbac(self.action, 'agent')
+
+    def get_queryset(self):
+        qs = Agent.objects.select_related('employee', 'employee__user')
+
+        params = self.request.query_params
+        if employee := params.get('employee'):
+            qs = qs.filter(employee_id=employee)
+        if is_active := params.get('is_active'):
+            qs = qs.filter(is_active=is_active.lower() == 'true')
+        if search := params.get('search'):
+            qs = qs.filter(
+                Q(employee__full_name__icontains=search) |
+                Q(district__icontains=search)
+            )
+
+        return qs.order_by('employee__full_name', 'district')

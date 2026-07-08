@@ -3,7 +3,7 @@
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from django.db.models import Sum, Q
+from django.db.models import Sum, Q, Count
 from django.db import transaction
 import datetime
 
@@ -58,6 +58,108 @@ def _broadcast_closed_period(request, instance, action_name):
         },
     )
 
+
+
+def _tl_scope_filter(request, branch_ids, warehouse_ids):
+    """
+    Тот же смысл, что и _osv_base_filter, но для queryset TransactionLine
+    напрямую (без reverse-related префикса 'transaction_lines__') — используется
+    в subconto_breakdown/subconto_card.
+    """
+    f = Q(journal_entry__status='posted')
+    if branch_ids or warehouse_ids:
+        scope_filter = Q()
+        if branch_ids:
+            scope_filter |= Q(journal_entry__branch_id__in=branch_ids)
+        if warehouse_ids:
+            scope_filter |= Q(journal_entry__warehouse_id__in=warehouse_ids)
+        f &= scope_filter
+
+    warehouse_param = request.query_params.get('warehouse')
+    branch_param = request.query_params.get('branch')
+    if warehouse_param:
+        f &= Q(journal_entry__warehouse_id=warehouse_param)
+    elif branch_param:
+        f &= Q(journal_entry__branch_id=branch_param)
+    return f
+
+
+def _compute_subconto_card(request, account, subconto_slug, subconto_id, subconto_obj, date_from, date_to):
+    """
+    Общий расчёт "карточки счёта по субконто" — вынесен из
+    JournalEntryViewSet.subconto_card, чтобы им же мог воспользоваться
+    DocumentViewSet.counterparty_card (сальдо контрагента в сайдбаре формы
+    накладной, см. DocumentFormPage.tsx) без дублирования запроса/бегущего остатка.
+    """
+    from accounting.models import TransactionLine
+
+    branch_ids, warehouse_ids = get_user_scope(request.user)
+    base_filter = _tl_scope_filter(request, branch_ids, warehouse_ids)
+    key_lookup = f'subcontos__{subconto_slug}'
+
+    base_qs = TransactionLine.objects.filter(base_filter, account_id=account.id, **{key_lookup: int(subconto_id)})
+
+    pre_totals = base_qs.filter(journal_entry__date__date__lt=date_from).aggregate(
+        debit=Sum('amount', filter=Q(side='debit'), default=Decimal('0')),
+        credit=Sum('amount', filter=Q(side='credit'), default=Decimal('0')),
+    )
+    opening_balance = (pre_totals['debit'] or Decimal('0')) - (pre_totals['credit'] or Decimal('0'))
+
+    period_rows = base_qs.filter(
+        journal_entry__date__date__gte=date_from, journal_entry__date__date__lte=date_to,
+    ).values(
+        'journal_entry_id', 'journal_entry__date', 'journal_entry__description',
+    ).annotate(
+        debit=Sum('amount', filter=Q(side='debit'), default=Decimal('0')),
+        credit=Sum('amount', filter=Q(side='credit'), default=Decimal('0')),
+    ).order_by('journal_entry__date', 'journal_entry_id')
+
+    items = []
+    running = opening_balance
+    total_debit = Decimal('0')
+    total_credit = Decimal('0')
+
+    for row in period_rows:
+        d = row['debit'] or Decimal('0')
+        c = row['credit'] or Decimal('0')
+        total_debit  += d
+        total_credit += c
+        running += d - c
+
+        corr_line = TransactionLine.objects.filter(
+            journal_entry_id=row['journal_entry_id'],
+        ).exclude(account_id=account.id).select_related('account').first()
+        corr_account_code = corr_line.account.code if corr_line else '?'
+
+        # ✅ document_id — чтобы фронт мог сделать строку кликабельной и открыть
+        # исходный документ (см. DocumentViewPage.tsx — не форму редактирования,
+        # см. правило CLAUDE.md про drill-down из отчётов). None, если проводка
+        # создана не документом (например ручная операция в журнале).
+        document_id = TransactionLine.objects.filter(
+            journal_entry_id=row['journal_entry_id'],
+        ).values_list('journal_entry__document__id', flat=True).first()
+
+        items.append({
+            'date':             row['journal_entry__date'],
+            'journal_entry_id': row['journal_entry_id'],
+            'document_id':      document_id,
+            'comment':          row['journal_entry__description'],
+            'corr_account':     corr_account_code,
+            'debit':  d,
+            'credit': c,
+            'balance': running,
+        })
+
+    return {
+        'items': items,
+        'opening_balance': opening_balance,
+        'closing_balance': running,
+        'total_debit': total_debit,
+        'total_credit': total_credit,
+        'account_code': account.code,
+        'account_name': account.name,
+        'subconto_label': str(subconto_obj),
+    }
 
 
 def _osv_base_filter(request, branch_ids, warehouse_ids):
@@ -218,6 +320,7 @@ class JournalEntryViewSet(AuditMixin, viewsets.ModelViewSet):
         qs = Account.objects.filter(
             is_active=True
         ).annotate(
+            subconto_count=Count('account_subcontos', distinct=True),
             pre_debit=Sum(
                 'transaction_lines__amount',
                 filter=base_filter & Q(
@@ -352,9 +455,194 @@ class JournalEntryViewSet(AuditMixin, viewsets.ModelViewSet):
                 'credit_turnover': kt,
                 'closing_debit':  closing_debit,
                 'closing_credit': closing_credit,
+                # ✅ Есть ли у счёта настроенное субконто (см. SubcontoBreakdownPage.tsx) —
+                # у групп своих проводок нет, поэтому для них всегда False, даже если
+                # subconto_count > 0 по ошибке конфигурации.
+                'has_subconto':   bool(acc.subconto_count) and not acc.is_group,
             })
 
         return Response(data)
+
+    @action(detail=False, methods=['get'], url_path='subconto-breakdown')
+    def subconto_breakdown(self, request):
+        """
+        Карточка счёта по субконто (уровень 1) — drill-down из ОСВ для счетов с
+        настроенным субконто (например "Счёт расчётов с покупателем" + субконто
+        "Контрагент"): по каждому значению субконто — начальное сальдо, обороты
+        за период, конечное сальдо. Те же формулы, что и в osv(), но сгруппированные
+        не по счетам, а по значению JSON-ключа TransactionLine.subcontos[slug].
+        """
+        from accounting.models import Account, AccountSubconto, TransactionLine
+
+        account_id    = request.query_params.get('account')
+        subconto_slug = request.query_params.get('subconto_slug')
+        date_from     = request.query_params.get('date_from')
+        date_to       = request.query_params.get('date_to')
+        show_zero     = request.query_params.get('show_zero', 'false') == 'true'
+
+        if not account_id or not subconto_slug or not date_from or not date_to:
+            return Response({'detail': 'Укажите account, subconto_slug, date_from и date_to'}, status=400)
+
+        try:
+            account = Account.objects.get(id=account_id)
+        except Account.DoesNotExist:
+            return Response({'detail': 'Счёт не найден'}, status=404)
+
+        try:
+            acc_subconto = AccountSubconto.objects.select_related(
+                'subconto_type', 'subconto_type__content_type',
+            ).get(account=account, subconto_type__slug=subconto_slug)
+        except AccountSubconto.DoesNotExist:
+            return Response({'detail': 'У счёта не настроено такое субконто'}, status=400)
+
+        subconto_type = acc_subconto.subconto_type
+        if not subconto_type.content_type_id:
+            return Response({'detail': f'Субконто «{subconto_type.name}» не привязано к модели данных'}, status=400)
+
+        branch_ids, warehouse_ids = get_user_scope(request.user)
+        base_filter = _tl_scope_filter(request, branch_ids, warehouse_ids)
+        key_lookup = f'subcontos__{subconto_slug}'
+
+        base_qs = TransactionLine.objects.filter(base_filter, account_id=account_id).exclude(
+            **{f'{key_lookup}__isnull': True}
+        )
+
+        def sums_by_key(qs):
+            rows = qs.values(key_lookup).annotate(
+                debit=Sum('amount', filter=Q(side='debit'), default=Decimal('0')),
+                credit=Sum('amount', filter=Q(side='credit'), default=Decimal('0')),
+            )
+            result = {}
+            for row in rows:
+                try:
+                    key = int(row[key_lookup])
+                except (TypeError, ValueError):
+                    continue
+                result[key] = (row['debit'] or Decimal('0'), row['credit'] or Decimal('0'))
+            return result
+
+        pre_sums    = sums_by_key(base_qs.filter(journal_entry__date__date__lt=date_from))
+        period_sums = sums_by_key(base_qs.filter(
+            journal_entry__date__date__gte=date_from, journal_entry__date__date__lte=date_to,
+        ))
+
+        all_keys = set(pre_sums) | set(period_sums)
+        model_class = subconto_type.content_type.model_class()
+        # ✅ Если модель субконто — Counterparty (или любая другая с полем agent) —
+        # заранее подтягиваем agent.employee одним запросом, чтобы фронтенд мог
+        # сгруппировать список по агенту (см. SubcontoBreakdownPage.tsx groupByAgent),
+        # без лишнего запроса на каждую строку.
+        has_agent_field = any(f.name == 'agent' for f in model_class._meta.get_fields())
+        qs = model_class.objects.all()
+        if has_agent_field:
+            qs = qs.select_related('agent', 'agent__employee')
+
+        # ✅ "Показать нулевые" должно показывать ВООБЩЕ ВСЕХ (например всех
+        # контрагентов), а не только тех, у кого расчётная сумма (открыт./оборот/закрыт.)
+        # случайно вышла в ноль — те, у кого на этом счёте вообще нет ни одной проводки,
+        # иначе никогда не попадали в all_keys (его строят только pre_sums/period_sums).
+        if show_zero:
+            all_keys |= set(qs.values_list('id', flat=True))
+
+        objects_by_id = qs.in_bulk(list(all_keys))
+
+        data = []
+        totals = {
+            'opening_debit': Decimal('0'), 'opening_credit': Decimal('0'),
+            'debit_turnover': Decimal('0'), 'credit_turnover': Decimal('0'),
+            'closing_debit': Decimal('0'), 'closing_credit': Decimal('0'),
+        }
+
+        for key in all_keys:
+            pre_dt, pre_kt = pre_sums.get(key, (Decimal('0'), Decimal('0')))
+            dt, kt = period_sums.get(key, (Decimal('0'), Decimal('0')))
+
+            opening_balance = pre_dt - pre_kt
+            opening_debit  = max(opening_balance,  Decimal('0'))
+            opening_credit = max(-opening_balance, Decimal('0'))
+
+            closing_balance = opening_balance + dt - kt
+            closing_debit  = max(closing_balance,  Decimal('0'))
+            closing_credit = max(-closing_balance, Decimal('0'))
+
+            if not show_zero and dt == 0 and kt == 0 and opening_debit == 0 and opening_credit == 0 and closing_debit == 0 and closing_credit == 0:
+                continue
+
+            obj = objects_by_id.get(key)
+            label = str(obj) if obj is not None else f'#{key}'
+            agent = getattr(obj, 'agent', None) if has_agent_field else None
+
+            totals['opening_debit']  += opening_debit
+            totals['opening_credit'] += opening_credit
+            totals['debit_turnover']  += dt
+            totals['credit_turnover'] += kt
+            totals['closing_debit']  += closing_debit
+            totals['closing_credit'] += closing_credit
+
+            data.append({
+                'subconto_id':    key,
+                'subconto_label': label,
+                'opening_debit':  opening_debit,
+                'opening_credit': opening_credit,
+                'debit_turnover':  dt,
+                'credit_turnover': kt,
+                'closing_debit':  closing_debit,
+                'closing_credit': closing_credit,
+                # ✅ Только если у модели субконто вообще есть поле agent (Counterparty) —
+                # для остальных (Product и т.п.) всегда None, группировка по агенту
+                # на фронте в этом случае просто не показывается.
+                'agent_id':    agent.id if agent else None,
+                'agent_label': str(agent) if agent else None,
+            })
+
+        data.sort(key=lambda r: r['subconto_label'])
+
+        return Response({
+            'items': data,
+            'totals': totals,
+            'account_code': account.code,
+            'account_name': account.name,
+            'subconto_name': subconto_type.name,
+        })
+
+    @action(detail=False, methods=['get'], url_path='subconto-card')
+    def subconto_card(self, request):
+        """
+        Карточка счёта по субконто (уровень 2) — хронологический список проводок
+        по счёту для ОДНОГО значения субконто (drill-down из subconto_breakdown),
+        с бегущим остатком — как обычная "карточка счёта" в 1С.
+        """
+        from accounting.models import Account, AccountSubconto
+
+        account_id    = request.query_params.get('account')
+        subconto_slug = request.query_params.get('subconto_slug')
+        subconto_id   = request.query_params.get('subconto_id')
+        date_from     = request.query_params.get('date_from')
+        date_to       = request.query_params.get('date_to')
+
+        if not all([account_id, subconto_slug, subconto_id, date_from, date_to]):
+            return Response({'detail': 'Укажите account, subconto_slug, subconto_id, date_from и date_to'}, status=400)
+
+        try:
+            account = Account.objects.get(id=account_id)
+        except Account.DoesNotExist:
+            return Response({'detail': 'Счёт не найден'}, status=404)
+
+        try:
+            acc_subconto = AccountSubconto.objects.select_related(
+                'subconto_type', 'subconto_type__content_type',
+            ).get(account=account, subconto_type__slug=subconto_slug)
+        except AccountSubconto.DoesNotExist:
+            return Response({'detail': 'У счёта не настроено такое субконто'}, status=400)
+
+        subconto_type = acc_subconto.subconto_type
+        model_class = subconto_type.content_type.model_class()
+        try:
+            subconto_obj = model_class.objects.get(id=subconto_id)
+        except model_class.DoesNotExist:
+            return Response({'detail': 'Элемент субконто не найден'}, status=404)
+
+        return Response(_compute_subconto_card(request, account, subconto_slug, subconto_id, subconto_obj, date_from, date_to))
 
 
 class StockMovementViewSet(viewsets.ModelViewSet):

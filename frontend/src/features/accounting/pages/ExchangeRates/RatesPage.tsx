@@ -54,11 +54,8 @@ export default function RatesPage() {
   const [sortBy, setSortBy] = useState<string | null>(null);
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
 
-  const { workDate, workBranch, workWarehouse, periodFrom, periodTo } = useDateStore();
-  const { isClosed } = useClosedPeriod({
-    branch: workBranch?.id,
-    warehouse: workWarehouse?.id,
-  });
+  const { workDate, workWarehouse, periodFrom, periodTo } = useDateStore();
+  const { isClosed } = useClosedPeriod(workWarehouse?.id);
 
   // canCreate — оба условия должны быть выполнены
   const canCreate = canPost && !isClosed;

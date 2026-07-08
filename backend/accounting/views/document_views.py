@@ -12,7 +12,7 @@ from accounting.serializers.document_serializers import (
     DocumentParticipantSerializer,
 )
 from users.permissions import _rbac
-from users.scoping import apply_scope
+from users.scoping import apply_scope, apply_agent_scope
 
 
 def _get_error_detail(e: ValidationError) -> str:
@@ -65,6 +65,8 @@ class DocumentViewSet(viewsets.ModelViewSet):
 
         # Data Scoping — пользователь видит только свои склады/филиалы
         qs = apply_scope(qs, self.request.user)
+        # Agent Scoping — роль "Агент" видит только документы своих клиентов
+        qs = apply_agent_scope(qs, self.request.user, agent_field='counterparty__agent__employee__user')
 
         # Фильтр по типу документа
         document_type = self.request.query_params.get('document_type')
@@ -163,6 +165,7 @@ class DocumentViewSet(viewsets.ModelViewSet):
         гейтится тем же 'document'/GET, что и list, а не отдельным правом 'user').
         """
         qs = apply_scope(Document.objects.all(), request.user)
+        qs = apply_agent_scope(qs, request.user, agent_field='counterparty__agent__employee__user')
         user_ids = set(
             qs.exclude(created_by__isnull=True).values_list('created_by_id', flat=True).distinct()
         ) | set(
@@ -175,6 +178,63 @@ class DocumentViewSet(viewsets.ModelViewSet):
             {'id': u.id, 'name': u.get_full_name() or u.username}
             for u in users
         ]
+        return Response(data)
+
+    @action(detail=False, methods=['get'], url_path='counterparty-card')
+    def counterparty_card(self, request):
+        """
+        Мини-карточка счёта контрагента для правого сайдбара формы накладной
+        (см. DocumentFormPage.tsx) — сальдо на начало дня документа, проводки
+        за этот день, сальдо на конец. Определяет нужный счёт сам, по складу и
+        типу документа (receivable_account для Расхода/Возврата от покупателя,
+        payable_account для Прихода/Возврата поставщику — те же счета, что
+        реально используются при проведении, см. Document._generate_out_posting/
+        _generate_in_posting) — переиспользует расчёт из
+        JournalEntryViewSet.subconto_card (_compute_subconto_card), не дублируя
+        его. Принимает контекст параметрами (не id документа) — поэтому работает
+        и для ещё не сохранённого черновика/новой накладной.
+        """
+        from accounting.models import Warehouse, Counterparty, AccountSubconto
+        from accounting.views.transaction_views import _compute_subconto_card
+        from django.contrib.contenttypes.models import ContentType
+
+        counterparty_id = request.query_params.get('counterparty')
+        warehouse_id = request.query_params.get('warehouse')
+        document_type = request.query_params.get('document_type')
+        date = request.query_params.get('date')
+
+        if not all([counterparty_id, warehouse_id, document_type, date]):
+            return Response({'detail': 'Укажите counterparty, warehouse, document_type и date'}, status=400)
+
+        try:
+            warehouse = Warehouse.objects.select_related('receivable_account', 'payable_account').get(id=warehouse_id)
+        except Warehouse.DoesNotExist:
+            return Response({'detail': 'Склад не найден'}, status=404)
+
+        if document_type in (Document.Type.OUT, Document.Type.RETURN_IN):
+            account = warehouse.receivable_account
+        elif document_type in (Document.Type.IN, Document.Type.RETURN_OUT):
+            account = warehouse.payable_account
+        else:
+            account = None
+
+        if not account:
+            return Response({'available': False})
+
+        try:
+            acc_subconto = AccountSubconto.objects.select_related('subconto_type').get(
+                account=account, subconto_type__content_type=ContentType.objects.get_for_model(Counterparty),
+            )
+        except AccountSubconto.DoesNotExist:
+            return Response({'available': False})
+
+        try:
+            counterparty = Counterparty.objects.get(id=counterparty_id)
+        except Counterparty.DoesNotExist:
+            return Response({'detail': 'Контрагент не найден'}, status=404)
+
+        data = _compute_subconto_card(request, account, acc_subconto.subconto_type.slug, counterparty_id, counterparty, date, date)
+        data['available'] = True
         return Response(data)
 
     @action(detail=True, methods=['post'], url_path='post')

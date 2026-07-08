@@ -60,6 +60,13 @@ const SidebarRight: React.FC<SidebarRightProps> = ({ isOpen }) => {
       <aside
         ref={sidebarRef}
         data-region="sidebar-right"
+        // ✅ Клейм региона на ЛЮБОЙ фокус внутри сайдбара (клик мышью, Tab), а не
+        // только когда сюда попадают через Ctrl+Shift+B (см. AppLayout.tsx) — до
+        // этого фокус на инпуте здесь не сбрасывал focusManager с "table", и
+        // стрелки в инпуте перехватывались клавиатурным хендлером таблицы.
+        // React's onFocus использует focusin, поэтому срабатывает и на дочерних
+        // элементах (input/select и т.д. внутри sidebarContent), не только на aside.
+        onFocus={() => focusManager.setRegion("sidebar-right")}
         className={`
         border-l border-slate-500 bg-slate-800 dark:bg-slate-900 transition-all duration-300
         fixed right-0 top-16 h-[calc(100vh-4rem)] z-40

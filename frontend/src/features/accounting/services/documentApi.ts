@@ -1,4 +1,10 @@
 import { api } from "../../../core/api/axiosInstance";
+import { type SaldoAccountData } from "../../../components/ui/SaldoTable";
+
+// ✅ available=false — счёт склада не сконфигурирован/не отслеживает контрагентов
+// (см. DocumentViewSet.counterparty_card); available=true — весь SaldoAccountData
+// присутствует. Дискриминированный union вместо кучи опциональных полей.
+export type CounterpartyCard = { available: false } | ({ available: true } & SaldoAccountData);
 
 export const documentApi = {
   getAll: async (params?: Record<string, string>) => {
@@ -35,6 +41,19 @@ export const documentApi = {
 
   unpost: async (id: number) => {
     return api.post(`/accounting/documents/${id}/unpost/`);
+  },
+
+  // ✅ Мини-карточка сальдо контрагента для правого сайдбара формы накладной
+  // (см. DocumentViewSet.counterparty_card) — принимает контекст параметрами,
+  // а не id документа, поэтому работает и для ещё не сохранённого черновика.
+  getCounterpartyCard: async (params: {
+    counterparty: number | string;
+    warehouse: number | string;
+    document_type: string;
+    date: string;
+  }): Promise<CounterpartyCard> => {
+    const res = await api.get(`/accounting/documents/counterparty-card/`, { params });
+    return res.data;
   },
 
   // Items

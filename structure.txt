@@ -1,5 +1,4 @@
 ﻿├── .claude
-│   ├── scheduled_tasks.lock
 │   └── settings.local.json
 ├── .pytest_cache
 │   ├── v
@@ -21,6 +20,13 @@
 │   │   ├── filter
 │   │   │   ├── __pycache__
 │   │   │   └── audit_filter.py
+│   │   ├── management
+│   │   │   ├── commands
+│   │   │   │   ├── __pycache__
+│   │   │   │   ├── bootstrap_daily_checks_schedule.py
+│   │   │   │   └── __init__.py
+│   │   │   ├── __pycache__
+│   │   │   └── __init__.py
 │   │   ├── migrations
 │   │   │   ├── __pycache__
 │   │   │   ├── 0001_initial.py
@@ -48,12 +54,15 @@
 │   │   │   ├── 0023_warehouse_payable_account.py
 │   │   │   ├── 0024_alter_transactionline_amount.py
 │   │   │   ├── 0025_warehouse_discount_account.py
+│   │   │   ├── 0026_warehouseproductsnapshot.py
+│   │   │   ├── 0027_systemalert.py
 │   │   │   └── __init__.py
 │   │   ├── mixins
 │   │   │   └── audit_mixin.py
 │   │   ├── models
 │   │   │   ├── __pycache__
 │   │   │   ├── account.py
+│   │   │   ├── alert.py
 │   │   │   ├── audit.py
 │   │   │   ├── company.py
 │   │   │   ├── counterparty.py
@@ -69,6 +78,7 @@
 │   │   ├── serializers
 │   │   │   ├── __pycache__
 │   │   │   ├── account_serializers.py
+│   │   │   ├── alert_serializers.py
 │   │   │   ├── audit_serializers.py
 │   │   │   ├── company_serializers.py
 │   │   │   ├── currency_serializers.py
@@ -81,12 +91,16 @@
 │   │   │   ├── __pycache__
 │   │   │   ├── base.py
 │   │   │   ├── test_audit.py
+│   │   │   ├── test_bulk_destroy.py
 │   │   │   ├── test_document_discount_posting.py
+│   │   │   ├── test_document_filter_users.py
 │   │   │   ├── test_document_in_posting.py
 │   │   │   ├── test_document_out_posting.py
 │   │   │   ├── test_document_posting.py
 │   │   │   ├── test_document_return_posting.py
+│   │   │   ├── test_journal_entry_restrictions.py
 │   │   │   ├── test_osv.py
+│   │   │   ├── test_product_turnover.py
 │   │   │   ├── test_rbac_all.py
 │   │   │   ├── test_rbac_branches.py
 │   │   │   ├── test_rbac_document_settings.py
@@ -95,6 +109,7 @@
 │   │   ├── views
 │   │   │   ├── __pycache__
 │   │   │   ├── account_views.py
+│   │   │   ├── alert_views.py
 │   │   │   ├── audit_views.py
 │   │   │   ├── company_views.py
 │   │   │   ├── currency_views.py
@@ -110,10 +125,12 @@
 │   │   ├── apps.py
 │   │   ├── mixins.py
 │   │   ├── models_disabled.py
+│   │   ├── tasks.py
 │   │   ├── tests.py
 │   │   ├── urls.py
 │   │   ├── utils.py
 │   │   ├── views.py
+│   │   ├── warehouse_snapshot.py
 │   │   └── __init__.py
 │   ├── chat
 │   │   ├── migrations
@@ -154,6 +171,7 @@
 │   ├── config
 │   │   ├── __pycache__
 │   │   ├── asgi.py
+│   │   ├── celery.py
 │   │   ├── pagination.py
 │   │   ├── settings.py
 │   │   ├── urls.py
@@ -211,12 +229,14 @@
 │   ├── entrypoint.sh
 │   ├── init_tenant.py
 │   ├── manage.py
+│   ├── nul
+│   ├── qty_promo_dump.txt
 │   └── structure.txt
 ├── frontend
 │   ├── dist
 │   │   ├── assets
-│   │   │   ├── index-BHilziTs.js
-│   │   │   └── index-EOeZIE0P.css
+│   │   │   ├── index-C-W0pw2M.js
+│   │   │   └── index-dJ44-4vx.css
 │   │   ├── icons
 │   │   ├── sounds
 │   │   │   ├── aside.mp3
@@ -285,11 +305,13 @@
 │   │   │       │   └── Select.tsx
 │   │   │       ├── Table
 │   │   │       │   ├── OSVTable.tsx
+│   │   │       │   ├── ProductTurnoverTable.tsx
 │   │   │       │   └── Table.tsx
 │   │   │       ├── Tabs
 │   │   │       │   ├── GoogleTabs.tsx
 │   │   │       │   ├── PageHeaderText.tsx
 │   │   │       │   └── SegmentedControl.tsx
+│   │   │       ├── AlertBell.tsx
 │   │   │       ├── Avatar.tsx
 │   │   │       ├── BackButton.tsx
 │   │   │       ├── Badge.tsx
@@ -329,6 +351,7 @@
 │   │   │   │   ├── useClosedPeriodSocket.ts
 │   │   │   │   ├── useHotkeys.ts
 │   │   │   │   ├── useInitScope.ts
+│   │   │   │   ├── useLogout.ts
 │   │   │   │   ├── usePageAccess.ts
 │   │   │   │   ├── usePageHotkeys.ts
 │   │   │   │   ├── useRBACSocket.ts
@@ -344,6 +367,7 @@
 │   │   │   │   ├── ProtectedRoute.tsx
 │   │   │   │   └── routes.ts
 │   │   │   ├── store
+│   │   │   │   ├── authStore.ts
 │   │   │   │   ├── dateStore.ts
 │   │   │   │   └── index.ts
 │   │   │   ├── types
@@ -369,7 +393,12 @@
 │   │   │   │   │   │   ├── AccountPage.tsx
 │   │   │   │   │   │   ├── AuditLogPage.tsx
 │   │   │   │   │   │   ├── exportOSVExcel.ts
+│   │   │   │   │   │   ├── exportProductTurnoverDetailExcel.ts
+│   │   │   │   │   │   ├── exportProductTurnoverExcel.ts
 │   │   │   │   │   │   ├── OSVPage.tsx
+│   │   │   │   │   │   ├── ProductTurnoverDetailPage.tsx
+│   │   │   │   │   │   ├── productTurnoverGrouping.ts
+│   │   │   │   │   │   ├── ProductTurnoverPage.tsx
 │   │   │   │   │   │   └── SubcontoTypesPage.tsx
 │   │   │   │   │   ├── Counterparties
 │   │   │   │   │   │   └── CounterpartiesPage.tsx
@@ -391,10 +420,12 @@
 │   │   │   │   │   │   │   │   └── Tablefooter.tsx
 │   │   │   │   │   │   │   ├── ColumnToggleDropdown.tsx
 │   │   │   │   │   │   │   ├── DocumentFormPage.tsx
+│   │   │   │   │   │   │   ├── DocumentViewPage.tsx
 │   │   │   │   │   │   │   ├── exportDocumentExcel.ts
 │   │   │   │   │   │   │   ├── HeadDocument.tsx
 │   │   │   │   │   │   │   ├── HeaderPage.tsx
 │   │   │   │   │   │   │   ├── Interface.ts
+│   │   │   │   │   │   │   ├── InvoiceHeaderView.tsx
 │   │   │   │   │   │   │   ├── Participants.tsx
 │   │   │   │   │   │   │   ├── useColumnVisibility.ts
 │   │   │   │   │   │   │   ├── useWarehouseStocks.ts
@@ -442,6 +473,7 @@
 │   │   │   │   │   └── Dashboard.tsx
 │   │   │   │   └── services
 │   │   │   │       ├── accountingApi.ts
+│   │   │   │       ├── alertApi.ts
 │   │   │   │       ├── branchApi.ts
 │   │   │   │       ├── companyApi.ts
 │   │   │   │       ├── counterpartyApi.ts

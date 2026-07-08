@@ -39,6 +39,9 @@ export const ROUTES = {
     ACCOUNTING_PRODUCT_TURNOVER: '/accounting/product-turnover',
     ACCOUNTING_PRODUCT_TURNOVER_DETAIL: '/accounting/product-turnover/:id',
 
+    ACCOUNTING_SUBCONTO_BREAKDOWN: '/accounting/account/:accountId/subconto',
+    ACCOUNTING_SUBCONTO_CARD: '/accounting/account/:accountId/subconto/:subcontoId',
+
 
     EMPLOYEES: '/employees',
     EMPLOYEES_LIST: '/employees/list',

@@ -79,6 +79,28 @@ interface UserLike {
   position?: string;
 }
 
+interface SaldoItem {
+  date: string;
+  corr_account: string;
+  debit: number;
+  credit: number;
+  balance: number;
+}
+
+// ✅ То же самое сальдо контрагента, что показано на экране/печати под таблицей
+// товаров (CounterpartyBalanceCard.tsx) — передаётся сюда как готовые данные из
+// той же query, а не пересчитывается заново (см. CLAUDE.md про паритет экран/печать/Excel).
+export interface SaldoData {
+  account_code?: string;
+  account_name?: string;
+  subconto_label?: string;
+  opening_balance?: number;
+  closing_balance?: number;
+  total_debit?: number;
+  total_credit?: number;
+  items?: SaldoItem[];
+}
+
 export interface ExportDocumentExcelOptions {
   company: CompanyLike | null | undefined;
   user: UserLike | null | undefined;
@@ -100,6 +122,7 @@ export interface ExportDocumentExcelOptions {
     discAmount: number;
     total: number;
   };
+  saldo?: SaldoData; // сальдо контрагента — выводится под таблицей товаров, если доступно
 }
 
 function cellValueForColumn(col: ColumnDef, row: ItemRow, index: number, lineTotal: (row: ItemRow) => number): string | number {
@@ -155,7 +178,7 @@ function cellValueForColumn(col: ColumnDef, row: ItemRow, index: number, lineTot
 }
 
 export async function exportDocumentExcel(opts: ExportDocumentExcelOptions): Promise<void> {
-  const { company, user, t, fileNamePrefix, docTitle, headerLines, counterpartyLine, driverLine, postedByLine, branchSlogan, columns, mainItems, bundleItems, promoItems, lineTotal, totals } = opts;
+  const { company, user, t, fileNamePrefix, docTitle, headerLines, counterpartyLine, driverLine, postedByLine, branchSlogan, columns, mainItems, bundleItems, promoItems, lineTotal, totals, saldo } = opts;
 
   const exportCols = columns.filter((c) => EXPORTABLE_KEYS.has(c.key));
   // ✅ Ширина шапки (в колонках) — на неё же merge'им заголовок/инфо-строки/контрагента,
@@ -278,6 +301,57 @@ export async function exportDocumentExcel(opts: ExportDocumentExcelOptions): Pro
     addTotalRow(t("TotalAfterDiscount") + ":", totals.total);
   } else {
     addTotalRow(t("Subtotal") + ":", totals.total);
+  }
+
+  // ── Сальдо контрагента — под таблицей товаров, те же данные, что на экране/печати
+  // (CounterpartyBalanceCard.tsx) — начало → проводки за день → оборот → конец,
+  // + бегущий "Остаток". Грейскейл-заливка, как во всех отчётах (см. CLAUDE.md).
+  if (saldo?.items) {
+    const opening = saldo.opening_balance ?? 0;
+    const closing = saldo.closing_balance ?? 0;
+
+    worksheet.addRow([]);
+    const saldoTitleRow = worksheet.addRow([`${t("CounterpartyBalance")}: ${saldo.account_code ?? ""} ${saldo.account_name ?? ""} — ${saldo.subconto_label ?? ""}`]);
+    saldoTitleRow.font = { bold: true, size: 12 };
+    worksheet.mergeCells(saldoTitleRow.number, 1, saldoTitleRow.number, 5);
+
+    const saldoHeaderRow = worksheet.addRow([t("Indicator"), "", t("Debit"), t("Credit"), t("Balance")]);
+    worksheet.mergeCells(saldoHeaderRow.number, 1, saldoHeaderRow.number, 2);
+    saldoHeaderRow.eachCell({ includeEmpty: true }, (cell) => {
+      cell.font = { bold: true };
+      cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFE0E0E0" } };
+      cell.border = { top: { style: "thin" }, left: { style: "thin" }, bottom: { style: "thin" }, right: { style: "thin" } };
+      cell.alignment = { horizontal: "center" };
+    });
+
+    const addSaldoLabelRow = (label: string, debit: number, credit: number, balance: number | null, fill?: string) => {
+      const row = worksheet.addRow([label, "", fmt(debit), fmt(credit), balance !== null ? fmt(balance) : ""]);
+      worksheet.mergeCells(row.number, 1, row.number, 2);
+      row.font = { bold: true };
+      row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
+        cell.border = { top: { style: "thin" }, left: { style: "thin" }, bottom: { style: "thin" }, right: { style: "thin" } };
+        if (colNumber >= 3) cell.numFmt = FLOAT_NUMFMT;
+        if (fill) cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: fill } };
+      });
+    };
+
+    const addSaldoItemRow = (item: SaldoItem) => {
+      const row = worksheet.addRow([new Date(item.date).toLocaleDateString("ru-RU"), item.corr_account, fmt(item.debit), fmt(item.credit), fmt(item.balance)]);
+      row.eachCell((cell, colNumber) => {
+        cell.border = { top: { style: "thin" }, left: { style: "thin" }, bottom: { style: "thin" }, right: { style: "thin" } };
+        if (colNumber >= 3) cell.numFmt = FLOAT_NUMFMT;
+      });
+    };
+
+    const [openingDebit, openingCredit] = opening >= 0 ? [opening, 0] : [0, Math.abs(opening)];
+    addSaldoLabelRow(t("OpeningBalance"), openingDebit, openingCredit, opening);
+
+    saldo.items.forEach(addSaldoItemRow);
+
+    addSaldoLabelRow(t("TotalTurnover"), saldo.total_debit ?? 0, saldo.total_credit ?? 0, null, "FFF2F2F2");
+
+    const [closingDebit, closingCredit] = closing >= 0 ? [closing, 0] : [0, Math.abs(closing)];
+    addSaldoLabelRow(t("ClosingBalance"), closingDebit, closingCredit, closing, "FFD9D9D9");
   }
 
   // ── "Авто" (сотрудник/водитель) — под таблицей товаров ──────────────────────

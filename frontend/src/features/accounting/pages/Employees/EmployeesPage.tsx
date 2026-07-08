@@ -19,7 +19,9 @@ import { useTranslation } from "react-i18next";
 import { useTableFilter } from "../../../../core/hooks/useTableFilter";
 import { usePageHotkeys } from "../../../../core/hooks/usePageHotkeys";
 import { userScopeApi } from "../../services/transactionApi";
+import { usersApi } from "../../../users/services/userApi";
 import { useDateStore } from "../../../../core/store/dateStore";
+import SearchableSelect, { type SelectOption } from "../../../../components/ui/SearchableSelect";
 
 interface Employee {
   id: number;
@@ -33,6 +35,8 @@ interface Employee {
   is_active: boolean;
   photo?: string | null;
   photo_thumbnail?: string | null;
+  user: number | null;
+  user_username?: string | null;
 }
 
 interface Position {
@@ -52,6 +56,7 @@ interface EmployeeForm {
   phone: string;
   note: string;
   is_active: boolean;
+  user: number | null;
 }
 
 const EMPTY: EmployeeForm = {
@@ -61,6 +66,7 @@ const EMPTY: EmployeeForm = {
   phone: "",
   note: "",
   is_active: true,
+  user: null,
 };
 
 const selectCls =
@@ -96,6 +102,17 @@ const EmployeesPage = () => {
     queryKey: ["positions"],
     queryFn: positionApi.getAll,
   });
+
+  const { data: usersLookup = [] } = useQuery({
+    queryKey: ["users-lookup"],
+    queryFn: usersApi.getUsersLookup,
+    enabled: canView,
+    retry: false,
+  });
+  const userOptions: SelectOption[] = (usersLookup as any[]).map((u) => ({
+    id: u.id,
+    label: u.full_name,
+  }));
 
   // const { data: branches = [] } = useQuery<Branch[]>({
   //   queryKey: ["branches"],
@@ -139,6 +156,7 @@ const EmployeesPage = () => {
         phone: editing.phone,
         note: editing.note,
         is_active: editing.is_active,
+        user: editing.user ?? null,
       });
       setExistingPhotoUrl(editing.photo ?? null);
     } else {
@@ -265,6 +283,12 @@ const EmployeesPage = () => {
     },
     { header: t("Phone"), accessor: "phone", sortable: true },
     {
+      header: t("SystemUser"),
+      accessor: "user_username",
+      sortable: true,
+      render: (item) => item.user_username ?? "—",
+    },
+    {
       header: t("Status"),
       accessor: "is_active",
       render: (item) => <StatusBadge isActive={item.is_active} activeLabel={t("Active")} inactiveLabel={t("Inactive")} />,
@@ -380,6 +404,16 @@ const EmployeesPage = () => {
           </div>
 
           <Input label={t("Phone")} value={form.phone} onChange={(e) => setForm((p) => ({ ...p, phone: e.target.value }))} />
+
+          <div>
+            <label className="block mb-1 text-sm font-medium">{t("SystemUser")}</label>
+            <SearchableSelect
+              options={userOptions}
+              value={form.user}
+              onChange={(id) => setForm((p) => ({ ...p, user: id }))}
+              placeholder={t("SelectSystemUser")}
+            />
+          </div>
 
           <Input label={t("Note")} value={form.note} onChange={(e) => setForm((p) => ({ ...p, note: e.target.value }))} />
 

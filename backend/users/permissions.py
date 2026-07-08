@@ -52,6 +52,11 @@ def _rbac(action: str, resource: str):
         'check':          'GET',
         'range_check':    'GET',
         'osv':            'GET',
+        'subconto_breakdown': 'GET',
+        'subconto_card':      'GET',
+        'counterparty_card':  'GET',
+        'saldo':              'GET',
+        'bulk_saldo':         'GET',
         'product_turnover':        'GET',
         'product_turnover_detail': 'GET',
         'filter_users':   'GET',
@@ -59,6 +64,10 @@ def _rbac(action: str, resource: str):
         # DELETE, а не POST по умолчанию, иначе право "создавать" ошибочно давало
         # бы право массово удалять.
         'bulk_destroy':   'DELETE',
+        # ✅ Колокольчик системных алертов (accounting/views/alert_views.py) —
+        # unresolved_count это GET (просто счётчик), без явной записи в маппинг
+        # он бы по умолчанию требовал POST-право, хотя ничего не создаёт.
+        'unresolved_count': 'GET',
     }
     method = action_map.get(action, 'POST')  # неизвестные экшены → POST
     return [IsAuthenticated(), HasPermission(resource, method)()]

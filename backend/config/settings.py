@@ -77,6 +77,11 @@ SHARED_APPS = [
     'django.contrib.staticfiles',
     'rest_framework_simplejwt.token_blacklist',
     'django_extensions',
+    # ✅ Расписание периодических задач (Celery Beat) — общее для всей системы,
+    # не завязано на конкретного tenant'а (сама задача сама обходит все схемы
+    # внутри себя, см. accounting/tasks.py), поэтому живёт в public-схеме, а не
+    # в TENANT_APPS.
+    'django_celery_beat',
 ]
 
 TENANT_APPS = [
@@ -366,7 +371,25 @@ CHANNEL_LAYERS = {
         },
     },
 }
-    
+
+
+# ── Celery ────────────────────────────────────────────────────────────────
+# ✅ Тот же Redis, что и для WebSocket-канала выше, но ДРУГИЕ номера баз (db 2/3
+# вместо db 1) — просто логическое разделение, чтобы очередь задач и pub/sub
+# трафик WebSocket'ов не путались в одном "ящике", хотя физически это один и
+# тот же Redis-инстанс (заводить отдельный Redis-контейнер не нужно).
+CELERY_BROKER_URL = os.environ.get('CELERY_BROKER_URL', 'redis://127.0.0.1:6380/2')
+CELERY_RESULT_BACKEND = os.environ.get('CELERY_RESULT_BACKEND', 'redis://127.0.0.1:6380/3')
+CELERY_ACCEPT_CONTENT = ['json']
+CELERY_TASK_SERIALIZER = 'json'
+CELERY_RESULT_SERIALIZER = 'json'
+CELERY_TIMEZONE = TIME_ZONE
+# ✅ django-celery-beat хранит расписание периодических задач в БД (модель
+# PeriodicTask и т.д. — public-схема, см. SHARED_APPS выше), а не в статичном
+# Python-словаре в коде — можно менять расписание через Django admin без
+# передеплоя.
+CELERY_BEAT_SCHEDULER = 'django_celery_beat.schedulers:DatabaseScheduler'
+
     
     
     

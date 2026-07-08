@@ -37,8 +37,9 @@ from .product import (
     product_image_path
 )
 from .counterparty import Counterparty
-from .employee import Position, Employee
+from .employee import Position, Employee, Agent
 from .audit import AuditLog
+from .alert import SystemAlert
 from .document import DocumentParticipant, Document, DocumentItem
 from .company import UserScope
 from .currency import Currency, ExchangeRate
@@ -88,8 +89,9 @@ __all__ = [
     'Product', 'ProductCategory', 'Brand', 'Tag', 'Unit',
     'ProductImage', 'PriceType', 'ProductPrice',
     'Counterparty',
-    'Position', 'Employee',
+    'Position', 'Employee', 'Agent',
     'AuditLog',
+    'SystemAlert',
     # Функции путей для файлов
     'company_logo_directory_path',
     'company_logo2_directory_path',

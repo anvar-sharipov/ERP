@@ -3,6 +3,8 @@
 import { useState, useEffect, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { counterpartyApi } from "../../services/productApi";
+import { agentApi } from "../../services/employeeApi";
+import { useDateStore } from "../../../../core/store/dateStore";
 import { useNotify } from "../../../../core/context/NotificationContext";
 import { usePageAccess } from "../../../../core/hooks/usePageAccess";
 import { useSidebar } from "../../../../core/context/SidebarRightContext";
@@ -10,6 +12,7 @@ import { Table, type Column } from "../../../../components/ui/Table/Table";
 import { Button } from "../../../../components/ui/Button";
 import { Input } from "../../../../components/ui/Input";
 import { TextArea } from "../../../../components/ui/TextArea";
+import SearchableSelect, { type SelectOption } from "../../../../components/ui/SearchableSelect";
 import { Modal } from "../../../../components/ui/Modal/Modal";
 import { ConfirmModal } from "../../../../components/ui/Modal/ConfirmModal";
 import { RBACGuard } from "../../../../components/ui/RBACGuard";
@@ -20,6 +23,7 @@ import { Plus } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { PageHeaderText } from "../../../../components/ui/Tabs/PageHeaderText";
 import { usePageHotkeys } from "../../../../core/hooks/usePageHotkeys";
+import { CounterpartySaldoModal } from "./CounterpartySaldoModal";
 
 const COUNTERPARTY_TYPES = (t: any) => [
   { value: "client", label: t("Client") },
@@ -35,6 +39,8 @@ interface CounterpartyForm {
   email: string;
   address: string;
   is_active: boolean;
+  agent: number | null;
+  district: string;
 }
 
 const EMPTY: CounterpartyForm = {
@@ -45,6 +51,8 @@ const EMPTY: CounterpartyForm = {
   email: "",
   address: "",
   is_active: true,
+  agent: null,
+  district: "",
 };
 
 const CounterpartiesPage = () => {
@@ -65,6 +73,8 @@ const CounterpartiesPage = () => {
   const [deleteId, setDeleteId] = useState<number | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [typeFilter, setTypeFilter] = useState<"all" | "client" | "supplier">("all");
+  const [saldoCounterparty, setSaldoCounterparty] = useState<{ id: number; name: string } | null>(null);
+  const { workBranch, workWarehouse, periodFrom, periodTo } = useDateStore();
 
   const {
     data: counterparties = [],
@@ -77,6 +87,33 @@ const CounterpartiesPage = () => {
     retry: false,
   });
 
+  const { data: agentsList = [] } = useQuery({
+    queryKey: ["agents"],
+    queryFn: () => agentApi.getAll(),
+    enabled: canView,
+    retry: false,
+  });
+
+  const agentOptions: SelectOption[] = (agentsList as any[]).map((a) => ({
+    id: a.id,
+    label: a.display_name,
+  }));
+
+  // ✅ Мини-таблица сальдо в колонке — один общий batch-запрос на весь список
+  // (тот же паттерн, что и ProductsListPage.tsx::turnoverMap), а не по запросу
+  // на контрагента. Реагирует на branch/warehouse/период из WorkDateWidget.
+  const saldoEnabled = !!periodFrom && !!periodTo;
+  const { data: bulkSaldo = {} } = useQuery({
+    queryKey: ["counterparties-bulk-saldo", periodFrom, periodTo, workWarehouse?.id, workBranch?.id],
+    queryFn: () =>
+      counterpartyApi.getBulkSaldo({
+        date_from: periodFrom!,
+        date_to: periodTo!,
+        ...(workWarehouse?.id ? { warehouse: String(workWarehouse.id) } : workBranch?.id ? { branch: String(workBranch.id) } : {}),
+      }),
+    enabled: saldoEnabled,
+  });
+
   useEffect(() => {
     if (editing) {
       setForm({
@@ -87,6 +124,8 @@ const CounterpartiesPage = () => {
         email: editing.email ?? "",
         address: editing.address ?? "",
         is_active: editing.is_active,
+        agent: editing.agent ?? null,
+        district: editing.district ?? "",
       });
       setExistingPhotoUrl(editing.photo ?? null);
     } else {
@@ -225,6 +264,74 @@ const CounterpartiesPage = () => {
     { header: t("INN"), accessor: "inn", sortable: true, excelWidth: 15 },
     { header: t("Phone"), accessor: "phone", sortable: true, excelWidth: 15 },
     {
+      header: t("Agent"),
+      accessor: "agent_detail",
+      sortable: true,
+      excelWidth: 20,
+      sortValue: (item) => item.agent_detail?.display_name ?? "",
+      render: (item) => item.agent_detail?.display_name ?? "—",
+      excelValue: (item) => item.agent_detail?.display_name ?? "",
+    },
+    { header: t("District"), accessor: "district", sortable: true, excelWidth: 15 },
+    {
+      header: t("CounterpartyBalance"),
+      hideInPrint: true,
+      // ✅ Мини-таблица сальдо прямо в колонке — тот же приём, что и
+      // ProductsListPage.tsx::Turnovers (один batch-запрос на весь список выше,
+      // bulkSaldo, а не N+1 по каждой строке).
+      render: (item) => {
+        if (!saldoEnabled) {
+          return <span className="text-xs md:text-sm text-gray-400">{t("SpecifyPeriod")}</span>;
+        }
+        const row = bulkSaldo[item.id];
+        const opening = Number(row?.opening_balance ?? 0);
+        const debit = Number(row?.total_debit ?? 0);
+        const credit = Number(row?.total_credit ?? 0);
+        const closing = Number(row?.closing_balance ?? 0);
+        const fmt = (v: number) => v.toLocaleString("ru-RU", { maximumFractionDigits: 2 });
+        const groups = [
+          { label: t("Opening"), value: opening },
+          { label: t("Incoming"), value: debit },
+          { label: t("Outgoing"), value: credit },
+          { label: t("Closing"), value: closing },
+        ];
+        return (
+          <table className="border-collapse text-xs md:text-sm leading-tight">
+            <thead>
+              <tr>
+                <th className="border border-gray-300 dark:border-slate-600 px-2 py-1" />
+                {groups.map((g) => (
+                  <th key={g.label} className="border border-gray-300 dark:border-slate-600 px-2 py-1 font-semibold whitespace-nowrap">
+                    {g.label}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td className="border border-gray-300 dark:border-slate-600 px-2 py-1 text-gray-500 whitespace-nowrap">{t("SumShort")}</td>
+                {groups.map((g) => (
+                  <td key={g.label} className="border border-gray-300 dark:border-slate-600 px-2 py-1 text-center font-medium">
+                    {fmt(g.value)}
+                  </td>
+                ))}
+              </tr>
+            </tbody>
+          </table>
+        );
+      },
+      excelValue: (item) => {
+        if (!saldoEnabled) return "";
+        const row = bulkSaldo[item.id];
+        const opening = Number(row?.opening_balance ?? 0);
+        const debit = Number(row?.total_debit ?? 0);
+        const credit = Number(row?.total_credit ?? 0);
+        const closing = Number(row?.closing_balance ?? 0);
+        const fmt = (v: number) => v.toLocaleString("ru-RU", { maximumFractionDigits: 2 });
+        return [`${t("Opening")}: ${fmt(opening)}`, `${t("Incoming")}: ${fmt(debit)}`, `${t("Outgoing")}: ${fmt(credit)}`, `${t("Closing")}: ${fmt(closing)}`].join("\n");
+      },
+    },
+    {
       header: t("Status"),
       accessor: "is_active",
       sortable: true,
@@ -277,10 +384,7 @@ const CounterpartiesPage = () => {
         tableId="counterparties_list"
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
-        onRowDoubleClick={(item) => {
-          setEditing(item);
-          setFormOpen(true);
-        }}
+        onRowDoubleClick={(item) => setSaldoCounterparty({ id: item.id, name: item.name })}
       />
 
       <Modal isOpen={formOpen} onClose={() => setFormOpen(false)} title={editing ? t("Edit") : t("Add")} closeOnOutsideClick={false}>
@@ -339,6 +443,17 @@ const CounterpartiesPage = () => {
           <Input label={t("Email")} type="email" value={form.email} onChange={(e) => setForm((p) => ({ ...p, email: e.target.value }))} />
           <TextArea label={t("Address")} rows={2} value={form.address} onChange={(e) => setForm((p) => ({ ...p, address: e.target.value }))} />
 
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t("Agent")}</label>
+            <SearchableSelect
+              options={agentOptions}
+              value={form.agent}
+              onChange={(id) => setForm((p) => ({ ...p, agent: id }))}
+              placeholder={t("SelectAgent")}
+            />
+          </div>
+          <Input label={t("District")} value={form.district} onChange={(e) => setForm((p) => ({ ...p, district: e.target.value }))} />
+
           <label className="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300 cursor-pointer">
             <input
               type="checkbox"
@@ -371,6 +486,8 @@ const CounterpartiesPage = () => {
       />
 
       <ImagePreview src={previewSrc} onClose={() => setPreviewSrc(null)} />
+
+      <CounterpartySaldoModal counterparty={saldoCounterparty} onClose={() => setSaldoCounterparty(null)} />
     </RBACGuard>
   );
 };

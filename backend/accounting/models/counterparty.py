@@ -46,6 +46,22 @@ class Counterparty(models.Model):
         source='photo', processors=[ResizeToFill(150, 150)],
         format='JPEG', options={'quality': 80}
     )
+    # ✅ Ответственный агент — FK на Agent (не Employee и не User напрямую!).
+    # Agent.employee — тот, кому в итоге идёт ЗП/%; Agent.district — какое
+    # направление/район этого агента обслуживает данного клиента (один Employee
+    # может иметь несколько Agent-профилей, см. accounting/models/employee.py::Agent).
+    # Это же поле — единственный источник scope для роли "Агент" (см.
+    # users/scoping.py::apply_agent_scope): агент видит только тех контрагентов
+    # (и связанные документы), где agent.employee.user == request.user — по ЛЮБОМУ
+    # из своих Agent-профилей/районов сразу.
+    agent = models.ForeignKey(
+        'Agent', on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='clients',
+        verbose_name="Агент",
+    )
+    # ✅ Дублирует Agent.district для быстрого фильтра/отображения без join —
+    # заполняется тем же значением, что и agent.district на момент назначения.
+    district = models.CharField(max_length=100, blank=True, verbose_name="Район")
     created_at = models.DateTimeField(auto_now_add=True)
     extra_data = models.JSONField(default=dict, blank=True)
 

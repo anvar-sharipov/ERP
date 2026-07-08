@@ -124,6 +124,7 @@ export interface Product {
   name: string;
   sku?: string;
   barcode?: string;
+  is_active?: boolean;
   unit?: number;
   unit_detail?: { name: string };
   cost_price?: number;

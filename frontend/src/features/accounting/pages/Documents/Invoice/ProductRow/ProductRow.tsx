@@ -260,7 +260,11 @@ const ProductRow = forwardRef<ProductRowHandle, ProductRowProps>(({
   // }));
   // ✅ Для складывающих товар документов (Расход/Перемещение/Возврат поставщику)
   // не показываем в выборе то, чего физически нет в наличии на этом складе.
-  const selectableProducts = filterByStock ? products.filter((p) => (stockMap.get(p.id)?.available ?? 0) > 0) : products;
+  // Неактивные товары в поиске никогда не показываем (но products целиком
+  // оставляем как есть — уже добавленные строки могут ссылаться на товар,
+  // который был активен на момент добавления, и должны и дальше отображаться).
+  const activeProducts = products.filter((p) => p.is_active !== false);
+  const selectableProducts = filterByStock ? activeProducts.filter((p) => (stockMap.get(p.id)?.available ?? 0) > 0) : activeProducts;
 
   const productOptions: SelectOption[] = selectableProducts.map((p) => ({
     id: p.id,

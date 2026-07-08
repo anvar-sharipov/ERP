@@ -1,6 +1,6 @@
 # backend/accounting/serializers/employee_serializers.py
 from rest_framework import serializers
-from ..models import Position, Employee
+from ..models import Position, Employee, Agent
 
 
 class PositionSerializer(serializers.ModelSerializer):
@@ -67,3 +67,30 @@ class EmployeeShortSerializer(serializers.ModelSerializer):
     class Meta:
         model = Employee
         fields = ["id", "full_name", "employee_no", "position", "position_name", "branch", "branch_name"]
+
+
+# ── Agent (профиль агента: Employee + район) ──────────────────────────────────
+
+class AgentSerializer(serializers.ModelSerializer):
+    employee_name = serializers.CharField(source="employee.full_name", read_only=True)
+    display_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Agent
+        fields = ["id", "employee", "employee_name", "district", "is_active", "display_name", "created_at"]
+        read_only_fields = ["created_at"]
+
+    def get_display_name(self, obj):
+        return str(obj)
+
+
+class AgentShortSerializer(serializers.ModelSerializer):
+    employee_name = serializers.CharField(source="employee.full_name", read_only=True)
+    display_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Agent
+        fields = ["id", "employee", "employee_name", "district", "display_name"]
+
+    def get_display_name(self, obj):
+        return str(obj)

@@ -1,0 +1,59 @@
+# docker-compose.celery-dev.yml
+# ✅ Отдельный dev-стек ТОЛЬКО для Celery — не трогает основной docker-compose.yml
+# (это прод-конфиг). Использует тот же образ (backend/Dockerfile) и код, но
+# подключается к тому, что у вас УЖЕ запущено локально: Postgres на хосте
+# (localhost:5432) и redis-dev (докер-контейнер, порт 6380 → 6379 внутри) —
+# точно так же, как ваш backend, запущенный напрямую через venv.
+#
+# host.docker.internal — специальное DNS-имя, которое Docker Desktop (Windows/
+# Mac) сам резолвит в адрес хост-машины изнутри контейнера — с его помощью
+# celery-контейнер достаёт и вашу нативную Postgres, и redis-dev (его порт
+# 6380 опубликован на хосте, значит доступен как host.docker.internal:6380).
+#
+# Запуск:
+#   docker compose -f docker-compose.celery-dev.yml up -d --build
+# Логи:
+#   docker compose -f docker-compose.celery-dev.yml logs -f
+# Остановка:
+#   docker compose -f docker-compose.celery-dev.yml down
+
+services:
+  celery-worker-dev:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: celery-worker-dev
+    command: celery -A config worker -l info
+    volumes:
+      - ./backend:/app
+    environment:
+      - DJANGO_SECRET_KEY=${DJANGO_SECRET_KEY}
+      - DEBUG=${DJANGO_DEBUG}
+      - PROJECT_DOMAIN=${PROJECT_DOMAIN}
+      - DB_HOST=host.docker.internal
+      - DB_PORT=5432
+      - DB_NAME=${DB_NAME}
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - CELERY_BROKER_URL=redis://host.docker.internal:6380/2
+      - CELERY_RESULT_BACKEND=redis://host.docker.internal:6380/3
+
+  celery-beat-dev:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: celery-beat-dev
+    command: celery -A config beat -l info --scheduler django_celery_beat.schedulers:DatabaseScheduler
+    volumes:
+      - ./backend:/app
+    environment:
+      - DJANGO_SECRET_KEY=${DJANGO_SECRET_KEY}
+      - DEBUG=${DJANGO_DEBUG}
+      - PROJECT_DOMAIN=${PROJECT_DOMAIN}
+      - DB_HOST=host.docker.internal
+      - DB_PORT=5432
+      - DB_NAME=${DB_NAME}
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - CELERY_BROKER_URL=redis://host.docker.internal:6380/2
+      - CELERY_RESULT_BACKEND=redis://host.docker.internal:6380/3

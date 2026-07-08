@@ -6,6 +6,7 @@ from rest_framework.parsers import MultiPartParser, FormParser
 from accounting.mixins import AuditMixin, BulkDestroyMixin
 # from django.db.models import F
 from django.db import models
+from decimal import Decimal
 from accounting.utils import resolve_product_price
 
 from ..models import (
@@ -23,6 +24,7 @@ from ..serializers.product_serializers import (
     VolumeDiscountSerializer, QuantityPromotionSerializer
 )
 from users.permissions import _rbac
+from users.scoping import apply_agent_scope
 from rest_framework.permissions import IsAuthenticated
 
 
@@ -68,20 +70,51 @@ class ProductViewSet(AuditMixin, BulkDestroyMixin, viewsets.ModelViewSet):
     serializer_class = ProductSerializer
 
     def get_queryset(self):
-        return (
+        qs = (
             Product.objects
             .select_related("category", "brand", "unit")
             .prefetch_related(
                 "tags", "images", "prices__price_type", "prices__warehouse",
                 "bundle_items__bundle_product__unit", "bundle_items__bundle_product__images",
-                "volume_discounts", "quantity_promotions",
+                "volume_discounts", "quantity_promotions", "allowed_warehouses",
             )
             .order_by("name")
         )
+        # ✅ Ассортиментная матрица "товар × склад" (Product.allowed_warehouses) —
+        # опт-аут: товар без привязок виден на любом складе/филиале, иначе только
+        # там, куда явно привязан. ?warehouse= имеет приоритет над ?branch=, как и
+        # везде в проекте (см. _resolve_warehouse_ids в report_views.py).
+        warehouse_id = self.request.query_params.get("warehouse")
+        branch_id = self.request.query_params.get("branch")
+        if warehouse_id:
+            qs = qs.filter(models.Q(allowed_warehouses__isnull=True) | models.Q(allowed_warehouses__id=warehouse_id)).distinct()
+        elif branch_id:
+            qs = qs.filter(models.Q(allowed_warehouses__isnull=True) | models.Q(allowed_warehouses__branch_id=branch_id)).distinct()
+        return qs
 
     def get_permissions(self):
         return _rbac(self.action, "product")
-    
+
+    def perform_update(self, serializer):
+        # ✅ allowed_warehouses — ManyToMany, AuditMixin._snapshot() его не видит
+        # (перебирает только instance._meta.concrete_fields) — пишем диф вручную,
+        # иначе смена ассортиментной матрицы товара вообще не попадёт в AuditLog.
+        old_warehouses = set(serializer.instance.allowed_warehouses.values_list("id", flat=True))
+        super().perform_update(serializer)
+        new_warehouses = set(serializer.instance.allowed_warehouses.values_list("id", flat=True))
+        if old_warehouses != new_warehouses:
+            from django.contrib.contenttypes.models import ContentType
+            from ..models import AuditLog
+            names = lambda ids: ", ".join(Warehouse.objects.filter(id__in=ids).order_by("name").values_list("name", flat=True)) or "—"
+            AuditLog.objects.create(
+                content_type=ContentType.objects.get_for_model(Product),
+                object_id=serializer.instance.pk,
+                object_repr=str(serializer.instance)[:255],
+                action=AuditLog.Action.UPDATE,
+                user=self.request.user if self.request.user.is_authenticated else None,
+                changed_data={"allowed_warehouses": {"before": names(old_warehouses), "after": names(new_warehouses)}},
+            )
+
     @action(detail=False, methods=["get"], url_path="stocks-map")
     def stocks_map(self, request):
         """
@@ -291,11 +324,133 @@ class CounterpartyViewSet(AuditMixin, viewsets.ModelViewSet):
     def get_queryset(self):
         ctype = self.request.query_params.get("type")
         if ctype == "client":
-            return Counterparty.objects.clients().order_by("name")
-        if ctype == "supplier":
-            return Counterparty.objects.suppliers().order_by("name")
-        return Counterparty.objects.order_by("name")
-    
+            qs = Counterparty.objects.clients().order_by("name")
+        elif ctype == "supplier":
+            qs = Counterparty.objects.suppliers().order_by("name")
+        else:
+            qs = Counterparty.objects.order_by("name")
+        return apply_agent_scope(qs, self.request.user)
+
+    @action(detail=True, methods=['get'], url_path='saldo')
+    def saldo(self, request, pk=None):
+        """
+        Сальдо контрагента за период — для модалки по двойному клику/Enter на строке
+        в CounterpartiesPage.tsx (вместо открытия формы редактирования). В отличие
+        от DocumentViewSet.counterparty_card (день конкретного документа, счёт по
+        складу+типу документа) здесь нет ни документа, ни склада — контрагент мог
+        фигурировать на РАЗНЫХ счетах (62 "Клиенты", 60 "Поставщики" и т.п.), поэтому
+        находим ВСЕ счета, у которых сконфигурировано субконто "Контрагенты"
+        (AccountSubconto.content_type=Counterparty), и считаем карточку по каждому —
+        обычно он один (62 или 60), но не хардкодим это.
+        """
+        from django.contrib.contenttypes.models import ContentType
+        from accounting.models import AccountSubconto
+        from accounting.views.transaction_views import _compute_subconto_card
+
+        counterparty = self.get_object()
+        date_from = request.query_params.get('date_from')
+        date_to = request.query_params.get('date_to')
+        if not date_from or not date_to:
+            return Response({'detail': 'Укажите date_from и date_to'}, status=400)
+
+        acc_subcontos = AccountSubconto.objects.filter(
+            subconto_type__content_type=ContentType.objects.get_for_model(Counterparty),
+        ).select_related('account', 'subconto_type')
+
+        accounts_data = []
+        for acc_subconto in acc_subcontos:
+            data = _compute_subconto_card(
+                request, acc_subconto.account, acc_subconto.subconto_type.slug,
+                counterparty.id, counterparty, date_from, date_to,
+            )
+            accounts_data.append(data)
+
+        return Response({
+            'counterparty_name': counterparty.name,
+            'accounts': accounts_data,
+        })
+
+    @action(detail=False, methods=['get'], url_path='bulk-saldo')
+    def bulk_saldo(self, request):
+        """
+        Массовое сальдо ВСЕХ контрагентов текущего scope за период — для мини-таблицы
+        сальдо в колонке CounterpartiesPage.tsx (тот же паттерн, что и
+        ProductsListPage.tsx::Turnovers — один batch-запрос на весь список, а не
+        N+1 отдельных запросов по каждой строке). Считает по КАЖДОМУ счёту, где
+        настроено субконто "Контрагенты" (обычно 62 "Клиенты" и/или 60
+        "Поставщики"), и суммирует по counterparty_id — если контрагент типа "both"
+        фигурирует сразу на обоих счетах, для обзорной колонки это ок; полная,
+        счёт-по-счёту разбивка — в CounterpartySaldoModal.tsx (по клику на строку).
+        Контрагенты без единой проводки в ключ результата не попадают — фронт
+        трактует отсутствие ключа как нулевое сальдо (см. ProductsListPage.tsx
+        turnoverMap[item.id] с фолбэком ?? 0).
+        """
+        from django.contrib.contenttypes.models import ContentType
+        from django.db.models import Sum, Q
+        from accounting.models import AccountSubconto, TransactionLine
+        from accounting.views.transaction_views import _tl_scope_filter
+        from users.scoping import get_user_scope
+
+        date_from = request.query_params.get('date_from')
+        date_to = request.query_params.get('date_to')
+        if not date_from or not date_to:
+            return Response({'detail': 'Укажите date_from и date_to'}, status=400)
+
+        branch_ids, warehouse_ids = get_user_scope(request.user)
+        base_filter = _tl_scope_filter(request, branch_ids, warehouse_ids)
+
+        acc_subcontos = AccountSubconto.objects.filter(
+            subconto_type__content_type=ContentType.objects.get_for_model(Counterparty),
+        ).select_related('account', 'subconto_type')
+
+        def to_int(value):
+            try:
+                return int(value)
+            except (TypeError, ValueError):
+                return None
+
+        result = {}
+
+        def entry_for(cid):
+            return result.setdefault(cid, {
+                'opening_balance': Decimal('0'), 'total_debit': Decimal('0'), 'total_credit': Decimal('0'),
+            })
+
+        for acc_subconto in acc_subcontos:
+            key_lookup = f'subcontos__{acc_subconto.subconto_type.slug}'
+            base_qs = TransactionLine.objects.filter(base_filter, account_id=acc_subconto.account_id).exclude(
+                **{f'{key_lookup}__isnull': True}
+            )
+
+            pre_rows = base_qs.filter(journal_entry__date__date__lt=date_from).values(key_lookup).annotate(
+                debit=Sum('amount', filter=Q(side='debit'), default=Decimal('0')),
+                credit=Sum('amount', filter=Q(side='credit'), default=Decimal('0')),
+            )
+            for row in pre_rows:
+                cid = to_int(row[key_lookup])
+                if cid is None:
+                    continue
+                entry_for(cid)['opening_balance'] += (row['debit'] or Decimal('0')) - (row['credit'] or Decimal('0'))
+
+            period_rows = base_qs.filter(
+                journal_entry__date__date__gte=date_from, journal_entry__date__date__lte=date_to,
+            ).values(key_lookup).annotate(
+                debit=Sum('amount', filter=Q(side='debit'), default=Decimal('0')),
+                credit=Sum('amount', filter=Q(side='credit'), default=Decimal('0')),
+            )
+            for row in period_rows:
+                cid = to_int(row[key_lookup])
+                if cid is None:
+                    continue
+                entry = entry_for(cid)
+                entry['total_debit']  += row['debit'] or Decimal('0')
+                entry['total_credit'] += row['credit'] or Decimal('0')
+
+        for entry in result.values():
+            entry['closing_balance'] = entry['opening_balance'] + entry['total_debit'] - entry['total_credit']
+
+        return Response(result)
+
 
 
 class WarehouseViewSet(AuditMixin, viewsets.ModelViewSet):

@@ -44,9 +44,12 @@ import SubcontoTypesPage from "../../features/accounting/pages/Accounting/Subcon
 import OSVPage from "../../features/accounting/pages/Accounting/OSVPage";
 import ProductTurnoverPage from "../../features/accounting/pages/Accounting/ProductTurnoverPage";
 import ProductTurnoverDetailPage from "../../features/accounting/pages/Accounting/ProductTurnoverDetailPage";
+import SubcontoBreakdownPage from "../../features/accounting/pages/Accounting/SubcontoBreakdownPage";
+import SubcontoCardPage from "../../features/accounting/pages/Accounting/SubcontoCardPage";
 import Employees from "../../features/accounting/pages/Employees/Employees";
 import EmployeesPage from "../../features/accounting/pages/Employees/EmployeesPage";
 import PositionsPage from "../../features/accounting/pages/Employees/PositionsPage";
+import AgentsPage from "../../features/accounting/pages/Employees/AgentsPage";
 import AuditLogPage from "../../features/accounting/pages/Accounting/AuditLogPage";
 import Documents from "../../features/accounting/pages/Documents/Documents";
 import InvoicesPage from "../../features/accounting/pages/Documents/InvoicesPage";
@@ -119,6 +122,8 @@ const AppRouter: React.FC = () => {
             <Route path="audit-log" element={<AuditLogPage />} />
           </Route>
           <Route path={ROUTES.APP.ACCOUNTING_PRODUCT_TURNOVER_DETAIL} element={<ProductTurnoverDetailPage />} />
+          <Route path={ROUTES.APP.ACCOUNTING_SUBCONTO_BREAKDOWN} element={<SubcontoBreakdownPage />} />
+          <Route path={ROUTES.APP.ACCOUNTING_SUBCONTO_CARD} element={<SubcontoCardPage />} />
 
           {/* Справочники — тот же принцип: свой resource на каждой вложенной странице */}
           <Route path={ROUTES.APP.DIRECTORY} element={<Directory />}>
@@ -163,6 +168,7 @@ const AppRouter: React.FC = () => {
           <Route index element={<Navigate to="list" replace />} />
           <Route path="list" element={<EmployeesPage />} />
           <Route path="positions" element={<PositionsPage />} />
+          <Route path="agents" element={<AgentsPage />} />
         </Route>
 
         <Route path={ROUTES.APP.DOCUMENTS} element={<Documents />}>

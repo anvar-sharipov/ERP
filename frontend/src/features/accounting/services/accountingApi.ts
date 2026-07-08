@@ -63,6 +63,21 @@ export const accountApi = {
     return res.data;
   },
 
+  getAccountDetail: async (id: number) => {
+    const res = await api.get(`/accounting/accounts/${id}/`);
+    return res.data;
+  },
+
+  getSubcontoBreakdown: async (params: { account: string; subconto_slug: string; date_from: string; date_to: string; show_zero?: boolean; warehouse?: string; branch?: string }) => {
+    const res = await api.get('/accounting/journal-entries/subconto-breakdown/', { params });
+    return res.data;
+  },
+
+  getSubcontoCard: async (params: { account: string; subconto_slug: string; subconto_id: string; date_from: string; date_to: string; warehouse?: string; branch?: string }) => {
+    const res = await api.get('/accounting/journal-entries/subconto-card/', { params });
+    return res.data;
+  },
+
   getProductTurnover: async (params: { date_from: string; date_to: string; warehouse?: string; branch?: string }) => {
     const res = await api.get('/accounting/reports/product-turnover/', { params });
     return res.data;
@@ -75,7 +90,7 @@ export const accountApi = {
 
   getStockBalance: async (params: { warehouse?: string; branch?: string }) => {
     const res = await api.get('/accounting/reports/stock-balance/', { params });
-    return res.data as Record<string, { quantity: string; reserved: string; available: string }>;
+    return res.data as Record<string, { quantity: string; reserved: string; available: string; min_stock_level: number | null; is_low: boolean }>;
   },
 
   // est backend paginasiya

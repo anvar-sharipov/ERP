@@ -12,15 +12,22 @@ export const MainTab = ({
   units,
   brands,
   tags,
+  warehouses,
   categories,
   isEdit,
 }: MainTabProps) => {
   const f = (key: keyof ProductFormData) => (e: React.ChangeEvent<HTMLInputElement>) => setForm((p) => ({ ...p, [key]: e.target.value }));
-  
+
     const toggleTag = (id: number) =>
       setForm((p) => ({
         ...p,
         tag_ids: p.tag_ids.includes(id) ? p.tag_ids.filter((t) => t !== id) : [...p.tag_ids, id],
+      }));
+
+    const toggleWarehouse = (id: number) =>
+      setForm((p) => ({
+        ...p,
+        allowed_warehouse_ids: p.allowed_warehouse_ids.includes(id) ? p.allowed_warehouse_ids.filter((w) => w !== id) : [...p.allowed_warehouse_ids, id],
       }));
   
     return (
@@ -101,6 +108,32 @@ export const MainTab = ({
           </div>
         </div>
   
+        {/* ✅ Ассортиментная матрица "товар × склад" — пусто = виден на любом
+            складе (опт-аут, см. Product.allowed_warehouses). Тот же паттерн
+            чипов-переключателей, что и у тегов выше. */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+            Разрешённые склады <span className="font-normal text-gray-400">(ничего не выбрано — виден на всех)</span>
+          </label>
+          <div className="flex flex-wrap gap-2">
+            {warehouses.map((w) => {
+              const active = form.allowed_warehouse_ids.includes(w.id);
+              return (
+                <button
+                  key={w.id}
+                  type="button"
+                  onClick={() => toggleWarehouse(w.id)}
+                  className={`px-2 py-1 text-xs rounded-full border transition-colors ${
+                    active ? "bg-indigo-600 border-indigo-600 text-white" : "border-gray-300 dark:border-slate-600 text-gray-600 dark:text-gray-400 hover:border-indigo-400"
+                  }`}
+                >
+                  {w.name}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
         <Input label="description" value={form.description} onChange={f("description")} placeholder="description" />
   
         <label className="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300 cursor-pointer">

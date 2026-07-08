@@ -24,36 +24,36 @@ services:
 
   # 3. Бэкенд Django (запуск через Daphne) build: ./backend
   backend:
-    build: 
+    build:
       context: .           # Было ./backend, поставьте . (точка - это корень)
       dockerfile: backend/Dockerfile
+    # ✅ Явный тег образа (а не то, что compose придумает сам по имени папки) —
+    # celery-worker/celery-beat ниже ссылаются на этот же ТЕГ вместо своей
+    # отдельной сборки (у них тот же Dockerfile/код). Значит для офлайн-переноса
+    # на новый ПК ничего нового сохранять/грузить не нужно — существующий
+    # backend-erp.tar (docker save -o backend-erp.tar my_erp-backend:latest)
+    # уже покрывает и celery — это буквально тот же образ.
+    image: my_erp-backend:latest
     restart: always
-    # Команда запуска: собирает статику и стартует сервер daphne
-    # command: >
-    #   sh -c "python manage.py migrate_schemas --shared --noinput &&
-    #          python init_tenant.py &&
-    #          python manage.py sync_permissions &&
-    #          python manage.py collectstatic --noinput &&
-    #          daphne -b 0.0.0.0 -p 8000 config.asgi:application"
-    # command: ["sh", "/app/entrypoint.sh"]
+    # ✅ Второй migrate_schemas (без --shared) обязателен — иначе миграции,
+    # добавленные ПОСЛЕ первого создания тенанта, никогда не применятся к уже
+    # существующим схемам тенантов (новый тенант мигрируется автоматически
+    # через auto_create_schema, но повторный деплой с новой миграцией — нет).
     command: >
       sh -c "python manage.py migrate_schemas --shared --noinput &&
             python init_tenant.py &&
+            python manage.py migrate_schemas --noinput &&
             python manage.py sync_permissions &&
+            python manage.py bootstrap_daily_checks_schedule &&
             python manage.py collectstatic --noinput &&
             exec daphne -b 0.0.0.0 -p 8000 config.asgi:application"
+    # ✅ Без bind-mount'а ./backend:/app — код уже "запечён" в образ на этапе
+    # build (COPY . .). Значит перенос на офлайн-хост = только .tar образа +
+    # этот compose-файл + .env, БЕЗ копирования папки backend/ целиком.
+    # Именованные тома ниже — не код, а персистентные данные (статика/медиа).
     volumes:
-      - ./backend:/app
       - django_static:/app/static
       - django_media:/app/media
-    # environment:
-    #   - SECRET_KEY=${DJANGO_SECRET_KEY}
-    #   - DEBUG=${DJANGO_DEBUG}
-    #   - PROJECT_DOMAIN=${PROJECT_DOMAIN}
-    #   - DB_HOST=db
-    #   - DB_NAME=erp_db
-    #   - DB_USER=postgres
-    #   - DB_PASSWORD=novedu112garagoz
 
     environment:
       - DJANGO_SECRET_KEY=${DJANGO_SECRET_KEY}
@@ -80,50 +80,84 @@ services:
       db:
         condition: service_healthy
 
+  celery-worker:
+    # ✅ Без своего build: — использует уже собранный тег my_erp-backend:latest
+    # (см. комментарий у backend выше). Docker Compose соберёт его один раз
+    # (по инструкции у backend), а не три раза под три разных тега.
+    image: my_erp-backend:latest
+    restart: always
+    command: celery -A config worker -l info
+    volumes:
+      - django_media:/app/media
+    environment:
+      - DJANGO_SECRET_KEY=${DJANGO_SECRET_KEY}
+      - DEBUG=${DJANGO_DEBUG}
+      - PROJECT_DOMAIN=${PROJECT_DOMAIN}
+      - DB_HOST=${DB_HOST}
+      - DB_NAME=${DB_NAME}
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - REDIS_URL=${REDIS_URL}
+      - CELERY_BROKER_URL=${CELERY_BROKER_URL}
+      - CELERY_RESULT_BACKEND=${CELERY_RESULT_BACKEND}
+    depends_on:
+      redis:
+        condition: service_started
+      db:
+        condition: service_healthy
+      backend:
+        condition: service_started
+
+  celery-beat:
+    # ✅ Тот же тег, что и backend/celery-worker — см. комментарий выше.
+    image: my_erp-backend:latest
+    restart: always
+    command: celery -A config beat -l info --scheduler django_celery_beat.schedulers:DatabaseScheduler
+    environment:
+      - DJANGO_SECRET_KEY=${DJANGO_SECRET_KEY}
+      - DEBUG=${DJANGO_DEBUG}
+      - PROJECT_DOMAIN=${PROJECT_DOMAIN}
+      - DB_HOST=${DB_HOST}
+      - DB_NAME=${DB_NAME}
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - REDIS_URL=${REDIS_URL}
+      - CELERY_BROKER_URL=${CELERY_BROKER_URL}
+      - CELERY_RESULT_BACKEND=${CELERY_RESULT_BACKEND}
+    depends_on:
+      redis:
+        condition: service_started
+      db:
+        condition: service_healthy
+      backend:
+        condition: service_started
+
   # Генерация SSL сертификата (запускается один раз)
   ssl-gen:
     # image: alpine/openssl
     image: alpine/openssl:3.3.1
     volumes:
       - ./nginx/ssl:/ssl
-    command: >
-      sh -c "
+    # ✅ Образ alpine/openssl:3.3.1 имеет ENTRYPOINT ["openssl"] — без переопределения
+    # entrypoint команда "sh -c ..." выполнялась бы как "openssl sh -c ...", что
+    # невалидно. Явно переопределяем entrypoint на sh, чтобы command был shell-скриптом.
+    # ✅ command задан СПИСКОМ из одного элемента — иначе Compose сам разбивает
+    # многострочную строку на отдельные shell-слова по переносам строк, обрывая
+    # скрипт на первой строке (без кавычек-обёртки нет группировки в один токен).
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
         if [ ! -f /ssl/nginx.crt ]; then
           echo 'Generating SSL certificate...'
-          openssl req -x509 -nodes -days 365 -newkey rsa:2048
-            -keyout /ssl/nginx.key
-            -out /ssl/nginx.crt
+          openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
+            -keyout /ssl/nginx.key \
+            -out /ssl/nginx.crt \
             -subj '/CN=${PROJECT_DOMAIN}'
           echo 'SSL certificate generated!'
         else
           echo 'SSL certificate already exists, skipping...'
         fi
-      "
 
-  # dns:
-  #   image: jpillora/dnsmasq
-  #   restart: always
-  #   ports:
-  #     - "53:53/udp"
-  #     - "53:53/tcp"
-  #   environment:
-  #     DNSMASQ_CONF: |
-  #       address=/erp.local/192.168.43.13
-  #       server=8.8.8.8
-  #       no-resolv
-  #   cap_add:
-  #     - NET_ADMIN
-  # dns:
-  #   image: alpine:3.20
-  #   restart: always
-  #   ports:
-  #     - "53:53/udp"
-  #     - "53:53/tcp"
-  #   volumes:
-  #     - ./dnsmasq.conf:/etc/dnsmasq.conf
-  #   cap_add:
-  #     - NET_ADMIN
-  #   command: sh -c "apk add --no-cache dnsmasq && dnsmasq --no-daemon --conf-file=/etc/dnsmasq.conf"
   dns:
     image: jpillora/dnsmasq
     restart: always

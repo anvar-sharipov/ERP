@@ -1,5 +1,6 @@
 // frontend/src/features/accounting/services/productApi.ts
 import { api } from "../../../core/api/axiosInstance";
+import { type SaldoAccountData } from "../../../components/ui/SaldoTable";
 
 export const unitApi = {
   getAll: async () => (await api.get("/accounting/units/")).data,
@@ -34,7 +35,10 @@ export const productCategoryApi = {
 };
 
 export const productApi = {
-  getAll: async () => (await api.get("/accounting/products/")).data,
+  // ✅ warehouse/branch — ассортиментная матрица "товар × склад" (backend:
+  // ProductViewSet.get_queryset, Product.allowed_warehouses). Товар без
+  // привязок виден всегда; ?warehouse= имеет приоритет над ?branch=.
+  getAll: async (params?: { warehouse?: number; branch?: number }) => (await api.get("/accounting/products/", { params })).data,
   getOne: async (id: number) => (await api.get(`/accounting/products/${id}/`)).data,
   save: (id: number | null, data: any) =>
     id ? api.put(`/accounting/products/${id}/`, data) : api.post("/accounting/products/", data),
@@ -99,6 +103,32 @@ export const counterpartyApi = {
       ? api.put(`/accounting/counterparties/${id}/`, data, { headers: { "Content-Type": "multipart/form-data" } })
       : api.post("/accounting/counterparties/", data, { headers: { "Content-Type": "multipart/form-data" } }),
   delete: (id: number) => api.delete(`/accounting/counterparties/${id}/`),
+
+  // ✅ Сальдо контрагента за период — для модалки по двойному клику/Enter на строке
+  // в CounterpartiesPage.tsx (см. CounterpartyViewSet.saldo). В отличие от
+  // getCounterpartyCard (карточка на форме накладной, день+счёт по документу) —
+  // здесь диапазон дат и по ВСЕМ счетам, где у контрагента есть проводки.
+  getSaldo: async (
+    id: number,
+    params: { date_from: string; date_to: string; warehouse?: string; branch?: string },
+  ): Promise<{ counterparty_name: string; accounts: SaldoAccountData[] }> => {
+    const res = await api.get(`/accounting/counterparties/${id}/saldo/`, { params });
+    return res.data;
+  },
+
+  // ✅ Массовое сальдо ВСЕХ контрагентов за период одним запросом — для мини-колонки
+  // "Сальдо" в CounterpartiesPage.tsx (см. CounterpartyViewSet.bulk_saldo, тот же
+  // паттерн, что и ProductsListPage.tsx::stockBalance/turnoverMap). Контрагенты без
+  // проводок отсутствуют в результате — фронт трактует это как нулевое сальдо.
+  getBulkSaldo: async (params: {
+    date_from: string;
+    date_to: string;
+    warehouse?: string;
+    branch?: string;
+  }): Promise<Record<string, { opening_balance: number; total_debit: number; total_credit: number; closing_balance: number }>> => {
+    const res = await api.get(`/accounting/counterparties/bulk-saldo/`, { params });
+    return res.data;
+  },
 };
 
 export const warehouseApi = {

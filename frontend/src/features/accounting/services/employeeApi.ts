@@ -20,6 +20,25 @@ export const employeeApi = {
     api.delete(`/accounting/employees/${id}/`),
 };
 
+export const agentApi = {
+  getAll: async (params?: Record<string, string>) =>
+    (await api.get("/accounting/agents/", { params })).data,
+
+  getOne: async (id: number) =>
+    (await api.get(`/accounting/agents/${id}/`)).data,
+
+  save: (id: number | null, data: any) =>
+    id
+      ? api.put(`/accounting/agents/${id}/`, data)
+      : api.post("/accounting/agents/", data),
+
+  delete: (id: number) =>
+    api.delete(`/accounting/agents/${id}/`),
+
+  bulkDelete: (ids: number[]) =>
+    api.delete("/accounting/agents/bulk-destroy/", { data: { ids } }),
+};
+
 export const positionApi = {
   getAll: async () =>
     (await api.get("/accounting/positions/")).data,

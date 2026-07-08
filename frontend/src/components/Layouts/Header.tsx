@@ -5,6 +5,7 @@ import { playAside2Sound } from "../../core/utils/sound";
 import { useCompany } from "../../core/context/CompanyContext";
 import { UserProfileBlock } from "../ui/UserProfileBlock";
 import { ExchangeRateWidget } from "../ui/ExchangeRateWidget";
+import { AlertBell } from "../ui/AlertBell";
 
 import { useChat } from "../../features/chat/context/ChatContext";
 import { motion, AnimatePresence } from "framer-motion";
@@ -133,6 +134,8 @@ const Header: React.FC<HeaderProps> = ({ onToggleSidebar, onToggleSidebarRight }
       <div className="hidden lg:flex items-center gap-3">
         {/* ✅ Иконка чата с бейджем */}
         <ChatButton />
+        {/* ✅ Колокольчик системных алертов (снапшот/остатки — см. accounting/tasks.py) */}
+        <AlertBell />
         <ExchangeRateWidget />
         <LanguageSwitcher />
         <ThemeToggle />
@@ -157,6 +160,7 @@ const Header: React.FC<HeaderProps> = ({ onToggleSidebar, onToggleSidebarRight }
 
       {/* Мобильная правая часть */}
       <div className="flex lg:hidden items-center gap-1">
+        <AlertBell />
         <button
           onClick={() => {
             playAside2Sound();

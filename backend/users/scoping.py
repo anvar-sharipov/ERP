@@ -63,3 +63,28 @@ def apply_scope(
         q |= Q(**{f"{warehouse_field}__in": warehouse_ids})
 
     return queryset.filter(q)
+
+
+def is_agent(user) -> bool:
+    """Есть ли у пользователя роль "Агент" (см. Counterparty.agent/apply_agent_scope)."""
+    if user.is_superuser:
+        return False
+    from users.models import UserRole
+    return UserRole.objects.filter(user=user, role__name='Агент').exists()
+
+
+def apply_agent_scope(queryset: QuerySet, user, agent_field: str = 'agent__employee__user') -> QuerySet:
+    """
+    Фильтрует queryset для роли "Агент" — такой пользователь видит только записи,
+    привязанные (через agent_field) к Counterparty.agent (Agent), чей Agent.employee.user == user.
+    Один Employee может иметь несколько Agent-профилей (районов) — пользователь
+    увидит записи по ВСЕМ своим Agent-профилям сразу. Все остальные роли (и
+    суперюзер) видят как есть — без ограничения.
+
+    agent_field — путь от модели queryset до User через Counterparty.agent.Agent.employee.user:
+        Counterparty:      agent_field='agent__employee__user' (по умолчанию)
+        Document/накладные: agent_field='counterparty__agent__employee__user'
+    """
+    if not is_agent(user):
+        return queryset
+    return queryset.filter(**{agent_field: user})

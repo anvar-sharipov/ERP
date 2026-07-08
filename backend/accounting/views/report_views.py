@@ -7,7 +7,7 @@ from rest_framework import viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
-from accounting.models import Document, DocumentItem, Warehouse, WarehouseStock, WarehouseProductSnapshot
+from accounting.models import Document, DocumentItem, Product, Warehouse, WarehouseStock, WarehouseProductSnapshot
 from users.permissions import _rbac
 from users.scoping import get_user_scope
 
@@ -85,14 +85,22 @@ def _new_bucket(product):
 
 
 def _closing(b):
+    """
+    ✅ По просьбе пользователя: "Начало"/"Конец" — ВСЕГДА qty × текущая
+    себестоимость товара (b['cost_price']), не накопленная историческая сумма.
+    "Приход"/"Расход" при этом остаются реальными суммами по факту документа
+    (см. основной цикл ниже) — это отдельная витрина "что реально было по
+    накладным", она сознательно НЕ обязана арифметически сходиться с
+    Начало/Конец (это разные вещи: факт движения денег vs текущая оценка
+    остатка). Раньше Конец считался как Начало+Приход-Расход по историческим
+    суммам — из-за разницы цены продажи и себестоимости на разных документах
+    сумма могла уйти в минус, хотя количество было верным.
+    """
     closing_qty = (
         b['opening_qty'] + b['in_qty'] + b['return_in_qty']
         - b['out_qty'] - b['return_out_qty'] + b['move_qty']
     )
-    closing_value = (
-        b['opening_value'] + b['in_value'] + b['return_in_value']
-        - b['out_after_discount'] - b['return_out_value'] + b['move_value']
-    )
+    closing_value = closing_qty * b['cost_price']
     return closing_qty, closing_value
 
 
@@ -151,17 +159,41 @@ class ReportViewSet(viewsets.ViewSet):
         )
         reserved_map = {r['product_id']: (r['qty'] or Decimal('0')) for r in reserved_rows}
 
+        # ✅ is_low — остаток (quantity, не available) ниже Product.min_stock_level
+        # в ВЫБРАННОМ scope (warehouse/branch), не через SystemAlert (та таблица
+        # обновляется только по расписанию Celery Beat / ручному "проверить сейчас"
+        # и может быть устаревшей) — используется для маркировки в ProductsListPage
+        # и фильтра "Только с нехваткой" в сайдбаре.
+        min_stock_map = dict(Product.objects.filter(min_stock_level__gt=0, is_active=True).values_list('id', 'min_stock_level'))
+
         result = {}
         for r in stock_rows:
             pid = r['product_id']
             qty = r['qty'] or Decimal('0')
             reserved = reserved_map.pop(pid, Decimal('0'))
-            result[str(pid)] = {'quantity': str(qty), 'reserved': str(reserved), 'available': str(qty - reserved)}
+            min_level = min_stock_map.get(pid)
+            result[str(pid)] = {
+                'quantity': str(qty), 'reserved': str(reserved), 'available': str(qty - reserved),
+                'min_stock_level': min_level, 'is_low': min_level is not None and qty < min_level,
+            }
         # ✅ Товар без строк WarehouseStock (остаток 0), но с резервом по черновикам —
         # тоже нужно показать: остаток 0, доступно уходит в минус — явный сигнал,
         # что заказано больше, чем реально есть на складе.
         for pid, reserved in reserved_map.items():
-            result[str(pid)] = {'quantity': '0', 'reserved': str(reserved), 'available': str(Decimal('0') - reserved)}
+            min_level = min_stock_map.get(pid)
+            result[str(pid)] = {
+                'quantity': '0', 'reserved': str(reserved), 'available': str(Decimal('0') - reserved),
+                'min_stock_level': min_level, 'is_low': min_level is not None,
+            }
+
+        # ✅ Товар без ЛЮБЫХ движений в этом scope (ни остатка, ни резерва), но с
+        # min_stock_level > 0 — тоже "мало" (остаток фактически 0 < порога), иначе
+        # такие товары вообще не появились бы в result и не подсветились бы в списке.
+        for pid, min_level in min_stock_map.items():
+            key = str(pid)
+            if key not in result:
+                result[key] = {'quantity': '0', 'reserved': '0', 'available': '0', 'min_stock_level': min_level, 'is_low': True}
+
         return Response(result)
 
     @action(detail=False, methods=['get'], url_path='product-turnover')
@@ -212,7 +244,9 @@ class ReportViewSet(viewsets.ViewSet):
                 for snap in snap_qs.iterator(chunk_size=500):
                     b = balance.setdefault(snap.product.id, _new_bucket(snap.product))
                     b['opening_qty'] += snap.quantity
-                    b['opening_value'] += snap.value
+                    # ✅ opening_value НЕ берём из снапшота — см. _closing() выше,
+                    # оно всегда пересчитывается как opening_qty × текущая
+                    # себестоимость, в конце функции.
                 date_filter = Q(document__date__gt=snapshot_date, document__date__lte=date_to)
             else:
                 date_filter = Q(document__date__lte=date_to)
@@ -242,6 +276,11 @@ class ReportViewSet(viewsets.ViewSet):
                 net = gross - discount_amt
                 is_pre = doc.date < date_from_obj
 
+                # ✅ "Приход"/"Расход" — РЕАЛЬНЫЕ суммы по факту документа (что
+                # реально указано в накладной), не себестоимость — по просьбе
+                # пользователя эта витрина сознательно не обязана арифметически
+                # сходиться с Начало/Конец (см. _closing() выше — там Начало/
+                # Конец = qty × текущая себестоимость, независимо от истории).
                 flows = []  # (qty_delta, value_delta, bucket)
                 if doc.document_type == 'in' and doc.warehouse_id == warehouse_id:
                     flows.append((qty, gross, 'in'))
@@ -259,9 +298,11 @@ class ReportViewSet(viewsets.ViewSet):
 
                 for qty_delta, value_delta, bucket in flows:
                     if is_pre:
+                        # ✅ До снапшота нужен только qty (opening_value считается
+                        # в конце как opening_qty × текущая себестоимость) —
+                        # value здесь больше не накапливаем.
                         sign = -1 if bucket in ('out', 'return_out', 'move_out') else 1
                         b['opening_qty'] += sign * qty_delta
-                        b['opening_value'] += sign * value_delta
                         continue
 
                     if bucket == 'in':
@@ -287,6 +328,7 @@ class ReportViewSet(viewsets.ViewSet):
 
         data = []
         for b in balance.values():
+            b['opening_value'] = b['opening_qty'] * b['cost_price']
             closing_qty, closing_value = _closing(b)
             b['closing_qty'] = closing_qty
             b['closing_value'] = closing_value
@@ -321,7 +363,6 @@ class ReportViewSet(viewsets.ViewSet):
         # полного скана истории до date_from. Если для склада снапшота нет (ни разу
         # не закрывали) — старое поведение, полный скан для этого склада.
         opening_qty = Decimal('0')
-        opening_value = Decimal('0')
 
         for warehouse_id in wh_set:
             snapshot_date = (
@@ -337,7 +378,8 @@ class ReportViewSet(viewsets.ViewSet):
                 ).first()
                 if snap:
                     opening_qty += snap.quantity
-                    opening_value += snap.value
+                    # ✅ opening_value не берём из снапшота — см. ниже, "Начало"
+                    # всегда пересчитывается как opening_qty × текущая себестоимость.
                 date_filter = Q(document__date__gt=snapshot_date, document__date__lt=date_from)
             else:
                 date_filter = Q(document__date__lt=date_from)
@@ -356,21 +398,24 @@ class ReportViewSet(viewsets.ViewSet):
             for item in items_qs.iterator():
                 doc = item.document
                 qty = item.quantity
-                gross = qty * item.price
-                net = gross - (gross * item.discount_percent / Decimal('100'))
-                if doc.document_type in ('in', 'return_in') and doc.warehouse_id == warehouse_id:
+                # ✅ По просьбе пользователя: "Начало"/"Конец" — ВСЕГДА
+                # qty × текущая себестоимость (см. ниже opening_value=...),
+                # поэтому здесь достаточно накопить только количество.
+                if doc.document_type == 'in' and doc.warehouse_id == warehouse_id:
                     opening_qty += qty
-                    opening_value += gross
-                elif doc.document_type in ('out', 'return_out') and doc.warehouse_id == warehouse_id:
+                elif doc.document_type == 'return_in' and doc.warehouse_id == warehouse_id:
+                    opening_qty += qty
+                elif doc.document_type == 'out' and doc.warehouse_id == warehouse_id:
                     opening_qty -= qty
-                    opening_value -= net if doc.document_type == 'out' else gross
+                elif doc.document_type == 'return_out' and doc.warehouse_id == warehouse_id:
+                    opening_qty -= qty
                 elif doc.document_type == 'move':
                     if doc.warehouse_id == warehouse_id:
                         opening_qty -= qty
-                        opening_value -= gross
                     if doc.warehouse_to_id == warehouse_id:
                         opening_qty += qty
-                        opening_value += gross
+
+        opening_value = opening_qty * product.cost_price
 
         period_items = (
             DocumentItem.objects
@@ -388,9 +433,15 @@ class ReportViewSet(viewsets.ViewSet):
 
         rows = []
         balance_qty = opening_qty
-        balance_value = opening_value
         turnover = {'in_qty': Decimal('0'), 'in_value': Decimal('0'), 'return_qty': Decimal('0'), 'return_value': Decimal('0'), 'out_qty': Decimal('0'), 'out_value': Decimal('0')}
 
+        # ✅ По просьбе пользователя: "Приход"/"Расход" ниже — РЕАЛЬНЫЕ суммы по
+        # факту документа (gross/net от item.price), не себестоимость. А вот
+        # "Остаток" (balance_sum на каждой строке, и итоговый end_value) —
+        # ВСЕГДА qty × текущая себестоимость (product.cost_price), пересчитывается
+        # заново на каждой строке, а не накапливается — поэтому эти два ряда
+        # цифр сознательно не обязаны биться "Начало+Приход-Расход=Остаток" по
+        # сумме (только по количеству), см. _closing() в product_turnover выше.
         for item in period_items:
             doc = item.document
             qty = item.quantity
@@ -406,28 +457,24 @@ class ReportViewSet(viewsets.ViewSet):
                 in_qty = qty
                 value = gross
                 balance_qty += qty
-                balance_value += gross
                 turnover['in_qty'] += qty
                 turnover['in_value'] += gross
             elif doc.document_type == 'return_in' and doc.warehouse_id in wh_set:
                 return_qty = qty
                 value = gross
                 balance_qty += qty
-                balance_value += gross
                 turnover['return_qty'] += qty
                 turnover['return_value'] += gross
             elif doc.document_type == 'out' and doc.warehouse_id in wh_set:
                 out_qty = qty
                 value = net
                 balance_qty -= qty
-                balance_value -= net
                 turnover['out_qty'] += qty
                 turnover['out_value'] += net
             elif doc.document_type == 'return_out' and doc.warehouse_id in wh_set:
                 out_qty = qty
                 value = gross
                 balance_qty -= qty
-                balance_value -= gross
                 turnover['out_qty'] += qty
                 turnover['out_value'] += gross
             elif doc.document_type == 'move':
@@ -435,12 +482,12 @@ class ReportViewSet(viewsets.ViewSet):
                     out_qty = qty
                     value = gross
                     balance_qty -= qty
-                    balance_value -= gross
                 if doc.warehouse_to_id in wh_set:
                     in_qty = qty
                     value = gross
                     balance_qty += qty
-                    balance_value += gross
+
+            balance_value = balance_qty * product.cost_price
 
             rows.append({
                 'date': doc.date,
@@ -463,7 +510,7 @@ class ReportViewSet(viewsets.ViewSet):
             })
 
         end_qty = balance_qty
-        end_value = balance_value
+        end_value = end_qty * product.cost_price
 
         return Response({
             'product_id': product.id,

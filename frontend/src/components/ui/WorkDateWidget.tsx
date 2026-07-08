@@ -10,7 +10,6 @@ import { usePageAccess } from "../../core/hooks/usePageAccess";
 import { RBACGuard } from "./RBACGuard";
 import { ConfirmModal } from "./Modal/ConfirmModal";
 import { useShallow } from "zustand/react/shallow";
-import { useMemo } from "react";
 import { formatDateDisplay } from "../../core/utils/formatDate";
 
 export default function WorkDateWidget() {
@@ -107,13 +106,6 @@ export default function WorkDateWidget() {
       setConfirmOpen(null);
       notify("error", err.response?.data?.detail || t("Error"));
     },
-  });
-
-  // Нужен id текущей закрытой записи для reopen — тянем check без флага, отдельно
-  const { data: closedRecord } = useQuery({
-    queryKey: ["closed-period-record", workDate, workWarehouse?.id],
-    queryFn: () => closedPeriodApi.checkWarehouses(workDate, [workWarehouse!.id]).then((r) => r.data[0] ?? null),
-    enabled: !!workDate && !!workWarehouse && isClosed,
   });
 
   const reopenMutation = useMutation({

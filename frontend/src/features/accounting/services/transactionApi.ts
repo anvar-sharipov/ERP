@@ -54,6 +54,7 @@ export interface JournalEntryPayload {
   number?:      string
   date?:        string
   branch?: number | null;
+  warehouse?: number | null;
   description: string
   lines:       TransactionLine[]
 }

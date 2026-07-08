@@ -17,6 +17,7 @@ interface OSVRow {
   credit_turnover: string;
   closing_debit: string;
   closing_credit: string;
+  has_subconto?: boolean;
 }
 
 interface OSVTableProps {

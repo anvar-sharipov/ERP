@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { Outlet, useLocation } from "react-router-dom";
+import { Outlet } from "react-router-dom";
 import { getTenantInfo } from "../../core/utils/tenant";
 import Header from "./Header";
 import SidebarLeft from "./SidebarLeft";
@@ -17,14 +17,11 @@ import { useQuery } from "@tanstack/react-query";
 import { branchApi } from "../../features/accounting/services/branchApi";
 import { useDateStore } from "../../core/store/dateStore";
 
-const fullWidthPages: string[] = [];
-
 export const AppLayout: React.FC = () => {
   const tenantInfo = useMemo(() => getTenantInfo(), []);
   const { isSubdomain } = tenantInfo;
   const { company: currentCompany } = useCompany();
   const { user: currentUser } = useUser();
-  const location = useLocation();
   const { t } = useTranslation();
   // const { workBranch } = useDateStore();
   const workBranch = useDateStore((s) => s.workBranch);
@@ -102,8 +99,6 @@ export const AppLayout: React.FC = () => {
     return saved !== null ? JSON.parse(saved) : true;
   });
 
-  const isFullWidth = fullWidthPages.some((path) => location.pathname.startsWith(path));
-
   // Автоматическое скрытие на мобильных при первой загрузке
   useEffect(() => {
     if (window.innerWidth < 1024) {
@@ -122,69 +117,75 @@ export const AppLayout: React.FC = () => {
 
   return (
     <div className="flex flex-col h-screen text-[11px] md:text-base bg-gray-100 dark:bg-slate-900 text-gray-900 dark:text-slate-100 overflow-hidden print:p-0 print:m-0 print:bg-white print:block print:h-auto">
-      {/* 1. ХЕДЕР */}
-      {isSubdomain ? <Header onToggleSidebar={() => setIsLeftOpen((v) => !v)} onToggleSidebarRight={() => setIsRightOpen((v) => !v)} /> : <AdminHeader />}
+      {/* 1. ХЕДЕР — та же ширина/центрирование, что и у группы сайдбары+контент ниже
+          (max-w-[1900px]), чтобы шапка не была шире и не "выпирала" за их пределы. */}
+      <div className="flex justify-center shrink-0">
+        <div className="w-full max-w-[1900px]">
+          {isSubdomain ? <Header onToggleSidebar={() => setIsLeftOpen((v) => !v)} onToggleSidebarRight={() => setIsRightOpen((v) => !v)} /> : <AdminHeader />}
+        </div>
+      </div>
 
       {/* 2. РАБОЧАЯ ОБЛАСТЬ */}
-      <div className="flex flex-1 min-h-0 overflow-hidden relative">
-        {/* ЛЕВЫЙ САЙДБАР */}
-        {isSubdomain ? <SidebarLeft isOpen={isLeftOpen} setIsOpen={setIsLeftOpen} /> : <AdminSidebarLeft />}
+      {/* ✅ justify-center — на широких экранах вся группа (левый сайдбар + контент +
+          правый сайдбар) ограничена по ширине (см. max-w на обёртке ниже) и центрируется
+          целиком; свободное место остаётся СНАРУЖИ (слева от левого сайдбара и справа от
+          правого), а не между сайдбарами и контентом — сайдбары всегда прижаты к контенту. */}
+      <div className="flex flex-1 min-h-0 overflow-hidden relative justify-center">
+        <div className="flex w-full max-w-[1900px] min-h-0">
+          {/* ЛЕВЫЙ САЙДБАР */}
+          {isSubdomain ? <SidebarLeft isOpen={isLeftOpen} setIsOpen={setIsLeftOpen} /> : <AdminSidebarLeft />}
 
-        {/* OVERLAY: затемнение контента при открытом сайдбаре на мобильных */}
-        {(isLeftOpen || isRightOpen) && (
-          <div
-            className="fixed inset-0 bg-black/40 z-30 lg:hidden"
-            onClick={() => {
-              setIsLeftOpen(false);
-              setIsRightOpen(false);
-            }}
-          />
-        )}
+          {/* OVERLAY: затемнение контента при открытом сайдбаре на мобильных */}
+          {(isLeftOpen || isRightOpen) && (
+            <div
+              className="fixed inset-0 bg-black/40 z-30 lg:hidden"
+              onClick={() => {
+                setIsLeftOpen(false);
+                setIsRightOpen(false);
+              }}
+            />
+          )}
 
-        {/* ГЛАВНАЯ ОБЛАСТЬ (Серый фон) */}
-        <main className="flex-1 flex flex-col min-w-0 bg-gray-300 dark:bg-slate-950 p-1 ml-12 lg:ml-0 md:p-2 overflow-hidden print:m-0 print:p-0">
-          {/* БЕЛАЯ КАРТОЧКА (Центрирована, ограничена по ширине) */}
-          <div
-            className={`
-              flex-1 overflow-auto bg-white dark:bg-slate-900 shadow-sm border border-slate-200 dark:border-slate-800 rounded-lg print:border-none print:shadow-none
-              ${isFullWidth ? "w-full" : "w-full max-w-screen-2xl mx-auto"}
-              p-2 md:p-4
-            `}
-          >
-            {/* Шапка для печати */}
-            <div className="hidden print:flex print:items-center print:justify-between print:mb-4 print:pb-2 print:border-b print:border-gray-300">
-              {/* <CompanyHeaderInfo logoUrl={currentCompany?.logo ?? currentCompany?.logo2} name={currentCompany?.name} /> */}
-              <CompanyHeaderInfo
-                logoUrl={currentCompany?.logo ?? currentCompany?.logo2}
-                name={currentCompany?.name}
-                branch={
-                  activeBranch
-                    ? {
-                        name: activeBranch.name,
-                        logo: activeBranch.logo,
-                        address: activeBranch.address,
-                        phone: activeBranch.phone,
-                        email: activeBranch.email,
-                        manager_name: activeBranch.manager_name,
-                      }
-                    : null
-                }
-              />
-              <div className="text-right text-xs text-gray-500">
-                <div>
-                  {t("Printed")}: {currentUser?.full_name}
-                </div>
-                <div>
-                  {t("Date")}: {new Date().toLocaleString("ru-RU")}
+          {/* ГЛАВНАЯ ОБЛАСТЬ (Серый фон) */}
+          <main className="flex-1 flex flex-col min-w-0 bg-gray-300 dark:bg-slate-950 p-1 ml-12 lg:ml-0 md:p-2 overflow-hidden print:m-0 print:p-0">
+            {/* БЕЛАЯ КАРТОЧКА — заполняет всё место внутри main (общий max-width уже
+                задан на обёртке сайдбары+контент выше, второй раз здесь не нужен) */}
+            <div className="flex-1 overflow-auto bg-white dark:bg-slate-900 shadow-sm border border-slate-200 dark:border-slate-800 rounded-lg print:border-none print:shadow-none w-full p-2 md:p-4">
+              {/* Шапка для печати */}
+              <div className="hidden print:flex print:items-center print:justify-between print:mb-4 print:pb-2 print:border-b print:border-gray-300">
+                {/* <CompanyHeaderInfo logoUrl={currentCompany?.logo ?? currentCompany?.logo2} name={currentCompany?.name} /> */}
+                <CompanyHeaderInfo
+                  logoUrl={currentCompany?.logo ?? currentCompany?.logo2}
+                  name={currentCompany?.name}
+                  branch={
+                    activeBranch
+                      ? {
+                          name: activeBranch.name,
+                          logo: activeBranch.logo,
+                          address: activeBranch.address,
+                          phone: activeBranch.phone,
+                          email: activeBranch.email,
+                          manager_name: activeBranch.manager_name,
+                        }
+                      : null
+                  }
+                />
+                <div className="text-right text-xs text-gray-500">
+                  <div>
+                    {t("Printed")}: {currentUser?.full_name}
+                  </div>
+                  <div>
+                    {t("Date")}: {new Date().toLocaleString("ru-RU")}
+                  </div>
                 </div>
               </div>
+              <Outlet />
             </div>
-            <Outlet />
-          </div>
-        </main>
+          </main>
 
-        {/* ПРАВЫЙ САЙДБАР */}
-        {isSubdomain && <SidebarRight isOpen={isRightOpen} setIsOpen={setIsRightOpen} />}
+          {/* ПРАВЫЙ САЙДБАР */}
+          {isSubdomain && <SidebarRight isOpen={isRightOpen} setIsOpen={setIsRightOpen} />}
+        </div>
       </div>
     </div>
   );

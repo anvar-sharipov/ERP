@@ -25,6 +25,7 @@ import { useColumnVisibility } from "./useColumnVisibility";
 import { exportDocumentExcel } from "./exportDocumentExcel";
 import Header from "./HeaderPage";
 import HeadDocument, { type HeadDocumentHandle } from "./HeadDocument";
+import { CounterpartyBalanceCard } from "./CounterpartyBalanceCard";
 import ProductRow, { type ProductRowHandle } from "./ProductRow/ProductRow";
 import Participants from "./Participants";
 import { userScopeApi } from "../../../services/transactionApi";
@@ -139,9 +140,30 @@ const DocumentFormPage = () => {
     queryFn: () => employeeApi.getAll(workBranch?.id ? { branch: String(workBranch.id) } : undefined),
   });
 
+  // ✅ Ассортиментная матрица "товар × склад" (Product.allowed_warehouses) —
+  // фильтруем по складу/филиалу ЭТОГО документа (header.warehouse/branch), а
+  // не по глобальному WorkDateWidget — при редактировании старого документа
+  // они могут отличаться.
   const { data: products = [] } = useQuery({
-    queryKey: ["products-short"],
-    queryFn: () => productApi.getAll(),
+    queryKey: ["products-short", header.warehouse, header.branch],
+    queryFn: () => productApi.getAll(header.warehouse ? { warehouse: header.warehouse } : header.branch ? { branch: header.branch } : {}),
+  });
+
+  // ✅ Сальдо контрагента — поднято на уровень страницы (не внутрь
+  // CounterpartyBalanceCard), чтобы одни и те же данные использовались и для
+  // виджета под таблицей товаров, и для Ctrl+P печати, и для Excel-экспорта —
+  // без трёх независимых копий (см. CLAUDE.md про паритет экран/печать/Excel).
+  const counterpartyCardEnabled = !!header.counterparty && !!header.warehouse && !!header.document_type && !!header.date;
+  const { data: counterpartyCard, isLoading: counterpartyCardLoading } = useQuery({
+    queryKey: ["counterparty-card", header.counterparty, header.warehouse, header.document_type, header.date],
+    queryFn: () =>
+      documentApi.getCounterpartyCard({
+        counterparty: header.counterparty as number,
+        warehouse: header.warehouse as number,
+        document_type: header.document_type,
+        date: header.date,
+      }),
+    enabled: counterpartyCardEnabled,
   });
 
   // ── Загрузка документа при редактировании ────────────────────────────────────
@@ -335,16 +357,6 @@ const DocumentFormPage = () => {
           </div>
         </div>
 
-        {/* Сальдо контрагента */}
-        {counterpartyBalance !== null && (
-          <div className="pt-3 border-t border-indigo-900/30">
-            <h4 className="font-bold text-indigo-300 mb-1">{t("CounterpartyBalance")}</h4>
-            <span className={`font-mono text-sm font-bold ${counterpartyBalance >= 0 ? "text-green-400" : "text-red-400"}`}>
-              {counterpartyBalance.toLocaleString("ru-RU", { minimumFractionDigits: 2 })}
-            </span>
-          </div>
-        )}
-
         {/* Инфо */}
         {isEdit && doc && (
           <div className="pt-3 border-t border-indigo-900/30">
@@ -371,7 +383,7 @@ const DocumentFormPage = () => {
         )}
       </div>,
     );
-  }, [setSidebarContent, items, header.discount_percent, isPosted, doc, isEdit, counterpartyBalance, t]);
+  }, [setSidebarContent, items, header.discount_percent, isPosted, doc, isEdit, t]);
 
   // ── Мутации ──────────────────────────────────────────────────────────────────
 
@@ -444,6 +456,9 @@ const DocumentFormPage = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["document", docId] });
       queryClient.invalidateQueries({ queryKey: ["documents"] });
+      // ✅ Проведение документа меняет проводки по счёту контрагента — сальдо в
+      // сайдбаре (CounterpartyBalanceCard) должно пересчитаться сразу же.
+      queryClient.invalidateQueries({ queryKey: ["counterparty-card"] });
       setDocStatus("posted");
       notify("success", t("DocumentPosted"));
       setPostConfirm(false);
@@ -460,6 +475,7 @@ const DocumentFormPage = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["document", docId] });
       queryClient.invalidateQueries({ queryKey: ["documents"] });
+      queryClient.invalidateQueries({ queryKey: ["counterparty-card"] });
       setDocStatus("draft");
       notify("success", t("DocumentUnposted"));
       setUnpostConfirm(false);
@@ -661,6 +677,9 @@ const DocumentFormPage = () => {
         promoItems,
         lineTotal,
         totals: { subtotal, discAmount, total },
+        // ✅ То же самое сальдо, что показано на экране/печати под таблицей товаров
+        // (CounterpartyBalanceCard) — та же query, никаких отдельных расчётов.
+        saldo: counterpartyCard?.available ? counterpartyCard : undefined,
       });
     } catch (e) {
       console.error("Ошибка экспорта в Excel:", e);
@@ -717,9 +736,15 @@ const DocumentFormPage = () => {
         </div>
 
         {/* ── Таблица товаров — единственная скроллируемая область; её шапка (thead) прилипает сверху ──
-            В печати flex-1 убираем (print:flex-none print:h-auto) — иначе блок растягивается на всё
-            оставшееся место в flex-колонке и оставляет пустоту перед строкой "Авто" ниже. */}
-        <div className="flex-1 min-h-0 mt-3 print:mt-1 print:flex-none print:h-auto">
+            flex-initial (не flex-1!) — растягиваться до конца доступного места должна только
+            когда строк действительно много и не помещаются; когда строк 1-2, блок должен сжаться
+            до размера контента, а не растягиваться на весь экран (иначе сальдо контрагента ниже
+            уезжает далеко вниз с пустым разрывом). flex-initial (grow:0, shrink:1, basis:auto) +
+            min-h-0 даёт именно это: сидит по контенту, но может сжаться и заскроллить внутри себя,
+            если места не хватает (см. flex-1 внутри самого ProductRow.tsx — оно тянется на всю
+            высоту ЭТОГО контейнера, который теперь сам не тянется просто так). В печати то же самое
+            через print:flex-none print:h-auto. */}
+        <div className="flex-initial min-h-0 mt-3 print:mt-1 print:flex-none print:h-auto">
           <ProductRow
             ref={productRowRef}
             isPosted={isPosted}
@@ -741,6 +766,13 @@ const DocumentFormPage = () => {
             onColumnsChange={setAllColumns}
             warehouseId={header.warehouse}
           />
+        </div>
+
+        {/* ── Сальдо контрагента под таблицей товаров — как "footer": вне скроллируемой
+            flex-1 области выше, поэтому не уезжает при скролле товаров. Видно и при
+            печати (Ctrl+P) — та же вёрстка, без print:hidden. ── */}
+        <div className="shrink-0 border-t-2 border-gray-300 dark:border-slate-600 print:border-black mt-2 pt-2 print:mt-1 print:pt-1">
+          <CounterpartyBalanceCard data={counterpartyCard} isLoading={counterpartyCardLoading} enabled={counterpartyCardEnabled} />
         </div>
 
         {/* ── Печатная версия: "Авто" (водитель, если назначен) и кто провёл документ — под таблицей товаров ── */}
@@ -768,10 +800,19 @@ const DocumentFormPage = () => {
         {branchSlogan && <div className="hidden print:block print:text-3xl font-bold italic text-center mt-3 font-serif">{branchSlogan}</div>}
       </div>
 
-      <ConfirmModal isOpen={postConfirm} type="info" title={t("PostDocument")} message={t("PostDocumentConfirm")} onClose={() => setPostConfirm(false)} onConfirm={() => postMutation.mutate()} />
+      <ConfirmModal
+        isOpen={postConfirm}
+        type="info"
+        variant="danger"
+        title={t("PostDocument")}
+        message={t("PostDocumentConfirm")}
+        onClose={() => setPostConfirm(false)}
+        onConfirm={() => postMutation.mutate()}
+      />
       <ConfirmModal
         isOpen={unpostConfirm}
         type="info"
+        variant="danger"
         title={t("UnpostDocument")}
         message={t("UnpostDocumentConfirm")}
         onClose={() => setUnpostConfirm(false)}

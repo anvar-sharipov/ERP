@@ -447,6 +447,15 @@ const InvoicesPage = () => {
       render: (item) => <StatusBadge isActive={item.status === "posted"} activeLabel={t("Posted")} inactiveLabel={t("Draft")} />,
     },
     {
+      header: t("Note"),
+      accessor: "note",
+      sortable: false,
+      excelWidth: 24,
+      excelWrapText: true,
+      excelValue: (item) => item.note ?? "",
+      render: (item) => <span className="text-xs md:text-sm text-gray-500 dark:text-gray-400">{item.note || "—"}</span>,
+    },
+    {
       header: t("CreatedBy"),
       accessor: "created_by_name",
       sortable: true,

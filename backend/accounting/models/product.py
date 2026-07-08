@@ -83,6 +83,17 @@ class Product(models.Model):
     brand = models.ForeignKey(Brand, on_delete=models.SET_NULL, null=True, blank=True, related_name='products', verbose_name="Бренд")
     unit = models.ForeignKey(Unit, on_delete=models.PROTECT, null=True, related_name='products', verbose_name="Единица измерения")
     tags = models.ManyToManyField(Tag, blank=True, related_name='products', verbose_name="Теги")
+    # ✅ Ассортиментная матрица "товар × склад" — опт-аут: пусто (по умолчанию,
+    # для всех уже существующих товаров) значит "виден на всех складах", как и
+    # было раньше. Если хоть один склад привязан — товар показывается ТОЛЬКО
+    # на привязанных складах (везде, где список товаров зависит от warehouse/
+    # branch — см. ProductViewSet.get_queryset). Это фильтр отображения, а не
+    # жёсткий запрет на уровне документов/проводок — намеренно, см. обсуждение
+    # с пользователем.
+    allowed_warehouses = models.ManyToManyField(
+        'Warehouse', blank=True, related_name='allowed_products',
+        verbose_name="Разрешённые склады (пусто = везде)",
+    )
 
     cost_price = models.DecimalField(max_digits=15, decimal_places=2, default=0, verbose_name="Себестоимость")
     min_stock_level = models.IntegerField(default=0, verbose_name="Мин. остаток для заказа")

@@ -57,7 +57,7 @@ const WarehouseStocksPage = () => {
 
   const { data: products = [] } = useQuery({
     queryKey: ["products"],
-    queryFn: productApi.getAll,
+    queryFn: () => productApi.getAll(),
   });
 
   useEffect(() => {

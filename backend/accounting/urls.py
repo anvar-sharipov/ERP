@@ -13,11 +13,12 @@ from .views.product_views import (
     VolumeDiscountViewSet, QuantityPromotionViewSet
 )
 from .views.audit_views import AuditLogViewSet
-from .views.employee_views import PositionViewSet, EmployeeViewSet
+from .views.employee_views import PositionViewSet, EmployeeViewSet, AgentViewSet
 from .views.transaction_views import JournalEntryViewSet, StockMovementViewSet, ClosedPeriodViewSet
 from .views.document_views import DocumentViewSet, DocumentItemViewSet, DocumentParticipantViewSet
 from .views.currency_views import CurrencyViewSet, ExchangeRateViewSet
 from .views.report_views import ReportViewSet
+from .views.alert_views import SystemAlertViewSet
 
 
 
@@ -66,6 +67,7 @@ router.register(r'subconto-types', SubcontoTypeViewSet, basename='subconto-type'
 # Employees
 router.register(r'positions', PositionViewSet, basename='position')
 router.register(r'employees', EmployeeViewSet, basename='employee')
+router.register(r'agents', AgentViewSet, basename='agent')
 
 # Currency
 router.register(r'currencies', CurrencyViewSet, basename='currency')
@@ -73,6 +75,9 @@ router.register(r'exchange-rates', ExchangeRateViewSet, basename='exchange-rate'
 
 # Audit
 router.register(r'audit-logs', AuditLogViewSet, basename='audit-log')
+
+# System alerts (колокольчик в хедере — см. tasks.py::run_daily_checks)
+router.register(r'system-alerts', SystemAlertViewSet, basename='system-alert')
 
 # Reports
 router.register(r'reports', ReportViewSet, basename='report')

@@ -56,15 +56,30 @@ def compute_balances(warehouse_id, as_of_date, since_date=None, base_balances=No
         doc = item.document
         qty = item.quantity
         gross = qty * item.price
-        net = gross - (gross * item.discount_percent / Decimal('100'))
+        cost_value = qty * item.cost_price
         pid = item.product_id
 
-        if doc.document_type in ('in', 'return_in') and doc.warehouse_id == warehouse_id:
+        # ✅ БАГ (см. обсуждение с пользователем: Z-40 qty=7 верно, сумма=-48.79):
+        # для 'in'/'return_out' item.price — это ЦЕНА ЗАКУПКИ, она же себестоимость
+        # на момент документа, поэтому gross (price×qty) корректно отражает
+        # балансовую стоимость запаса. Но для 'out'/'return_in' item.price — это
+        # ЦЕНА ПРОДАЖИ (обычно выше себестоимости) — списывать остаток по ней
+        # неверно, накопленная ошибка уводит стоимость в минус при активных
+        # продажах с наценкой. Нужно списывать/возвращать по item.cost_price
+        # (себестоимость, зафиксированная на момент документа) — та же логика,
+        # что уже используется в проводке (Document._generate_out_posting).
+        if doc.document_type == 'in' and doc.warehouse_id == warehouse_id:
             balances[pid]['qty'] += qty
             balances[pid]['value'] += gross
-        elif doc.document_type in ('out', 'return_out') and doc.warehouse_id == warehouse_id:
+        elif doc.document_type == 'return_out' and doc.warehouse_id == warehouse_id:
             balances[pid]['qty'] -= qty
-            balances[pid]['value'] -= net if doc.document_type == 'out' else gross
+            balances[pid]['value'] -= gross
+        elif doc.document_type == 'out' and doc.warehouse_id == warehouse_id:
+            balances[pid]['qty'] -= qty
+            balances[pid]['value'] -= cost_value
+        elif doc.document_type == 'return_in' and doc.warehouse_id == warehouse_id:
+            balances[pid]['qty'] += qty
+            balances[pid]['value'] += cost_value
         elif doc.document_type == 'move':
             if doc.warehouse_id == warehouse_id:
                 balances[pid]['qty'] -= qty

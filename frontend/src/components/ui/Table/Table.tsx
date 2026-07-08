@@ -1137,7 +1137,16 @@ export const Table = <T extends { id: string | number }>({
       const isEditable = target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.tagName === "SELECT" || target.isContentEditable;
 
       if (isEditable) {
-        focusManager.setRegion("none"); // или любой нейтральный регион
+        // ✅ Раньше здесь всегда стоял "none", даже если фокус ушёл в легитимный
+        // регион (например правый сайдбар, см. CLAUDE.md про focusManager) — эта
+        // таблица не единственная на странице, отслеживающая focusin на document,
+        // и её собственный "none" молча затирал то, что только что корректно
+        // выставил сам сайдбар/SearchableSelect. Теперь сначала смотрим, не
+        // помечен ли ближайший предок явным data-region (сайдбар и
+        // SearchableSelect в режиме theme="sidebar" ставят его и на себя, и на
+        // свой createPortal-контейнер) — и если да, уважаем его вместо "none".
+        const region = target.closest<HTMLElement>("[data-region]")?.dataset.region;
+        focusManager.setRegion((region as any) ?? "none");
         setSelectedCell(null); // опционально — снять выделение ячейки
       }
     };

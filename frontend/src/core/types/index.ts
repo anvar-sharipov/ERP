@@ -190,6 +190,8 @@ export interface Product {
   unit_detail: { id: number; name: string; short_name: string } | null;
   tag_ids: number[];
   tags_detail: { id: number; name: string; slug: string }[];
+  allowed_warehouse_ids: number[];
+  allowed_warehouses_detail: { id: number; name: string }[];
   cost_price: string;
   min_stock_level: number;
   is_active: boolean;
@@ -312,6 +314,7 @@ export interface DocumentList {
   created_by_name?: string | null;
   posted_by: number | null;
   posted_by_name?: string | null;
+  note?: string;
 }
  
 

@@ -7,6 +7,9 @@ export interface ProductFormData {
   brand: number | null;
   unit: number | null;
   tag_ids: number[];
+  // ✅ Ассортиментная матрица "товар × склад" — пусто = товар виден на любом
+  // складе (см. backend Product.allowed_warehouses).
+  allowed_warehouse_ids: number[];
   cost_price: string;
   min_stock_level: string;
   image_mode: "contain" | "cover";
@@ -31,6 +34,7 @@ export const EMPTY: ProductFormData = {
   brand: null,
   unit: null,
   tag_ids: [],
+  allowed_warehouse_ids: [],
   cost_price: "0",
   min_stock_level: "0",
   image_mode: "contain",
@@ -55,6 +59,7 @@ export interface MainTabProps {
   units: any[];
   brands: any[];
   tags: any[];
+  warehouses: any[];
   categories: any[];
   isEdit: boolean;
   description?: string;

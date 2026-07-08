@@ -3,6 +3,7 @@ import { useState, useRef, useEffect, useCallback, useImperativeHandle, forwardR
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import { ChevronDown, X, Search } from "lucide-react";
+import { focusManager } from "../../core/utils/focusManager";
 
 export interface SelectOption {
   id: number;
@@ -292,6 +293,10 @@ const SearchableSelect = forwardRef<SearchableSelectHandle, SearchableSelectProp
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               onKeyDown={handleKeyDown}
+              // ✅ Тот же явный клейм региона, что и на триггере выше — этот инпут
+              // рендерится через createPortal(document.body), поэтому обычный
+              // DOM-обход/onFocus на родительском <aside> его не поймает.
+              onFocus={() => { if (isSidebar) focusManager.setRegion("sidebar-right"); }}
               placeholder={t("Search")}
               className={`flex-1 text-sm bg-transparent outline-none placeholder-gray-400 ${isSidebar ? "text-indigo-100" : "text-gray-900 dark:text-gray-100"}`}
             />
@@ -361,7 +366,14 @@ const SearchableSelect = forwardRef<SearchableSelectHandle, SearchableSelectProp
     ) : null;
 
     return (
-      <div ref={containerRef} className={`relative ${className}`}>
+      // ✅ data-region — доступен и для триггера, и (см. ниже) для портала с
+      // выпадающим списком: closest('[data-region]') должен находить его даже
+      // когда открытый список физически смонтирован в document.body через
+      // createPortal, а не внутри настоящего <aside data-region="sidebar-right">
+      // (см. CLAUDE.md про focusManager и SidebarRight.tsx — обычный DOM-обход
+      // от портала до реального сайдбара невозможен, поэтому регион вешаем прямо
+      // на сам портал).
+      <div ref={containerRef} data-region={isSidebar ? "sidebar-right" : undefined} className={`relative ${className}`}>
         {/* Триггер */}
         <div
           ref={triggerRef}
@@ -371,6 +383,11 @@ const SearchableSelect = forwardRef<SearchableSelectHandle, SearchableSelectProp
           tabIndex={disabled ? -1 : 0}
           className={baseClass}
           onClick={doOpen}
+          // ✅ Явный клейм региона (не полагаясь только на data-region/closest()) —
+          // см. CLAUDE.md про focusManager: фокус должен всегда вытеснять
+          // предыдущий регион, а не рассчитывать на то, что что-то другое уже
+          // сделало это правильно.
+          onFocus={() => { if (isSidebar) focusManager.setRegion("sidebar-right"); }}
           onKeyDown={(e) => {
             if (!open && value !== null && (e.key === "Enter" || e.key === "ArrowRight") && onEnterWhenClosed) {
               e.preventDefault();
@@ -405,7 +422,7 @@ const SearchableSelect = forwardRef<SearchableSelectHandle, SearchableSelectProp
           </div>
         </div>
 
-        {createPortal(<div ref={portalRef}>{dropdown}</div>, document.body)}
+        {createPortal(<div ref={portalRef} data-region={isSidebar ? "sidebar-right" : undefined}>{dropdown}</div>, document.body)}
       </div>
     );
   },

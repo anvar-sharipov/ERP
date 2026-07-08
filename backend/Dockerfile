@@ -38,6 +38,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY . .
+# ✅ Контекст сборки — корень репо (там requirements.txt), но код бэкенда
+# нужен внутри /app БЕЗ вложенной папки backend/ — иначе manage.py оказывается
+# по пути /app/backend/manage.py, и это маскируется bind-mount'ом ./backend:/app
+# в docker-compose (dev). В офлайн-проде bind-mount'а нет — образ должен быть
+# самодостаточным, поэтому копируем содержимое backend/ прямо в /app.
+COPY backend/ .
 
 EXPOSE 8000

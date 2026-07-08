@@ -38,6 +38,9 @@ class Employee(models.Model):
     phone = models.CharField(max_length=30, blank=True, verbose_name="Телефон")
     hire_date = models.DateField(null=True, blank=True, verbose_name="Дата приема")
     dismiss_date = models.DateField(null=True, blank=True, verbose_name="Дата увольнения")
+    # ✅ Один реальный человек = одна запись Employee (для расчёта ЗП). Размножение
+    # "один агент — несколько районов" живёт на модели Agent (agent.py), а не здесь —
+    # см. Agent.employee. Поэтому здесь снова OneToOneField, а не ForeignKey.
     user = models.OneToOneField(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
@@ -82,3 +85,29 @@ class Employee(models.Model):
 
     def __str__(self):
         return f"{self.employee_no} - {self.full_name}"
+
+
+class Agent(models.Model):
+    """
+    Профиль агента — то, на что реально ссылается Counterparty.agent.
+    Разделяет "кто получает деньги/ЗП" (Employee, всегда один на человека) от
+    "по какому району/направлению закреплены клиенты" (Agent.district) — один
+    Employee может иметь несколько Agent-профилей (например, Rayon и Dashoguz),
+    но ЗП/% считается по Employee, суммируя выручку со всех его Agent-профилей
+    разом, а не по каждому профилю отдельно.
+    """
+    employee = models.ForeignKey(Employee, on_delete=models.PROTECT, related_name="agent_profiles", verbose_name="Сотрудник")
+    district = models.CharField(max_length=100, blank=True, verbose_name="Район")
+    is_active = models.BooleanField(default=True, verbose_name="Активен")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "Агент"
+        verbose_name_plural = "Агенты"
+        ordering = ["employee__full_name", "district"]
+        constraints = [
+            models.UniqueConstraint(fields=["employee", "district"], name="unique_agent_employee_district")
+        ]
+
+    def __str__(self):
+        return f"{self.employee.full_name} ({self.district})" if self.district else self.employee.full_name

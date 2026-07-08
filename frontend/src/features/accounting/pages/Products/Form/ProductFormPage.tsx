@@ -78,6 +78,7 @@ const ProductFormPage = () => {
         brand: product.brand,
         unit: product.unit,
         tag_ids: product.tag_ids ?? [],
+        allowed_warehouse_ids: product.allowed_warehouse_ids ?? [],
         cost_price: product.cost_price,
         min_stock_level: String(product.min_stock_level),
         image_mode: product.image_mode,
@@ -183,7 +184,7 @@ const ProductFormPage = () => {
           <div className="max-w-2xl">
             {activeTab === "Основное" && (
               <>
-                <MainTab form={form} setForm={setForm} units={units} brands={brands} tags={tags} categories={categories} isEdit={isEdit} />;
+                <MainTab form={form} setForm={setForm} units={units} brands={brands} tags={tags} warehouses={warehouses} categories={categories} isEdit={isEdit} />;
                 <div className="flex gap-2 mt-6">
                   <Button text={saveMutation.isPending ? t("Saving") : isEdit ? t("Save") : t("Create")} onClick={() => saveMutation.mutate(form)} />
                   <Button text={t("Cancel")} variant="secondary" onClick={() => navigate(ROUTES.APP.PRODUCTS_LIST)} />

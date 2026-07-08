@@ -14,7 +14,7 @@ import { RBACGuard } from "../../../../components/ui/RBACGuard";
 import { StatusBadge } from "../../../../components/ui/StatusBadge";
 import { ImagePreview } from "../../../../components/ui/ImagePreview";
 import SearchableSelect from "../../../../components/ui/SearchableSelect";
-import { Plus } from "lucide-react";
+import { Plus, AlertTriangle, EyeOff } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import { ROUTES } from "../../../../core/router/routes";
@@ -44,6 +44,7 @@ const ProductsListPage = () => {
   const [categoryFilter, setCategoryFilter] = useState<number | null>(null);
   const [brandFilter, setBrandFilter] = useState<number | null>(null);
   const [activeFilter, setActiveFilter] = useState<"all" | "active" | "inactive">("all");
+  const [lowStockOnly, setLowStockOnly] = useState(false);
   const { workBranch, workWarehouse, periodFrom, periodTo } = useDateStore();
 
   const goToTurnover = (item: any) => {
@@ -114,8 +115,8 @@ const ProductsListPage = () => {
     isLoading,
     error,
   } = useQuery({
-    queryKey: ["products"],
-    queryFn: productApi.getAll,
+    queryKey: ["products", workWarehouse?.id, workBranch?.id],
+    queryFn: () => productApi.getAll(workWarehouse?.id ? { warehouse: workWarehouse.id } : workBranch?.id ? { branch: workBranch.id } : {}),
     enabled: canView,
     retry: false,
   });
@@ -204,16 +205,22 @@ const ProductsListPage = () => {
             />
           </div>
         )}
+        <div className="pt-4 border-t border-indigo-900/30">
+          <label className="flex items-center gap-2 text-sm text-indigo-200 cursor-pointer select-none">
+            <input type="checkbox" className="accent-red-500 w-4 h-4" checked={lowStockOnly} onChange={(e) => setLowStockOnly(e.target.checked)} />
+            {t("LowStockOnlyFilter")}
+          </label>
+        </div>
       </div>,
     );
-  }, [setSidebarContent, canPost, activeFilter, categoryFilter, categories, brandFilter, brands, t]);
+  }, [setSidebarContent, canPost, activeFilter, categoryFilter, categories, brandFilter, brands, lowStockOnly, t]);
 
   // ── фильтрация ───────────────────────────────────────────────────────────────
 
   const filtered = useTableFilter(products as any[], {
     search: searchQuery,
     searchFields: ["name", "sku", "barcode"],
-    filterKey: `${activeFilter}:${categoryFilter}:${brandFilter}`,
+    filterKey: `${activeFilter}:${categoryFilter}:${brandFilter}:${lowStockOnly}`,
     filters: [
       (p) => {
         if (activeFilter === "active") return p.is_active;
@@ -222,6 +229,7 @@ const ProductsListPage = () => {
       },
       (p) => categoryFilter === null || p.category === categoryFilter,
       (p) => brandFilter === null || p.brand === brandFilter,
+      (p) => !lowStockOnly || !!stockBalance[p.id]?.is_low,
     ],
   });
 
@@ -240,26 +248,53 @@ const ProductsListPage = () => {
       header: t("Photo"),
       excelWidth: 14,
       excelImageUrl: (item) => item.main_image?.thumbnail_url || null,
-      render: (item) => (
-        <div className="flex justify-center">
-          {item.main_image?.thumbnail_url ? (
-            <img
-              src={item.main_image.thumbnail_url}
-              alt={item.name}
-              className="w-20 h-20 rounded object-cover cursor-zoom-in"
-              onClick={(e) => {
-                e.stopPropagation();
-                const gallery = [...(item.images ?? [])].sort((a: any, b: any) => a.sort_order - b.sort_order);
-                const idx = Math.max(0, gallery.findIndex((img: any) => img.id === item.main_image?.id));
-                setPreviewGallery(gallery.map((img: any) => img.image_url ?? img.thumbnail_url));
-                setPreviewIndex(idx);
-              }}
-            />
-          ) : (
-            <div className="w-20 h-20 rounded bg-gray-200 dark:bg-slate-700" />
-          )}
-        </div>
-      ),
+      render: (item) => {
+        const stock = stockBalance[item.id];
+        return (
+          <div className="flex justify-center">
+            <div className="relative">
+              {item.main_image?.thumbnail_url ? (
+                <img
+                  src={item.main_image.thumbnail_url}
+                  alt={item.name}
+                  className={`w-20 h-20 rounded object-cover cursor-zoom-in ${!item.is_active ? "grayscale opacity-50" : ""}`}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    const gallery = [...(item.images ?? [])].sort((a: any, b: any) => a.sort_order - b.sort_order);
+                    const idx = Math.max(0, gallery.findIndex((img: any) => img.id === item.main_image?.id));
+                    setPreviewGallery(gallery.map((img: any) => img.image_url ?? img.thumbnail_url));
+                    setPreviewIndex(idx);
+                  }}
+                />
+              ) : (
+                <div className={`w-20 h-20 rounded bg-gray-200 dark:bg-slate-700 ${!item.is_active ? "opacity-50" : ""}`} />
+              )}
+              {/* ✅ Живой признак нехватки (report_views.py::stock_balance::is_low) —
+                  крупная иконка в углу фото, вместо текстовой плашки у названия. */}
+              {stock?.is_low && (
+                <span
+                  className="absolute -top-1.5 -right-1.5 w-7 h-7 rounded-full bg-red-600 text-white flex items-center justify-center shadow-md ring-2 ring-white dark:ring-slate-900"
+                  title={t("LowStockHint", { min: stock.min_stock_level })}
+                >
+                  <AlertTriangle className="w-4 h-4" />
+                </span>
+              )}
+              {/* ✅ Тот же угол, что и "мало" — они взаимоисключающие: is_low у
+                  неактивных товаров всегда false (report_views.py::stock_balance
+                  фильтрует is_active=True при расчёте min_stock_map), значит
+                  одновременно эти две иконки никогда не показываются. */}
+              {!item.is_active && (
+                <span
+                  className="absolute -top-1.5 -right-1.5 w-7 h-7 rounded-full bg-gray-600 text-white flex items-center justify-center shadow-md ring-2 ring-white dark:ring-slate-900"
+                  title={t("InactiveHint")}
+                >
+                  <EyeOff className="w-4 h-4" />
+                </span>
+              )}
+            </div>
+          </div>
+        );
+      },
     },
     {
       header: t("Name"),
@@ -338,6 +373,7 @@ const ProductsListPage = () => {
           `${t("Stock")}: ${qty.toLocaleString("ru-RU")} ${unit}`,
           reserved > 0 ? `${t("Reserved")}: ${reserved.toLocaleString("ru-RU")} ${unit}` : null,
           `${t("Available")}: ${available.toLocaleString("ru-RU")} ${unit}`,
+          stock?.is_low ? `${t("LowStock")} (min: ${stock.min_stock_level})` : null,
         ].filter(Boolean);
         return lines.join("\n");
       },

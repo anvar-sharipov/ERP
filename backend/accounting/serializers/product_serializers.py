@@ -6,6 +6,7 @@ from ..models import (
     Counterparty, Warehouse, WarehouseStock, ProductBundle, VolumeDiscount,
     QuantityPromotion
 )
+from .employee_serializers import AgentShortSerializer
 
 from rest_framework import serializers
 
@@ -51,6 +52,12 @@ class UnitShortSerializer(serializers.ModelSerializer):
     class Meta:
         model = Unit
         fields = ["id", "name", "short_name"]
+
+
+class WarehouseShortSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Warehouse
+        fields = ["id", "name"]
 
 
 # ── Images ──────────────────────────────────────────────────────────────────
@@ -210,6 +217,13 @@ class ProductSerializer(serializers.ModelSerializer):
     )
     tags_detail = TagSerializer(source="tags", many=True, read_only=True)
 
+    # ✅ Ассортиментная матрица "товар × склад" — пусто = виден везде (см.
+    # Product.allowed_warehouses). Тот же паттерн, что tag_ids/tags_detail.
+    allowed_warehouse_ids = serializers.PrimaryKeyRelatedField(
+        source="allowed_warehouses", many=True, queryset=Warehouse.objects.all(), required=False
+    )
+    allowed_warehouses_detail = WarehouseShortSerializer(source="allowed_warehouses", many=True, read_only=True)
+
     # Изображения — read only, загрузка через отдельный эндпоинт
     images = ProductImageSerializer(many=True, read_only=True)
     main_image = serializers.SerializerMethodField()
@@ -228,6 +242,7 @@ class ProductSerializer(serializers.ModelSerializer):
             "brand", "brand_detail",
             "unit", "unit_detail",
             "tag_ids", "tags_detail",
+            "allowed_warehouse_ids", "allowed_warehouses_detail",
             "cost_price",
             "min_stock_level", "is_active",
             "extra_data",
@@ -304,6 +319,7 @@ class ProductBundleSerializer(serializers.ModelSerializer):
 class CounterpartySerializer(serializers.ModelSerializer):
     photo = serializers.ImageField(required=False, allow_null=True)
     photo_thumbnail = serializers.SerializerMethodField()
+    agent_detail = AgentShortSerializer(source='agent', read_only=True)
 
     class Meta:
         model = Counterparty
@@ -311,6 +327,7 @@ class CounterpartySerializer(serializers.ModelSerializer):
             "id", "name", "type",
             "inn", "phone", "email", "address",
             "is_active", "photo", "photo_thumbnail", "created_at", "extra_data",
+            "agent", "agent_detail", "district",
         ]
         read_only_fields = ["created_at"]
 
