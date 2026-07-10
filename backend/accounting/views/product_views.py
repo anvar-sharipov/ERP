@@ -17,7 +17,7 @@ from ..models import (
 )
 from ..serializers.product_serializers import (
     UnitSerializer, BrandSerializer, TagSerializer, ProductCategorySerializer,
-    ProductSerializer,
+    ProductSerializer, ProductListSerializer,
     ProductImageSerializer, ProductImageUploadSerializer,
     PriceTypeSerializer, ProductPriceSerializer,
     CounterpartySerializer, WarehouseSerializer, WarehouseStockSerializer, ProductBundleSerializer,
@@ -74,26 +74,60 @@ class ProductViewSet(AuditMixin, BulkDestroyMixin, viewsets.ModelViewSet):
             Product.objects
             .select_related("category", "brand", "unit")
             .prefetch_related(
-                "tags", "images", "prices__price_type", "prices__warehouse",
+                # ✅ prices__branch/volume_discounts__price_type/quantity_promotions__price_type
+                # раньше не были префетчены, хотя ProductPriceSerializer.branch_name,
+                # VolumeDiscountSerializer.price_type_name и QuantityPromotionSerializer.
+                # price_type_name читают именно эти поля — это был N+1 (отдельный SQL-запрос
+                # на КАЖДУЮ строку цены/скидки/акции у КАЖДОГО товара), из-за чего GET
+                # /products/ на большом каталоге фактически "зависал" (DocumentFormPage.tsx
+                # ждал этот запрос для SearchableSelect товара — казалось, что товары вообще
+                # не появляются).
+                "tags", "images", "prices__price_type", "prices__warehouse", "prices__branch",
                 "bundle_items__bundle_product__unit", "bundle_items__bundle_product__images",
-                "volume_discounts", "quantity_promotions", "allowed_warehouses",
+                "volume_discounts__price_type", "quantity_promotions__price_type", "allowed_warehouses",
             )
             .order_by("name")
         )
-        # ✅ Ассортиментная матрица "товар × склад" (Product.allowed_warehouses) —
-        # опт-аут: товар без привязок виден на любом складе/филиале, иначе только
-        # там, куда явно привязан. ?warehouse= имеет приоритет над ?branch=, как и
-        # везде в проекте (см. _resolve_warehouse_ids в report_views.py).
+        qs = self._filter_by_warehouse_or_branch(qs)
+        return qs
+
+    # ✅ Общая для list/list_light матрица "товар × склад" (Product.
+    # allowed_warehouses) — опт-аут: товар без привязок виден на любом складе/
+    # филиале, иначе только там, куда явно привязан. ?warehouse= имеет
+    # приоритет над ?branch=, как и везде в проекте (см. _resolve_warehouse_ids
+    # в report_views.py).
+    def _filter_by_warehouse_or_branch(self, qs):
         warehouse_id = self.request.query_params.get("warehouse")
         branch_id = self.request.query_params.get("branch")
         if warehouse_id:
-            qs = qs.filter(models.Q(allowed_warehouses__isnull=True) | models.Q(allowed_warehouses__id=warehouse_id)).distinct()
+            return qs.filter(models.Q(allowed_warehouses__isnull=True) | models.Q(allowed_warehouses__id=warehouse_id)).distinct()
         elif branch_id:
-            qs = qs.filter(models.Q(allowed_warehouses__isnull=True) | models.Q(allowed_warehouses__branch_id=branch_id)).distinct()
+            return qs.filter(models.Q(allowed_warehouses__isnull=True) | models.Q(allowed_warehouses__branch_id=branch_id)).distinct()
         return qs
 
     def get_permissions(self):
         return _rbac(self.action, "product")
+
+    # ✅ Облегчённый список специально для ProductsListPage.tsx — GET /products/
+    # (стандартный list) отдаёт полный ProductSerializer и используется ещё и
+    # DocumentFormPage.tsx/BundlesTab.tsx/WarehouseStocksPage.tsx (например,
+    # DocumentFormPage.tsx читает prod.prices прямо из этого списка для
+    # автоподстановки цены в строке документа) — сужать его нельзя, не сломав
+    # эти страницы. Поэтому для тяжёлой карточки в ProductsListPage.tsx заведён
+    # отдельный эндпоинт с ProductListSerializer (только то, что список реально
+    # показывает — фото/категория/бренд/ед.изм./себестоимость/статус; цены,
+    # остатки и оборотность список и так получает отдельными bulk-эндпоинтами).
+    @action(detail=False, methods=["get"], url_path="list-light")
+    def list_light(self, request):
+        qs = (
+            Product.objects
+            .select_related("category", "brand", "unit")
+            .prefetch_related("images")
+            .order_by("name")
+        )
+        qs = self._filter_by_warehouse_or_branch(qs)
+        serializer = ProductListSerializer(qs, many=True, context={"request": request})
+        return Response(serializer.data)
 
     def perform_update(self, serializer):
         # ✅ allowed_warehouses — ManyToMany, AuditMixin._snapshot() его не видит
@@ -329,6 +363,11 @@ class CounterpartyViewSet(AuditMixin, viewsets.ModelViewSet):
             qs = Counterparty.objects.suppliers().order_by("name")
         else:
             qs = Counterparty.objects.order_by("name")
+        # ✅ CounterpartySerializer.agent_detail (AgentShortSerializer) читает
+        # agent.employee_name (agent.employee.full_name) — без select_related это
+        # N+1: отдельный запрос на agent и на agent.employee для КАЖДОГО контрагента
+        # (тот же класс бага, что был в ProductViewSet.get_queryset — см. рядом).
+        qs = qs.select_related("agent", "agent__employee")
         return apply_agent_scope(qs, self.request.user)
 
     @action(detail=True, methods=['get'], url_path='saldo')

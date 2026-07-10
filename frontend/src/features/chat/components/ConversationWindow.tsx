@@ -1,6 +1,7 @@
 // frontend/src/features/chat/components/ConversationWindow.tsx
 import { useEffect, useRef, useState, useCallback } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { Upload } from "lucide-react";
 import { messageApi } from "../services/chatApi";
 import { useChatSocket } from "../hooks/useChatSocket";
 import { useUser } from "../../../core/context/UserContext";
@@ -29,6 +30,8 @@ export const ConversationWindow: React.FC<Props> = ({ convId, convName }) => {
   const notify = useNotify();
   const qc = useQueryClient();
   const [isUploading, setIsUploading] = useState(false);
+  const [isDraggingFile, setIsDraggingFile] = useState(false);
+  const dragCounterRef = useRef(0);
   const bottomRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const [onlineUsers, setOnlineUsers] = useState<Set<number>>(new Set());
@@ -123,6 +126,57 @@ export const ConversationWindow: React.FC<Props> = ({ convId, convName }) => {
     }
   };
 
+  // ✅ Удаление своего сообщения — оставляет запись с пометкой is_deleted вместо
+  // полного удаления строки, чтобы у собеседника осталась надпись "Сообщение удалено".
+  const applyDeleted = (messageId: number) => {
+    setMessages((prev) =>
+      prev.map((m) =>
+        m.id === messageId
+          ? { ...m, is_deleted: true, text: "", attachment_url: null, attachment_name: null, attachment_size: null, attachment_content_type: null }
+          : m,
+      ),
+    );
+  };
+
+  const handleDeleteMessage = async (messageId: number) => {
+    try {
+      await messageApi.delete(convId, messageId);
+      applyDeleted(messageId);
+      qc.invalidateQueries({ queryKey: ["conversations"] });
+    } catch (err: any) {
+      if (!err._handled) notify("error", err.response?.data?.detail || t("ErrorDeletingMessage"));
+    }
+  };
+
+  // ✅ Drag-and-drop файла в область чата — переиспользует ту же отправку, что и скрепка.
+  // Счётчик вложенности нужен, т.к. dragenter/dragleave срабатывают при пересечении
+  // границ дочерних элементов, а не только внешнего контейнера.
+  const handleDragEnter = (e: React.DragEvent) => {
+    e.preventDefault();
+    if (!e.dataTransfer.types.includes("Files")) return;
+    dragCounterRef.current += 1;
+    setIsDraggingFile(true);
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    dragCounterRef.current = Math.max(0, dragCounterRef.current - 1);
+    if (dragCounterRef.current === 0) setIsDraggingFile(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    dragCounterRef.current = 0;
+    setIsDraggingFile(false);
+    if (isUploading) return;
+    const file = e.dataTransfer.files?.[0];
+    if (file) handleSendFile(file, "");
+  };
+
   const { sendMessage, sendRead, sendTyping } = useChatSocket({
     convId,
     onMessage: (msg) => {
@@ -182,6 +236,7 @@ export const ConversationWindow: React.FC<Props> = ({ convId, convName }) => {
       }),
     onOnlineList: (userIds) => setOnlineUsers(new Set(userIds)),
     onTyping: handleTyping,
+    onDeleted: applyDeleted,
   });
 
   const handleMessageVisible = () => {
@@ -211,12 +266,24 @@ export const ConversationWindow: React.FC<Props> = ({ convId, convName }) => {
   }
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="relative flex flex-col h-full" onDragEnter={handleDragEnter} onDragOver={handleDragOver} onDragLeave={handleDragLeave} onDrop={handleDrop}>
+      {/* ✅ Оверлей drag-and-drop файла */}
+      {isDraggingFile && (
+        <div className="absolute inset-0 z-30 flex flex-col items-center justify-center gap-2 bg-indigo-950/85 backdrop-blur-sm border-2 border-dashed border-indigo-400 rounded-lg pointer-events-none">
+          <Upload className="w-10 h-10 text-indigo-300 drop-shadow-[0_0_10px_rgba(99,102,241,0.8)]" />
+          <span className="text-sm font-medium text-indigo-100">{t("DropFileHere")}</span>
+        </div>
+      )}
+
       {/* Шапка */}
       <div className="flex items-center gap-3 px-4 py-3 border-b border-slate-200 dark:border-slate-700/50 bg-white dark:bg-slate-800/50 shrink-0">
         <div className="relative">
-          <div className="w-9 h-9 rounded bg-indigo-600 flex items-center justify-center text-sm font-bold text-white">{convName.slice(0, 2).toUpperCase()}</div>
-          {[...onlineUsers].some((id) => id !== user?.id) && <span className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-green-500 ring-2 ring-slate-800" />}
+          <div className="w-9 h-9 rounded bg-gradient-to-br from-indigo-500 to-violet-600 shadow-[0_0_10px_rgba(99,102,241,0.45)] flex items-center justify-center text-sm font-bold text-white">
+            {convName.slice(0, 2).toUpperCase()}
+          </div>
+          {[...onlineUsers].some((id) => id !== user?.id) && (
+            <span className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-green-500 shadow-[0_0_6px_rgba(34,197,94,0.9)] ring-2 ring-white dark:ring-slate-800" />
+          )}
         </div>
         <div>
           <div className="text-sm font-semibold text-gray-900 dark:text-slate-100">{convName}</div>
@@ -247,7 +314,7 @@ export const ConversationWindow: React.FC<Props> = ({ convId, convName }) => {
             <span className="text-sm">{t("NoMessagesYet")}</span>
           </div>
         ) : (
-          messages.map((msg) => <MessageItem key={msg.id} message={msg} onVisible={handleMessageVisible} />)
+          messages.map((msg) => <MessageItem key={msg.id} message={msg} onVisible={handleMessageVisible} onDelete={handleDeleteMessage} />)
         )}
         <div ref={bottomRef} />
       </div>

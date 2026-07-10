@@ -49,6 +49,42 @@ class Warehouse(models.Model):
         'Account', on_delete=models.PROTECT, null=True, blank=True,
         related_name='warehouses_discount', verbose_name="Счёт скидок",
     )
+    # ✅ Альтернативная схема проводки "Расхода" — для складов, унаследовавших учёт
+    # в стиле "инвентарь списывается по полной цене продажи, прибыль — отдельной
+    # ногой на фонд" (перенос данных из исторической системы, см. обсуждение с
+    # пользователем). Оба поля заполняются вместе: если заполнены — Document.
+    # _generate_out_posting кредитует inventory_account по ПОЛНОЙ цене продажи
+    # (а не revenue_account) и по каждой строке проводит Дт profit_account/
+    # Кт fund_account на прибыль строки — вместо Дт cogs_account/Кт inventory_account
+    # на себестоимость. revenue_account/cogs_account в этом режиме не используются.
+    profit_account = models.ForeignKey(
+        'Account', on_delete=models.PROTECT, null=True, blank=True,
+        related_name='warehouses_profit', verbose_name="Счёт прибыли (альт. схема)",
+    )
+    fund_account = models.ForeignKey(
+        'Account', on_delete=models.PROTECT, null=True, blank=True,
+        related_name='warehouses_fund', verbose_name="Счёт фонда прибыли (альт. схема)",
+    )
+    # ✅ Override-счета для контрагентов с Counterparty.type == SUPPLIER — некоторые
+    # клиенты ведут расчёты с поставщиками по СОВСЕМ ДРУГИМ счетам, чем с обычными
+    # покупателями (не просто другая сумма — другая роль в плане счетов). Один
+    # статичный счёт на роль (как выше) не может этого выразить, поэтому здесь —
+    # необязательные "запасные" счета: если у контрагента документа type=supplier
+    # И соответствующее override-поле заполнено, Document._resolve_role_account берёт
+    # ЕГО вместо обычного receivable_account/payable_account/profit_account. Если
+    # override не заполнен — просто используется обычный счёт (обратная совместимость).
+    receivable_account_supplier = models.ForeignKey(
+        'Account', on_delete=models.PROTECT, null=True, blank=True,
+        related_name='warehouses_receivable_supplier', verbose_name="Счёт расчётов с поставщиком (Расход)",
+    )
+    payable_account_supplier = models.ForeignKey(
+        'Account', on_delete=models.PROTECT, null=True, blank=True,
+        related_name='warehouses_payable_supplier_override', verbose_name="Счёт расчётов с поставщиком (Приход, альт.)",
+    )
+    profit_account_supplier = models.ForeignKey(
+        'Account', on_delete=models.PROTECT, null=True, blank=True,
+        related_name='warehouses_profit_supplier', verbose_name="Счёт прибыли для поставщика (альт. схема)",
+    )
 
     class Meta:
         verbose_name = "Склад"

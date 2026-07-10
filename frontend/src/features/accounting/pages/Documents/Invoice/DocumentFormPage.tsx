@@ -53,8 +53,12 @@ const DocumentFormPage = () => {
     })),
   );
 
-  const isEdit = !!id;
-  const docId = id ? Number(id) : null;
+  // ✅ id === "new" — сентинел создания нового документа (см. ROUTES.APP.
+  // DOCUMENTS_CREATE в routes.ts: "/documents/new/edit" — тот же <Route>, что и
+  // редактирование, вместо отдельного маршрута, иначе первый autosave, переходя
+  // на URL с реальным id, размонтировал бы весь компонент и ронял фокус ввода).
+  const isEdit = !!id && id !== "new";
+  const docId = isEdit ? Number(id) : null;
 
   // ── Состояние шапки ──────────────────────────────────────────────────────────
 
@@ -81,6 +85,7 @@ const DocumentFormPage = () => {
   const [docStatus, setDocStatus] = useState<"draft" | "posted">("draft");
   const [docNumber, setDocNumber] = useState<string>("");
   const [counterpartyBalance, setCounterpartyBalance] = useState<number | null>(null);
+  const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null);
 
   const canAddProducts = !!header.branch && !!header.warehouse;
   const isPosted = docStatus === "posted";
@@ -89,6 +94,27 @@ const DocumentFormPage = () => {
   // ── Рефы для клавиатурного флоу: сотрудник → контрагент → комментарий → товар ─
   const headDocumentRef = useRef<HeadDocumentHandle>(null);
   const productRowRef = useRef<ProductRowHandle>(null);
+
+  // ✅ Автосохранение черновика (см. эффект ниже, после saveMutation) — рефы вместо
+  // useState, т.к. не должны вызывать ре-рендер. justHydratedRef переживает сам
+  // эффект гидратации (см. useEffect([doc]) выше); isAutosaveRef различает
+  // авто- и ручное сохранение внутри одного saveMutation (тост "Сохранено" — только
+  // для ручного, автосохранение молча обновляет lastSavedAt).
+  const justHydratedRef = useRef(false);
+  const isAutosaveRef = useRef(false);
+  const [autosaveError, setAutosaveError] = useState(false);
+  // ✅ id документа, для которого items/header/participants уже были ПОЛНОСТЬЮ
+  // собраны из ["document", docId] (со сборкой "_key: String(it.id)" для каждой
+  // строки/участника) — см. useEffect([doc]) ниже. Полная пересборка должна
+  // произойти РОВНО ОДИН РАЗ на документ (первое открытие/переключение на другой
+  // документ) — иначе каждый рефетч после автосохранения (или просто фоновый
+  // рефетч react-query) пересобирает items с НОВЫМИ _key (id, которого раньше не
+  // было, теперь есть) → React видит другой key у той же визуальной строки →
+  // размонтирует старый DOM-узел инпута и монтирует новый → фокус ввода теряется
+  // прямо во время печати. Реальные ERP не гоняют форму через полный ре-рендер на
+  // каждое автосохранение — локальное состояние остаётся источником истины, сервер
+  // только сообщает присвоенные id (см. onSuccess у saveMutation).
+  const hydratedDocIdRef = useRef<number | null>(null);
 
   // Без выбранного филиала и склада в правой панели создавать накладные нельзя
   useEffect(() => {
@@ -117,9 +143,15 @@ const DocumentFormPage = () => {
 
   const counterpartyType = ["in", "return_out"].includes(header.document_type) ? "supplier" : "client";
 
+  // ✅ staleTime — справочники (типы цен/контрагенты/сотрудники/товары) меняются
+  // редко в рамках одной сессии; без staleTime react-query рефетчит их заново
+  // при каждом заходе на форму документа (список товаров — самый тяжёлый запрос,
+  // см. ProductSerializer), из-за чего SearchableSelect-поля ощутимо долго
+  // "загружались" при повторном открытии/создании документов подряд.
   const { data: priceTypes = [] } = useQuery({
     queryKey: ["price-types"],
     queryFn: priceTypeApi.getAll,
+    staleTime: 60_000,
   });
 
   // ✅ Настройка "Тип цены для прихода" (админка → Настройка фактуры) — подставляется
@@ -133,11 +165,13 @@ const DocumentFormPage = () => {
   const { data: counterparties = [] } = useQuery({
     queryKey: ["counterparties", counterpartyType],
     queryFn: () => counterpartyApi.getAll({ type: counterpartyType }),
+    staleTime: 60_000,
   });
 
   const { data: employees = [] } = useQuery({
     queryKey: ["employees", workBranch?.id],
     queryFn: () => employeeApi.getAll(workBranch?.id ? { branch: String(workBranch.id) } : undefined),
+    staleTime: 60_000,
   });
 
   // ✅ Ассортиментная матрица "товар × склад" (Product.allowed_warehouses) —
@@ -147,6 +181,7 @@ const DocumentFormPage = () => {
   const { data: products = [] } = useQuery({
     queryKey: ["products-short", header.warehouse, header.branch],
     queryFn: () => productApi.getAll(header.warehouse ? { warehouse: header.warehouse } : header.branch ? { branch: header.branch } : {}),
+    staleTime: 60_000,
   });
 
   // ✅ Сальдо контрагента — поднято на уровень страницы (не внутрь
@@ -184,6 +219,18 @@ const DocumentFormPage = () => {
     staleTime: 60_000,
   });
 
+  // ✅ Настоящая причина, почему фокус ронялся именно на первом автосохранении:
+  // до первого сохранения запрос ["document", docId] выключен (enabled: isEdit
+  // было false), а сразу после — включается ВПЕРВЫЕ и висит в isLoading=true, пока
+  // не резолвится сетевой запрос. RBACGuard (см. ниже) при isLoading=true рендерит
+  // ВМЕСТО children спиннер — то есть вся форма целиком размонтируется под спиннер
+  // и монтируется заново, стоило только React Router сменить :id-параметр (никакой
+  // remount самого DocumentFormPage тут уже нет — это чинил прошлый фикс маршрута,
+  // но RBACGuard ломает то же самое своими силами, скрывая children). Раз этот
+  // документ уже гидратирован локально (hydratedDocIdRef, см. выше — мы его только
+  // что сами создали), спиннер не нужен: реальных данных ждать не от кого.
+  const showDocLoading = isEdit && isLoading && hydratedDocIdRef.current !== docId;
+
   // ── Эффекты синхронизации ────────────────────────────────────────────────────
 
   useEffect(() => {
@@ -215,6 +262,19 @@ const DocumentFormPage = () => {
     if (!doc) return;
     setDocStatus(doc.status);
     setDocNumber(doc.number);
+    if (doc.counterparty_balance != null) {
+      setCounterpartyBalance(Number(doc.counterparty_balance));
+    }
+
+    // ✅ Тот же документ, что уже собран локально (рефетч после автосохранения,
+    // фоновый рефетч react-query и т.п.) — статус/номер/сальдо выше уже обновлены,
+    // но items/header/participants НЕ пересобираем: локальное состояние сейчас —
+    // источник истины (это же мы сами только что сохранили), а полная пересборка
+    // сгенерировала бы новые "_key" для строк, только что получивших id с сервера,
+    // и React перемонтировал бы их DOM-узлы, роняя фокус ввода. См. hydratedDocIdRef.
+    if (hydratedDocIdRef.current === doc.id) return;
+    hydratedDocIdRef.current = doc.id;
+
     setHeader({
       document_type: doc.document_type,
       date: doc.date,
@@ -265,9 +325,10 @@ const DocumentFormPage = () => {
           }))
         : [newParticipantRow()],
     );
-    if (doc.counterparty_balance != null) {
-      setCounterpartyBalance(Number(doc.counterparty_balance));
-    }
+    // ✅ Это заполнение состояния пришло с сервера (первое открытие документа), а
+    // не от правки пользователем — эффект автосохранения ниже должен пропустить
+    // именно этот цикл, иначе открытие документа тут же планировало бы автосейв.
+    justHydratedRef.current = true;
   }, [doc]);
 
   useEffect(() => {
@@ -409,9 +470,14 @@ const DocumentFormPage = () => {
         }
       }
 
+      // ✅ Строки/участники, созданные только что (row.id ещё null) — после
+      // сохранения получают реальный id с сервера. Патчим его в локальный стейт
+      // ЦЕЛЕНАПРАВЛЕННО (по _key), не трогая сам _key — см. onSuccess и комментарий
+      // у hydratedDocIdRef выше про то, почему это критично для фокуса ввода.
+      const itemIdPatches: { key: string; id: number }[] = [];
       for (const row of items) {
         if (!row.product) continue;
-        await documentApi.saveItem(savedId, row.id, {
+        const itemRes = await documentApi.saveItem(savedId, row.id, {
           product: row.product,
           unit: row.unit,
           quantity: parseFloat(row.quantity) || 1,
@@ -422,28 +488,80 @@ const DocumentFormPage = () => {
           // авто-строки (комплектующее/бонус акции) не приняли за обычную покупку
           extra_data: { row_type: row.is_bundle ? "bundle" : row.is_promo ? "promo" : "manual" },
         });
+        if (!row.id && itemRes.data?.id) {
+          itemIdPatches.push({ key: row._key, id: itemRes.data.id });
+        }
       }
 
+      const participantIdPatches: { key: string; id: number }[] = [];
       for (const p of participants) {
         if (!p.employee || p.id) continue;
-        await documentApi.saveParticipant(savedId, null, {
+        const partRes = await documentApi.saveParticipant(savedId, null, {
           employee: p.employee,
           role: p.role,
         });
+        if (partRes.data?.id) {
+          participantIdPatches.push({ key: p._key, id: partRes.data.id });
+        }
       }
 
-      return { savedId, data: res.data };
+      return { savedId, data: res.data, itemIdPatches, participantIdPatches };
     },
-    onSuccess: ({ savedId }) => {
+    onSuccess: ({ savedId, itemIdPatches, participantIdPatches }) => {
+      const wasAutosave = isAutosaveRef.current;
+      isAutosaveRef.current = false;
+
+      // ✅ Патчим id новых строк/участников ПРЯМО в локальном состоянии (не через
+      // рефетч с сервера) — _key не меняется, значит React не перемонтирует DOM-узлы
+      // этих строк и фокус ввода не теряется. Без этого следующее автосохранение
+      // снова слало бы row.id=null и создавало ДУБЛИКАТ строки на сервере.
+      // justHydratedRef — эти setItems/setParticipants не являются правкой
+      // пользователя, эффект автосохранения ниже не должен планировать по ним ещё
+      // один цикл (иначе после каждого автосейва летел бы лишний повторный).
+      if (itemIdPatches.length) {
+        justHydratedRef.current = true;
+        setItems((prev) => prev.map((r) => {
+          const patch = itemIdPatches.find((p) => p.key === r._key);
+          return patch ? { ...r, id: patch.id } : r;
+        }));
+      }
+      if (participantIdPatches.length) {
+        justHydratedRef.current = true;
+        setParticipants((prev) => prev.map((r) => {
+          const patch = participantIdPatches.find((p) => p.key === r._key);
+          return patch ? { ...r, id: patch.id } : r;
+        }));
+      }
+      // ✅ Локальное состояние уже отражает то, что мы только что сами сохранили —
+      // помечаем документ "уже гидратированным", чтобы грядущий рефетч
+      // ["document", docId] (invalidateQueries ниже, либо активация запроса после
+      // перехода на /edit для только что созданного документа) не пересобрал
+      // items/header/participants с нуля и не сбросил фокус (см. useEffect([doc])).
+      hydratedDocIdRef.current = savedId;
+
       queryClient.invalidateQueries({ queryKey: ["documents"] });
       queryClient.invalidateQueries({ queryKey: ["document", docId] });
-      notify("success", isEdit ? t("SuccessUpdated") : t("SuccessCreated"));
+      setLastSavedAt(new Date());
+      setAutosaveError(false);
+      // ✅ Автосохранение — молча, без тоста на каждую паузу в наборе (см. CLAUDE.md
+      // про "не спамить": тост здесь только для ручного нажатия "Сохранить").
+      if (!wasAutosave) notify("success", isEdit ? t("SuccessUpdated") : t("SuccessCreated"));
       if (!isEdit) {
         navigate(ROUTES.APP.DOCUMENTS_EDIT.replace(":id", String(savedId)), { replace: true });
       }
     },
     onError: (err: any) => {
+      const wasAutosave = isAutosaveRef.current;
+      isAutosaveRef.current = false;
       if (err._handled) return;
+      // ✅ Автосохранение при ошибке не бросает тост при каждой попытке (например
+      // "период закрыт" повторялось бы на каждую паузу в наборе) — вместо этого
+      // маленький индикатор рядом с кнопкой "Сохранить" (см. HeaderPage.tsx).
+      // Ручное нажатие "Сохранить" — по-прежнему тост с точной причиной.
+      if (wasAutosave) {
+        setAutosaveError(true);
+        return;
+      }
       // ✅ Ошибка "период закрыт" (DocumentSerializer.validate(), см. utils.py::
       // check_period_open) приходит как {"date": ["текст"]}, а не {"detail": ...} —
       // без фолбэка в тост улетал бы дженерик ErrorSaving вместо понятной причины.
@@ -451,9 +569,38 @@ const DocumentFormPage = () => {
     },
   });
 
+  // ✅ Автосохранение черновика — реальные ERP не сохраняют на каждое нажатие
+  // клавиши: ждут паузу в наборе (debounce) и сохраняют молча в фоне, пока документ
+  // в статусе черновика. Стартует только после первой значимой строки товара — чтобы
+  // просто открытая и тут же закрытая форма нового документа не плодила пустые
+  // черновики в БД (решение согласовано с пользователем).
+  useEffect(() => {
+    // ✅ Это состояние пришло от гидратации с сервера (открыли существующий документ /
+    // документ перезагрузился после автосохранения) — не считается правкой пользователя.
+    if (justHydratedRef.current) {
+      justHydratedRef.current = false;
+      return;
+    }
+    if (isPosted) return;
+    if (!items.some((row) => !!row.product)) return;
+
+    const timer = setTimeout(() => {
+      isAutosaveRef.current = true;
+      saveMutation.mutate();
+    }, 1500);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [header, items, participants, isPosted]);
+
   const postMutation = useMutation({
     mutationFn: () => documentApi.post(docId!),
     onSuccess: () => {
+      // ✅ В отличие от автосохранения — здесь, наоборот, НУЖНА полная пересборка
+      // items/header из ["document", docId] (см. useEffect([doc]) и hydratedDocIdRef
+      // выше): проведение документа пересчитывает данные на сервере (себестоимость
+      // строк и т.п., см. CLAUDE.md про Document.post()), а фокус ввода в этот момент
+      // не защищаем намеренно — форма всё равно тут же становится нередактируемой.
+      hydratedDocIdRef.current = null;
       queryClient.invalidateQueries({ queryKey: ["document", docId] });
       queryClient.invalidateQueries({ queryKey: ["documents"] });
       // ✅ Проведение документа меняет проводки по счёту контрагента — сальдо в
@@ -473,6 +620,9 @@ const DocumentFormPage = () => {
   const unpostMutation = useMutation({
     mutationFn: () => documentApi.unpost(docId!),
     onSuccess: () => {
+      // ✅ См. комментарий в postMutation выше — отмена проведения тоже должна
+      // подтянуть реальное состояние документа с сервера целиком.
+      hydratedDocIdRef.current = null;
       queryClient.invalidateQueries({ queryKey: ["document", docId] });
       queryClient.invalidateQueries({ queryKey: ["documents"] });
       queryClient.invalidateQueries({ queryKey: ["counterparty-card"] });
@@ -690,7 +840,7 @@ const DocumentFormPage = () => {
   // ── Рендер ───────────────────────────────────────────────────────────────────
 
   return (
-    <RBACGuard isLoading={isEdit ? isLoading : false} error={isEdit ? error : null} canView={isEdit ? canPut : canPost} forbiddenText={t("ForbiddenText")}>
+    <RBACGuard isLoading={showDocLoading} error={isEdit ? error : null} canView={isEdit ? canPut : canPost} forbiddenText={t("ForbiddenText")}>
       <div className="h-full flex flex-col min-h-0">
         {/* ── Шапка страницы и шапка документа — всегда видимы, не скроллятся ── */}
         <div className="shrink-0">
@@ -706,6 +856,8 @@ const DocumentFormPage = () => {
             unpostMutation={unpostMutation}
             saveMutation={saveMutation}
             disableSave={disableSave}
+            lastSavedAt={lastSavedAt}
+            autosaveError={autosaveError}
           />
 
           <div className="space-y-3 print:space-y-1 mt-3 print:mt-1">

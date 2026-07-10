@@ -281,6 +281,61 @@ export const Table = <T extends { id: string | number }>({
     columns.map((c, i) => (c.hideInPrint ? i : -1)).filter((i) => i !== -1),
   );
 
+  // ✅ Изменение ширины колонок мышкой (drag за правый край <th>), с сохранением
+  // в localStorage per-tableId — тот же принцип, что и у hiddenInView/hiddenInPrint
+  // выше, только значение не Set индексов, а Record<индекс, ширина в px>.
+  const [columnWidths, setColumnWidths] = useState<Record<number, number>>(() => {
+    if (!tableId) return {};
+    try {
+      const saved = localStorage.getItem(`table:${tableId}:colWidths`);
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return {};
+  });
+
+  const resizingRef = useRef<{ colIndex: number; startX: number; startWidth: number } | null>(null);
+
+  const handleResizeStart = useCallback((e: React.MouseEvent, colIndex: number) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const th = (e.currentTarget as HTMLElement).closest("th");
+    const startWidth = th ? th.getBoundingClientRect().width : 120;
+    resizingRef.current = { colIndex, startX: e.clientX, startWidth };
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+  }, []);
+
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      const r = resizingRef.current;
+      if (!r) return;
+      const newWidth = Math.max(40, Math.round(r.startWidth + (e.clientX - r.startX)));
+      setColumnWidths((prev) => (prev[r.colIndex] === newWidth ? prev : { ...prev, [r.colIndex]: newWidth }));
+    };
+    const handleMouseUp = () => {
+      if (!resizingRef.current) return;
+      resizingRef.current = null;
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+      setColumnWidths((prev) => {
+        if (tableId) {
+          try {
+            localStorage.setItem(`table:${tableId}:colWidths`, JSON.stringify(prev));
+          } catch {}
+        }
+        return prev;
+      });
+    };
+    window.addEventListener("mousemove", handleMouseMove);
+    window.addEventListener("mouseup", handleMouseUp);
+    return () => {
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mouseup", handleMouseUp);
+    };
+  }, [tableId]);
+
+  const getColWidth = useCallback((i: number, col: Column<T>) => columnWidths[i] ?? col.width, [columnWidths]);
+
   useEffect(() => {
     const handler = (e: MouseEvent) => {
       if (mobileMenuRef.current && !mobileMenuRef.current.contains(e.target as Node)) {
@@ -376,9 +431,16 @@ export const Table = <T extends { id: string | number }>({
   const handleSort = (key: keyof T) => {
     // ✅ Server-режим — не сортируем на клиенте, а просим родительскую страницу
     // переспросить сервер с новым ordering (см. ServerPagination.onSortChange).
+    // Сохраняем в тот же localStorage-ключ, что и client-режим (см. ниже) — так
+    // сортировка переживает перезагрузку страницы независимо от режима пагинации.
     if (isServer) {
       const sp = pagination as ServerPagination;
       const direction: "asc" | "desc" = sp.sortBy === key && sp.sortDir === "asc" ? "desc" : "asc";
+      if (tableId) {
+        try {
+          localStorage.setItem(`table:${tableId}:sort`, JSON.stringify({ key, direction }));
+        } catch {}
+      }
       sp.onSortChange?.(String(key), direction);
       return;
     }
@@ -395,6 +457,26 @@ export const Table = <T extends { id: string | number }>({
       return next;
     });
   };
+
+  // ✅ Восстановление сохранённой сортировки для server-режима. В отличие от
+  // client-режима (sortConfig читается из localStorage прямо в useState-инициализаторе
+  // выше), при server-пагинации состояние сортировки держит родительская страница —
+  // поэтому Table.tsx не может применить сохранённое значение сам, а должен один раз
+  // на маунте попросить об этом родителя через onSortChange. Не перетираем sortBy,
+  // если родитель уже явно задал начальную сортировку.
+  useEffect(() => {
+    if (!isServer || !tableId) return;
+    const sp = pagination as ServerPagination;
+    if (sp.sortBy) return;
+    try {
+      const saved = localStorage.getItem(`table:${tableId}:sort`);
+      if (saved) {
+        const parsed = JSON.parse(saved) as { key?: string; direction?: "asc" | "desc" };
+        if (parsed?.key) sp.onSortChange?.(parsed.key, parsed.direction ?? "asc");
+      }
+    } catch {}
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tableId]);
 
   // ✅ Единый источник для стрелки-индикатора в заголовке — при server-режиме
   // "текущая сортировка" приходит снаружи (sortBy/sortDir), а не из локального
@@ -1427,24 +1509,33 @@ export const Table = <T extends { id: string | number }>({
                   <th
                     key={i}
                     className={`
-                      px-1 py-0.5 md:px-2 md:py-2 bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700
+                      relative px-1 py-0.5 md:px-2 md:py-2 bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700
                       font-medium text-gray-700 dark:text-gray-300 print:!text-black
                       ${hiddenInView.has(i) ? "hidden print:table-cell" : ""}
                       ${hiddenInPrint.has(i) ? "print:hidden" : ""}
                       ${col.frozen ? "sticky z-20" : ""}
                     `}
                     style={{
-                      width: col.width,
+                      width: getColWidth(i, col),
                       ...(col.frozen && frozenOffsets[i] !== undefined ? { left: frozenOffsets[i] } : {}),
                     }}
                   >
                     <div
-                      className={`flex items-center gap-1 ${col.sortable ? "cursor-pointer hover:text-indigo-600 dark:hover:text-indigo-400" : ""}`}
+                      className={`flex items-center gap-1 min-w-0 ${col.sortable ? "cursor-pointer hover:text-indigo-600 dark:hover:text-indigo-400" : ""}`}
                       onClick={() => col.sortable && col.accessor && handleSort(col.accessor)}
                     >
-                      {col.header}
-                      {col.sortable && effectiveSortKey === col.accessor && <span>{effectiveSortDir === "asc" ? "▲" : "▼"}</span>}
+                      <span className="truncate min-w-0" title={col.header}>
+                        {col.header}
+                      </span>
+                      {col.sortable && effectiveSortKey === col.accessor && <span className="shrink-0">{effectiveSortDir === "asc" ? "▲" : "▼"}</span>}
                     </div>
+                    {/* ✅ Ручка изменения ширины колонки мышкой — drag за правый край.
+                        z-30, чтобы быть выше sticky-контента (z-20) у frozen-колонок. */}
+                    <div
+                      onMouseDown={(e) => handleResizeStart(e, i)}
+                      className="absolute top-0 right-0 h-full w-1.5 z-30 cursor-col-resize select-none print:hidden hover:bg-indigo-400/50 active:bg-indigo-500/70"
+                      title={t("ResizeColumn")}
+                    />
                   </th>
                 ))}
               </tr>
@@ -1488,7 +1579,7 @@ export const Table = <T extends { id: string | number }>({
                           onClick={() => handleCellClick(item, i, col)}
                           onDoubleClick={() => !isActionCell && onRowDoubleClick && onRowDoubleClick(item)}
                           className={`
-                            px-1 py-0.5 md:px-2 md:py-1 border border-gray-200 dark:border-gray-700 cursor-pointer whitespace-nowrap
+                            px-1 py-0.5 md:px-2 md:py-1 border border-gray-200 dark:border-gray-700 cursor-pointer break-words
                             text-gray-700 dark:text-gray-300 print:!text-black
                             ${isCellSelected && !isActionCell ? "bg-yellow-400/30 dark:bg-yellow-500/20 shadow-[inset_0_0_0_2px_#eab308] print:!bg-transparent print:shadow-none" : ""}
                             ${isCellSelected && isActionCell ? "shadow-[inset_0_0_0_2px_#6366f1] print:shadow-none" : ""}
@@ -1497,7 +1588,7 @@ export const Table = <T extends { id: string | number }>({
                             ${col.frozen ? `sticky z-10 ${isRowSelected ? "bg-yellow-100 dark:bg-yellow-900/30" : "bg-white dark:bg-gray-900"}` : ""}
                           `}
                           style={{
-                            width: col.width,
+                            width: getColWidth(i, col),
                             // Для frozen ячеек нужен явный background иначе будет прозрачный
                             ...(col.frozen && frozenOffsets[i] !== undefined ? { left: frozenOffsets[i] } : {}),
                           }}

@@ -1,5 +1,5 @@
 // frontend/src/features/accounting/pages/Documents/Invoice/Participants.tsx
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Button } from "../../../../../components/ui/Button";
 import { Plus, Trash2, ChevronDown, ChevronRight } from "lucide-react";
 import { newParticipantRow } from "./Vars";
@@ -47,12 +47,16 @@ const Participants = ({ setParticipants, participants, isPosted, employees, remo
     );
   };
 
-  // Опции для SearchableSelect
-  const employeeOptions = employees.map((e) => ({
-    id: e.id,
-    label: e.full_name,
-    sublabel: e.position_name ?? e.branch_name ?? undefined,
-  }));
+  // Опции для SearchableSelect (мемоизировано — пересчёт только при смене employees)
+  const employeeOptions = useMemo(
+    () =>
+      employees.map((e) => ({
+        id: e.id,
+        label: e.full_name,
+        sublabel: e.position_name ?? e.branch_name ?? undefined,
+      })),
+    [employees],
+  );
 
   return (
     <div className="border border-gray-300 dark:border-slate-600 border-l-4 border-l-indigo-400 dark:border-l-indigo-500 rounded-lg bg-gray-200 dark:bg-slate-800 print:border-none print:bg-transparent print:p-0">

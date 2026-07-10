@@ -40,7 +40,11 @@ const ChatPage = () => {
       <div className="w-72 shrink-0 flex flex-col border-r border-slate-700/50 bg-slate-800/30">
         <div className="flex items-center justify-between px-4 py-3 border-b border-slate-700/50">
           <span className="text-sm font-semibold text-slate-200">{t("Messages")}</span>
-          <button onClick={() => setNewChatOpen(true)} className="w-7 h-7 rounded-lg bg-indigo-600 hover:bg-indigo-500 flex items-center justify-center transition-colors" title={t("NewConversation")}>
+          <button
+            onClick={() => setNewChatOpen(true)}
+            className="w-7 h-7 rounded-lg bg-gradient-to-br from-indigo-500 to-violet-600 hover:from-indigo-400 hover:to-violet-500 shadow-[0_0_10px_rgba(99,102,241,0.45)] hover:shadow-[0_0_16px_rgba(99,102,241,0.65)] flex items-center justify-center transition-all"
+            title={t("NewConversation")}
+          >
             <Plus className="w-4 h-4 text-white" />
           </button>
         </div>
@@ -56,7 +60,10 @@ const ChatPage = () => {
           <div className="flex-1 flex flex-col items-center justify-center text-indigo-400/40 gap-3">
             <MessageSquare className="w-16 h-16" />
             <span className="text-sm">{t("SelectChat")}</span>
-            <button onClick={() => setNewChatOpen(true)} className="mt-2 px-4 py-2 rounded-lg bg-indigo-600/20 hover:bg-indigo-600/40 text-indigo-400 text-sm transition-colors">
+            <button
+              onClick={() => setNewChatOpen(true)}
+              className="mt-2 px-4 py-2 rounded-lg bg-gradient-to-br from-indigo-600/20 to-violet-600/20 hover:from-indigo-600/40 hover:to-violet-600/40 text-indigo-400 text-sm transition-all"
+            >
               + {t("NewConversation")}
             </button>
           </div>

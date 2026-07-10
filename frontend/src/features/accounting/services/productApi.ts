@@ -39,6 +39,12 @@ export const productApi = {
   // ProductViewSet.get_queryset, Product.allowed_warehouses). Товар без
   // привязок виден всегда; ?warehouse= имеет приоритет над ?branch=.
   getAll: async (params?: { warehouse?: number; branch?: number }) => (await api.get("/accounting/products/", { params })).data,
+  // ✅ Облегчённый список специально для ProductsListPage.tsx — только то, что
+  // список реально показывает (фото/категория/бренд/ед.изм./себестоимость/
+  // статус), без prices/bundle_items/volume_discounts/quantity_promotions/tags
+  // и т.д. (см. ProductViewSet.list_light). НЕ использовать там, где нужен
+  // prod.prices (например DocumentFormPage.tsx) — там нужен обычный getAll.
+  getAllLight: async (params?: { warehouse?: number; branch?: number }) => (await api.get("/accounting/products/list-light/", { params })).data,
   getOne: async (id: number) => (await api.get(`/accounting/products/${id}/`)).data,
   save: (id: number | null, data: any) =>
     id ? api.put(`/accounting/products/${id}/`, data) : api.post("/accounting/products/", data),

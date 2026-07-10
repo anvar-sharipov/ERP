@@ -203,6 +203,15 @@ class ChatConsumer(AsyncWebsocketConsumer):
         except Exception:
             pass
 
+    async def message_deleted(self, event):
+        try:
+            await self.send(text_data=json.dumps({
+                "type": "deleted",
+                "message_id": event["message_id"],
+            }))
+        except Exception:
+            pass
+
     async def message_read(self, event):
         try:
             await self.send(text_data=json.dumps({

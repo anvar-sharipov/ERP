@@ -91,7 +91,12 @@ export const AlertBell = () => {
           {/* ✅ Клик мимо — закрыть панель, тот же приём, что и у выпадающих
               списков в проекте (SearchableSelect и т.п.). */}
           <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
-          <div className="absolute right-0 mt-2 w-96 max-h-[28rem] overflow-y-auto rounded-lg shadow-xl border border-slate-700 bg-slate-800 z-50">
+          {/* ✅ Без top-full панель не имела вертикального якоря вообще (только
+              mt-2) — absolute-элемент без top/bottom вычисляет "статическую"
+              позицию, которая здесь совпадала примерно с верхом маленькой
+              relative-обёртки кнопок, а не с низом хедера, из-за чего список
+              рендерился слишком высоко и вылезал за пределы вьюпорта. */}
+          <div className="absolute top-full right-0 mt-2 w-96 max-h-[28rem] overflow-y-auto rounded-lg shadow-xl border border-slate-700 bg-slate-800 z-50">
             <div className="px-4 py-2 border-b border-slate-700 font-bold text-sm text-white sticky top-0 bg-slate-800">{t("SystemAlerts")}</div>
             {isLoading ? (
               <div className="p-4 text-sm text-gray-400">{t("Loading")}</div>

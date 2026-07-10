@@ -1,7 +1,7 @@
 services:
   # 1. База данных PostgreSQL
   db:
-    image: postgres:15-alpine
+    image: postgres:16-alpine
     restart: always
     environment:
       POSTGRES_DB: ${DB_NAME}
@@ -10,7 +10,7 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     ports:
-      - "5432:5432"
+      - "5434:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
       interval: 5s
@@ -35,14 +35,18 @@ services:
     # уже покрывает и celery — это буквально тот же образ.
     image: my_erp-backend:latest
     restart: always
-    # ✅ Второй migrate_schemas (без --shared) обязателен — иначе миграции,
-    # добавленные ПОСЛЕ первого создания тенанта, никогда не применятся к уже
-    # существующим схемам тенантов (новый тенант мигрируется автоматически
-    # через auto_create_schema, но повторный деплой с новой миграцией — нет).
+    # ✅ migrate_schemas (без --shared) обязателен ДО init_tenant.py — иначе
+    # миграции, добавленные ПОСЛЕ первого создания тенанта, ещё не будут
+    # применены к уже существующим схемам тенантов в момент, когда
+    # init_tenant.py начнёт сеять/читать данные через ORM (новый тенант при
+    # создании мигрируется автоматически через auto_create_schema — для него
+    # порядок не важен, а вот для уже существующего тенанта важен: раньше
+    # именно из-за обратного порядка init_tenant.py падал на несуществующей
+    # колонке при повторном деплое с новой миграцией).
     command: >
       sh -c "python manage.py migrate_schemas --shared --noinput &&
-            python init_tenant.py &&
             python manage.py migrate_schemas --noinput &&
+            python init_tenant.py &&
             python manage.py sync_permissions &&
             python manage.py bootstrap_daily_checks_schedule &&
             python manage.py collectstatic --noinput &&

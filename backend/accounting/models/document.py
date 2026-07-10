@@ -289,6 +289,9 @@ class Document(models.Model):
         self.posted_by = user
         self.save(update_fields=['status', 'posted_at', 'posted_by', 'journal_entry'])
         self._write_audit_log(user, AuditLog.Action.POST)
+        if self.document_type in (self.Type.OUT, self.Type.RETURN_OUT):
+            from accounting.broadcasts import broadcast_dashboard_update
+            broadcast_dashboard_update()
 
     def _update_product_cost_prices(self, user=None):
         """
@@ -312,6 +315,24 @@ class Document(models.Model):
                 user=user if user and user.is_authenticated else None,
                 changed_data={'cost_price': {'before': str(old_cost_price), 'after': str(item.price)}},
             )
+
+    def _resolve_role_account(self, wh, default_field, supplier_field):
+        """
+        Возвращает счёт для роли (receivable/payable/profit), учитывая, что у
+        контрагента-поставщика (Counterparty.Type.SUPPLIER) эта роль может вестись
+        по СОВСЕМ ДРУГОМУ счёту, чем у обычного покупателя — см. Warehouse.
+        *_account_supplier в accounting/models/stock.py. Если override не настроен
+        (или контрагент не поставщик) — используется обычный default_field.
+        """
+        from accounting.models import Counterparty
+        override = getattr(wh, supplier_field, None)
+        if (
+            override is not None
+            and self.counterparty is not None
+            and self.counterparty.type == Counterparty.Type.SUPPLIER
+        ):
+            return override
+        return getattr(wh, default_field)
 
     def _resolve_account_subcontos(self, account, counterparty=None, product=None):
         """
@@ -369,6 +390,15 @@ class Document(models.Model):
         строкой Дт discount_account / Кт receivable_account, чтобы в ОСВ было видно сумму
         предоставленных скидок отдельно от выручки. Если счёт не настроен — поведение как
         раньше: receivable/revenue = self.total (уже netted со скидкой).
+
+        ✅ Альтернативная схема (Warehouse.profit_account И fund_account оба заполнены) —
+        для складов, унаследовавших учёт в стиле "инвентарь списывается по полной цене
+        продажи, прибыль — отдельной ногой на фонд" (см. обсуждение с пользователем про
+        перенос данных из исторической системы). В этом режиме revenue_account/cogs_account
+        не используются вовсе: Нога 1 — Дт receivable/Кт inventory_account на полную сумму
+        (вместо revenue_account), Нога 2 (по каждой строке) — Дт profit_account/Кт
+        fund_account на прибыль строки ((price*(1-discount_percent/100) - cost_price)*qty),
+        вместо Дт cogs_account/Кт inventory_account на себестоимость.
         """
         from accounting.models import JournalEntry, TransactionLine
         from accounting.utils import generate_journal_number
@@ -377,7 +407,11 @@ class Document(models.Model):
         if wh is None:
             raise ValidationError("У документа не указан склад — проводка невозможна.")
 
-        required = ['receivable_account_id', 'revenue_account_id', 'cogs_account_id', 'inventory_account_id']
+        alt_scheme = wh.profit_account_id is not None and wh.fund_account_id is not None
+        if alt_scheme:
+            required = ['receivable_account_id', 'inventory_account_id', 'profit_account_id', 'fund_account_id']
+        else:
+            required = ['receivable_account_id', 'revenue_account_id', 'cogs_account_id', 'inventory_account_id']
         missing = [f for f in required if getattr(wh, f, None) is None]
         if missing:
             raise ValidationError(
@@ -397,16 +431,65 @@ class Document(models.Model):
         )
 
         order = 1
+        receivable_account = self._resolve_role_account(wh, 'receivable_account', 'receivable_account_supplier')
+
+        if alt_scheme:
+            # ✅ В альт-схеме "Нога 1" (receivable/inventory) кредитует inventory_account —
+            # а этот счёт обычно требует субконто "Номенклатура", которое доступно только на
+            # уровне СТРОКИ документа (несколько разных товаров в одном документе). Поэтому,
+            # в отличие от классической схемы (где receivable/revenue — одна строка на весь
+            # документ), здесь и эта нога, и нога прибыли строятся ПО КАЖДОЙ СТРОКЕ отдельно —
+            # так же, как в исходной системе (create_entries вызывался внутри цикла по товарам).
+            profit_account = self._resolve_role_account(wh, 'profit_account', 'profit_account_supplier')
+            for item in self.items.select_related('product'):
+                line_factor = Decimal('1') - item.discount_percent / Decimal('100')
+                sale_amount = (item.price * line_factor * item.quantity * sign).quantize(Decimal('0.01'))
+                if sale_amount != 0:
+                    ar_subcontos = self._resolve_account_subcontos(receivable_account, counterparty=self.counterparty)
+                    inv_subcontos = self._resolve_account_subcontos(wh.inventory_account, counterparty=self.counterparty, product=item.product)
+                    TransactionLine.objects.create(
+                        journal_entry=entry, order=order, side=TransactionLine.Side.DEBIT,
+                        account=receivable_account, amount=sale_amount, subcontos=ar_subcontos,
+                    )
+                    order += 1
+                    TransactionLine.objects.create(
+                        journal_entry=entry, order=order, side=TransactionLine.Side.CREDIT,
+                        account=wh.inventory_account, amount=sale_amount, subcontos=inv_subcontos,
+                    )
+                    order += 1
+
+                profit_amount = ((item.price * line_factor - item.cost_price) * item.quantity * sign).quantize(Decimal('0.01'))
+                if profit_amount != 0:
+                    profit_subcontos = self._resolve_account_subcontos(profit_account, counterparty=self.counterparty, product=item.product)
+                    fund_subcontos = self._resolve_account_subcontos(wh.fund_account, counterparty=self.counterparty, product=item.product)
+                    TransactionLine.objects.create(
+                        journal_entry=entry, order=order, side=TransactionLine.Side.DEBIT,
+                        account=profit_account, amount=profit_amount, subcontos=profit_subcontos,
+                    )
+                    order += 1
+                    TransactionLine.objects.create(
+                        journal_entry=entry, order=order, side=TransactionLine.Side.CREDIT,
+                        account=wh.fund_account, amount=profit_amount, subcontos=fund_subcontos,
+                    )
+                    order += 1
+
+            if order == 1:
+                entry.delete()
+                return
+            entry.post()
+            self.journal_entry = entry
+            return
+
         discount_amount = (self.discount_amount * sign).quantize(Decimal('0.01'))
         use_gross = wh.discount_account_id is not None and discount_amount != 0
         total_amount = ((self.subtotal if use_gross else self.total) * sign).quantize(Decimal('0.01'))
 
         if total_amount != 0:
-            ar_subcontos = self._resolve_account_subcontos(wh.receivable_account, counterparty=self.counterparty)
+            ar_subcontos = self._resolve_account_subcontos(receivable_account, counterparty=self.counterparty)
             rev_subcontos = self._resolve_account_subcontos(wh.revenue_account, counterparty=self.counterparty)
             TransactionLine.objects.create(
                 journal_entry=entry, order=order, side=TransactionLine.Side.DEBIT,
-                account=wh.receivable_account, amount=total_amount, subcontos=ar_subcontos,
+                account=receivable_account, amount=total_amount, subcontos=ar_subcontos,
             )
             order += 1
             TransactionLine.objects.create(
@@ -424,7 +507,7 @@ class Document(models.Model):
                 order += 1
                 TransactionLine.objects.create(
                     journal_entry=entry, order=order, side=TransactionLine.Side.CREDIT,
-                    account=wh.receivable_account, amount=discount_amount, subcontos=ar_subcontos,
+                    account=receivable_account, amount=discount_amount, subcontos=ar_subcontos,
                 )
                 order += 1
 
@@ -510,12 +593,13 @@ class Document(models.Model):
         )
 
         order = 1
+        payable_account = self._resolve_role_account(wh, 'payable_account', 'payable_account_supplier')
         for item in self.items.select_related('product'):
             item_amount = (item.price * item.quantity * sign).quantize(Decimal('0.01'))
             if item_amount == 0:
                 continue
             inv_subcontos = self._resolve_account_subcontos(wh.inventory_account, counterparty=self.counterparty, product=item.product)
-            payable_subcontos = self._resolve_account_subcontos(wh.payable_account, counterparty=self.counterparty, product=item.product)
+            payable_subcontos = self._resolve_account_subcontos(payable_account, counterparty=self.counterparty, product=item.product)
             TransactionLine.objects.create(
                 journal_entry=entry, order=order, side=TransactionLine.Side.DEBIT,
                 account=wh.inventory_account, amount=item_amount, subcontos=inv_subcontos,
@@ -523,7 +607,7 @@ class Document(models.Model):
             order += 1
             TransactionLine.objects.create(
                 journal_entry=entry, order=order, side=TransactionLine.Side.CREDIT,
-                account=wh.payable_account, amount=item_amount, subcontos=payable_subcontos,
+                account=payable_account, amount=item_amount, subcontos=payable_subcontos,
             )
             order += 1
 
@@ -572,6 +656,9 @@ class Document(models.Model):
         self.posted_by = None
         self.save(update_fields=['status', 'posted_at', 'posted_by', 'journal_entry'])
         self._write_audit_log(user, AuditLog.Action.UNPOST)
+        if self.document_type in (self.Type.OUT, self.Type.RETURN_OUT):
+            from accounting.broadcasts import broadcast_dashboard_update
+            broadcast_dashboard_update()
 
     def _stock_direction(self, reverse=False):
         fwd = {

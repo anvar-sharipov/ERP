@@ -154,7 +154,9 @@ export const MessageInput: React.FC<Props> = ({ onSend, onSendFile, onTyping, di
         disabled={!text.trim() || disabled}
         className="
           w-9 h-9 rounded-xl flex items-center justify-center shrink-0
-          bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40
+          bg-gradient-to-br from-indigo-500 to-violet-600 hover:from-indigo-400 hover:to-violet-500
+          shadow-[0_0_10px_rgba(99,102,241,0.45)] hover:shadow-[0_0_16px_rgba(99,102,241,0.65)]
+          disabled:opacity-40 disabled:shadow-none
           transition-all duration-150
           disabled:cursor-not-allowed
         "

@@ -120,10 +120,28 @@ def _check_low_stock():
     по складам, которые этот товар вообще не должны держать (проверено на
     реальных тестовых данных: полный перебор склад×товар дал 4226 алертов
     вместо ожидаемых — решили вернуться к варианту "только там, где товар был").
+
+    ✅ Этого фильтра недостаточно самого по себе: строка WarehouseStock может
+    существовать (например создана массовым импортом/корректировкой остатка
+    с quantity=0) даже если товар НИКОГДА не фигурировал ни в одной накладной
+    — по факту это "заведённый, но никогда не заказывавшийся" товар, а не
+    реальная нехватка. Реальный кейс: пользователь увидел 3912 активных
+    уведомлений и спросил, почему так много — почти все были именно такими
+    товарами без единой строки в DocumentItem. Тот же принцип, что и в
+    report_views.py::stock_balance (там уже исправлено) — проверяем ГЛОБАЛЬНО
+    (по всем складам сразу, не только по текущему), фигурировал ли товар хоть
+    раз хоть в одной накладной.
     """
-    from .models import WarehouseStock, SystemAlert
+    from .models import WarehouseStock, SystemAlert, DocumentItem
 
     ct = ContentType.objects.get_for_model(WarehouseStock)
+
+    base_qs = WarehouseStock.objects.filter(product__min_stock_level__gt=0)
+    pids_with_turnover = set(
+        DocumentItem.objects
+        .filter(product_id__in=base_qs.values_list('product_id', flat=True).distinct())
+        .values_list('product_id', flat=True).distinct()
+    )
 
     # ✅ Тут НЕ фильтруем по product__is_active=True — иначе товар, у которого
     # уже открыт алерт, а потом стал неактивным, вообще выпадает из перебора
@@ -132,14 +150,17 @@ def _check_low_stock():
     # is_problem=False — реальный баг: Z-90 остался в уведомлениях навсегда
     # после деактивации). Вместо этого is_active проверяем прямо в is_low.
     stocks = (
-        WarehouseStock.objects
-        .filter(product__min_stock_level__gt=0)
+        base_qs
         .select_related('product', 'warehouse')
         .iterator(chunk_size=500)
     )
 
     for stock in stocks:
-        is_low = stock.product.is_active and stock.quantity < stock.product.min_stock_level
+        is_low = (
+            stock.product.is_active
+            and stock.product_id in pids_with_turnover
+            and stock.quantity < stock.product.min_stock_level
+        )
 
         title = f"Мало товара: {stock.product.name}"
         message = (

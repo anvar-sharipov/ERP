@@ -134,6 +134,10 @@ const ProductFormPage = () => {
       }),
     onSuccess: (res) => {
       queryClient.invalidateQueries({ queryKey: ["products"] });
+      // ✅ ProductsListPage.tsx использует отдельный лёгкий список (см.
+      // ProductViewSet.list_light) под своим ключом — тоже сбрасываем, иначе
+      // после создания/правки товара список может показать устаревший кэш.
+      queryClient.invalidateQueries({ queryKey: ["products-light"] });
       queryClient.invalidateQueries({ queryKey: ["product", productId] });
       notify("success", isEdit ? t("SuccessUpdated") : t("SuccessCreated"));
 

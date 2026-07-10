@@ -26,4 +26,5 @@ export const messageApi = {
       headers: { "Content-Type": "multipart/form-data" },
     });
   },
+  delete: (convId: number, messageId: number) => api.delete(`/chat/conversations/${convId}/messages/${messageId}/`),
 };

@@ -3,7 +3,7 @@ import { useEffect, useRef } from "react";
 import { getTenantWsBaseUrl } from "../../../core/utils/tenant";
 
 interface IncomingMessage {
-  type: "message" | "read" | "online" | "offline" | "online_list" | "typing";
+  type: "message" | "read" | "online" | "offline" | "online_list" | "typing" | "deleted";
 
   user_ids?: number[];
   message_id?: number;
@@ -46,6 +46,7 @@ interface UseChatSocketOptions {
   onOffline?: (userId: number) => void;
   onOnlineList?: (userIds: number[]) => void;
   onTyping?: (user: TypingUser, isTyping: boolean) => void;
+  onDeleted?: (messageId: number) => void;
 }
 
 export const useChatSocket = ({
@@ -56,6 +57,7 @@ export const useChatSocket = ({
   onOffline,
   onOnlineList,
   onTyping,
+  onDeleted,
 }: UseChatSocketOptions) => {
   const wsRef = useRef<WebSocket | null>(null);
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -124,6 +126,9 @@ export const useChatSocket = ({
               data.is_typing ?? false,
             );
           }
+          break;
+        case "deleted":
+          if (data.message_id) onDeleted?.(data.message_id);
           break;
       }
     };

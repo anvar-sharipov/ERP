@@ -22,6 +22,13 @@ import { useRestoreScroll } from "../../../../core/hooks/useRestoreScroll";
 import { usePageHotkeys } from "../../../../core/hooks/usePageHotkeys";
 import { useTableFilter } from "../../../../core/hooks/useTableFilter";
 
+// ✅ Стабильный дефолт для useQuery({data: x = []}) — литерал [] пересоздаётся
+// заново на каждом рендере, пока data ещё не загрузилась; если такое поле стоит
+// в зависимостях useEffect (см. sidebar-эффект ниже), это вызывает бесконечный
+// цикл setState (React "Maximum update depth exceeded"). Модульная константа —
+// одна и та же ссылка на каждом рендере, пока data действительно не придёт.
+const EMPTY_ARRAY: never[] = [];
+
 // ── Основная страница ─────────────────────────────────────────────────────────
 const ProductsListPage = () => {
   const { t } = useTranslation();
@@ -110,19 +117,24 @@ const ProductsListPage = () => {
       }),
   });
 
+  // ✅ Облегчённый список (ProductViewSet.list_light/ProductListSerializer) —
+  // страница показывает только фото/категорию/бренд/ед.изм./себестоимость/
+  // статус, цены/остатки/оборотность и так приходят отдельными bulk-запросами
+  // выше (pricesMap/stockBalance/turnoverRows), поэтому полный productApi.getAll
+  // (с prices/bundle_items/tags и т.д. на каждый товар) тут не нужен.
   const {
     data: products = [],
     isLoading,
     error,
   } = useQuery({
-    queryKey: ["products", workWarehouse?.id, workBranch?.id],
-    queryFn: () => productApi.getAll(workWarehouse?.id ? { warehouse: workWarehouse.id } : workBranch?.id ? { branch: workBranch.id } : {}),
+    queryKey: ["products-light", workWarehouse?.id, workBranch?.id],
+    queryFn: () => productApi.getAllLight(workWarehouse?.id ? { warehouse: workWarehouse.id } : workBranch?.id ? { branch: workBranch.id } : {}),
     enabled: canView,
     retry: false,
   });
 
-  const { data: categories = [], isLoading: isLoadingCategories } = useQuery({ queryKey: ["product-categories"], queryFn: productCategoryApi.getAll });
-  const { data: brands = [], isLoading: isLoadingBrands } = useQuery({ queryKey: ["brands"], queryFn: brandApi.getAll });
+  const { data: categories = EMPTY_ARRAY, isLoading: isLoadingCategories } = useQuery({ queryKey: ["product-categories"], queryFn: productCategoryApi.getAll });
+  const { data: brands = EMPTY_ARRAY, isLoading: isLoadingBrands } = useQuery({ queryKey: ["brands"], queryFn: brandApi.getAll });
 
   // ✅ Прогресс загрузки страницы — доля уже завершённых запросов из тех, что реально
   // задействованы (pricesMap считается только если выбран филиал/склад) — не фейковая
@@ -133,6 +145,7 @@ const ProductsListPage = () => {
   const deleteMutation = useMutation({
     mutationFn: (id: number) => productApi.delete(id),
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["products-light"] });
       queryClient.invalidateQueries({ queryKey: ["products"] });
       notify("success", t("SuccessDeleted"));
       setDeleteId(null);
@@ -148,6 +161,7 @@ const ProductsListPage = () => {
   // там же, где и обычное удаление (см. CLAUDE.md).
   const handleBulkDelete = async (ids: (string | number)[]) => {
     const res = await productApi.bulkDelete(ids);
+    queryClient.invalidateQueries({ queryKey: ["products-light"] });
     queryClient.invalidateQueries({ queryKey: ["products"] });
     if (res.errors.length > 0) {
       notify("error", t("BulkDeletePartialError", { deleted: res.deleted_ids.length, failed: res.errors.length }));
@@ -273,10 +287,10 @@ const ProductsListPage = () => {
                   крупная иконка в углу фото, вместо текстовой плашки у названия. */}
               {stock?.is_low && (
                 <span
-                  className="absolute -top-1.5 -right-1.5 w-7 h-7 rounded-full bg-red-600 text-white flex items-center justify-center shadow-md ring-2 ring-white dark:ring-slate-900"
+                  className="absolute -top-1.5 -right-1.5 w-6 h-6 rounded-full bg-amber-500/90 dark:bg-amber-600/90 text-white flex items-center justify-center shadow-sm ring-1 ring-white dark:ring-slate-900"
                   title={t("LowStockHint", { min: stock.min_stock_level })}
                 >
-                  <AlertTriangle className="w-4 h-4" />
+                  <AlertTriangle className="w-3.5 h-3.5" />
                 </span>
               )}
               {/* ✅ Тот же угол, что и "мало" — они взаимоисключающие: is_low у
@@ -285,10 +299,10 @@ const ProductsListPage = () => {
                   одновременно эти две иконки никогда не показываются. */}
               {!item.is_active && (
                 <span
-                  className="absolute -top-1.5 -right-1.5 w-7 h-7 rounded-full bg-gray-600 text-white flex items-center justify-center shadow-md ring-2 ring-white dark:ring-slate-900"
+                  className="absolute -top-1.5 -right-1.5 w-6 h-6 rounded-full bg-gray-400/90 dark:bg-gray-600/90 text-white flex items-center justify-center shadow-sm ring-1 ring-white dark:ring-slate-900"
                   title={t("InactiveHint")}
                 >
-                  <EyeOff className="w-4 h-4" />
+                  <EyeOff className="w-3.5 h-3.5" />
                 </span>
               )}
             </div>

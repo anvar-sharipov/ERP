@@ -1,4 +1,5 @@
 # backend/accounting/tests/test_rbac_all.py
+from rest_framework import status
 from accounting.tests.base import BaseRBACTest
 from django_tenants.utils import tenant_context
 from accounting.models import CompanyProfile, Unit, Product
@@ -96,6 +97,23 @@ class TestProductRBAC(BaseRBACTest):
         return {"name": "New Product", "unit": unit.id, "price_retail": 100}
 
     update_payload = {"name": "Updated Product Name"}
+
+    # ✅ ProductViewSet.list_light (ProductsListPage.tsx) — тот же resource
+    # "product", тот же GET, поэтому и RBAC-права те же, что у обычного list.
+    def test_list_light_without_permission_returns_403(self):
+        response = self._client(self.user_simple).get("/api/accounting/products/list-light/")
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_list_light_returns_lean_payload(self):
+        response = self._client(self.user_manager).get("/api/accounting/products/list-light/")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertGreaterEqual(len(response.data), 1)
+        item = response.data[0]
+        for field in ("id", "name", "sku", "category_detail", "brand_detail", "unit_detail", "cost_price", "is_active", "images", "main_image"):
+            self.assertIn(field, item, f"'{field}' должен быть в облегчённом ответе list-light")
+        for field in ("prices", "bundle_items", "volume_discounts", "quantity_promotions", "tags_detail", "allowed_warehouses_detail", "description", "extra_data"):
+            self.assertNotIn(field, item, f"'{field}' не должен попадать в облегчённый ответ list-light")
+
 
 class TestWarehouseRBAC(BaseRBACTest):
     resource_name = "warehouse"

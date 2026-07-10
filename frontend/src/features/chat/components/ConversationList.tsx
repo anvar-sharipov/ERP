@@ -97,7 +97,11 @@ export const ConversationList: React.FC<Props> = ({ onSelect }) => {
                 onClick={() => handleSelect(conv)}
                 className={`
                   w-full flex items-center gap-3 px-3 py-3 transition-all duration-150 text-left border-b border-slate-700/30
-                  ${isActive ? "bg-indigo-600/20 border-l-2 border-l-indigo-500" : "hover:bg-slate-700/40 border-l-2 border-l-transparent"}
+                  ${
+                    isActive
+                      ? "bg-gradient-to-r from-indigo-600/25 via-violet-600/10 to-transparent border-l-2 border-l-indigo-500 shadow-[inset_0_0_16px_-6px_rgba(99,102,241,0.5)]"
+                      : "hover:bg-slate-700/40 border-l-2 border-l-transparent"
+                  }
                 `}
               >
                 <div className="relative w-10 h-10 rounded shrink-0 overflow-hidden">
@@ -106,7 +110,13 @@ export const ConversationList: React.FC<Props> = ({ onSelect }) => {
                     return isValidMediaUrl(other?.photo_thumbnail) ? (
                       <img src={other.photo_thumbnail!} alt={name} loading="lazy" className="w-full h-full object-cover" />
                     ) : (
-                      <div className={`w-full h-full flex items-center justify-center text-sm font-bold ${isActive ? "bg-indigo-600" : "bg-slate-600"}`}>{getInitials(name)}</div>
+                      <div
+                        className={`w-full h-full flex items-center justify-center text-sm font-bold ${
+                          isActive ? "bg-gradient-to-br from-indigo-500 to-violet-600 shadow-[0_0_8px_rgba(99,102,241,0.5)]" : "bg-slate-600"
+                        }`}
+                      >
+                        {getInitials(name)}
+                      </div>
                     );
                   })()}
                 </div>
@@ -126,10 +136,18 @@ export const ConversationList: React.FC<Props> = ({ onSelect }) => {
                   </div>
 
                   <div className="flex items-center justify-between gap-1 mt-0.5">
-                    <span className="text-xs text-slate-400 truncate">{lastMsg ? (lastMsg.sender_id === user?.id ? `${t("You")}: ${lastMsg.text}` : lastMsg.text) : t("NoMessages")}</span>
+                    <span className="text-xs text-slate-400 truncate">
+                      {lastMsg
+                        ? lastMsg.is_deleted
+                          ? t("MessageDeleted")
+                          : lastMsg.sender_id === user?.id
+                            ? `${t("You")}: ${lastMsg.text}`
+                            : lastMsg.text
+                        : t("NoMessages")}
+                    </span>
 
                     {hasUnread && (
-                      <span className="shrink-0 min-w-[20px] h-5 px-1.5 rounded-full bg-indigo-500 text-white text-xs flex items-center justify-center font-medium">
+                      <span className="shrink-0 min-w-[20px] h-5 px-1.5 rounded-full bg-gradient-to-br from-fuchsia-500 to-indigo-500 shadow-[0_0_8px_rgba(217,70,239,0.55)] text-white text-xs flex items-center justify-center font-medium">
                         {conv.unread_count > 99 ? "99+" : conv.unread_count}
                       </span>
                     )}

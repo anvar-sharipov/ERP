@@ -1,5 +1,5 @@
 // frontend/src/features/accounting/pages/Documents/Invoice/HeadDocument.tsx
-import { forwardRef, useImperativeHandle, useRef, useState } from "react";
+import { forwardRef, useImperativeHandle, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { selectClass, DOC_TYPES } from "./Vars";
 import { Input } from "../../../../../components/ui/Input";
@@ -113,13 +113,21 @@ const HeadDocument = forwardRef<HeadDocumentHandle, HeadDocumentProps>(
 
   // ── Первый участник (сотрудник/водитель) — обязателен, всегда первый в массиве ──
   const primaryParticipant = participants[0];
-  const employeeOptions: SelectOption[] = employees.map((e: any) => ({
-    id: e.id,
-    label: e.full_name,
-    sublabel: e.position_name ?? e.branch_name ?? undefined,
-    thumbnail: e.photo_thumbnail ?? null,
-    fullImage: e.photo ?? null,
-  }));
+  // ✅ useMemo — без него этот .map() пересчитывался бы на каждый рендер
+  // (в т.ч. на каждое нажатие клавиши в любом другом поле формы, т.к. header/items
+  // живут в родителе), что при большом числе сотрудников заметно тормозило открытие
+  // SearchableSelect. Пересчёт нужен только когда реально изменился список.
+  const employeeOptions: SelectOption[] = useMemo(
+    () =>
+      employees.map((e: any) => ({
+        id: e.id,
+        label: e.full_name,
+        sublabel: e.position_name ?? e.branch_name ?? undefined,
+        thumbnail: e.photo_thumbnail ?? null,
+        fullImage: e.photo ?? null,
+      })),
+    [employees],
+  );
 
   const handleEmployeeChange = (employeeId: number | null) => {
     setParticipants((prev) =>
@@ -137,13 +145,17 @@ const HeadDocument = forwardRef<HeadDocumentHandle, HeadDocumentProps>(
     else noteInputRef.current?.focus();
   };
 
-  const counterpartyOptions: SelectOption[] = counterparties.map((c) => ({
-    id: c.id,
-    label: c.name,
-    thumbnail: c.photo_thumbnail ?? null,
-    fullImage: c.photo ?? null,
-    sublabel: c.inn ? `${t("INN")}: ${c.inn}` : c.phone || undefined,
-  }));
+  const counterpartyOptions: SelectOption[] = useMemo(
+    () =>
+      counterparties.map((c) => ({
+        id: c.id,
+        label: c.name,
+        thumbnail: c.photo_thumbnail ?? null,
+        fullImage: c.photo ?? null,
+        sublabel: c.inn ? `${t("INN")}: ${c.inn}` : c.phone || undefined,
+      })),
+    [counterparties, t],
+  );
 
   const warehouseName = warehouses.find((w) => w.id === header.warehouse)?.name ?? "—";
   const warehouseToName = warehouses.find((w) => w.id === header.warehouse_to)?.name ?? "—";

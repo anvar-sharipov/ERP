@@ -1,5 +1,5 @@
 // frontend/src/features/accounting/pages/Documents/Invoice/ProductRow/ProductRow.tsx
-import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { newItemRow, resolveVolumeDiscount, resolveQuantityPromotion, calcRowIncome } from "../Vars";
 import { DEFAULT_COLUMNS, colVisibilityClass, printSize, type ProductRowProps, type ItemRow, type Product } from "../Interface";
@@ -253,27 +253,35 @@ const ProductRow = forwardRef<ProductRowHandle, ProductRowProps>(({
   const bundleItems = items.filter((r) => r.is_bundle);
   const promoItems = items.filter((r) => r.is_promo);
 
-  // const productOptions: SelectOption[] = products.map((p) => ({
-  //   id: p.id,
-  //   label: p.name,
-  //   sublabel: p.unit_detail?.name,
-  // }));
   // ✅ Для складывающих товар документов (Расход/Перемещение/Возврат поставщику)
   // не показываем в выборе то, чего физически нет в наличии на этом складе.
   // Неактивные товары в поиске никогда не показываем (но products целиком
   // оставляем как есть — уже добавленные строки могут ссылаться на товар,
   // который был активен на момент добавления, и должны и дальше отображаться).
-  const activeProducts = products.filter((p) => p.is_active !== false);
-  const selectableProducts = filterByStock ? activeProducts.filter((p) => (stockMap.get(p.id)?.available ?? 0) > 0) : activeProducts;
+  // ✅ useMemo — без него весь filter+map по каталогу товаров пересчитывался бы
+  // на КАЖДЫЙ рендер ProductRow (в т.ч. на каждое нажатие клавиши в количестве/
+  // цене любой строки, т.к. items хранится в родителе) — при большом каталоге
+  // это и было причиной "долгой загрузки" полей SearchableSelect на форме.
+  // stockMap — стабильная ссылка между рендерами, пока сам react-query запрос
+  // не рефетчится (см. useWarehouseStocks.ts), поэтому безопасна как зависимость.
+  const activeProducts = useMemo(() => products.filter((p) => p.is_active !== false), [products]);
+  const selectableProducts = useMemo(
+    () => (filterByStock ? activeProducts.filter((p) => (stockMap.get(p.id)?.available ?? 0) > 0) : activeProducts),
+    [activeProducts, filterByStock, stockMap],
+  );
 
-  const productOptions: SelectOption[] = selectableProducts.map((p) => ({
-    id: p.id,
-    label: p.name,
-    sublabel: p.unit_detail?.name,
-    thumbnail: p.main_image?.thumbnail_url ?? null,
-    fullImage: p.main_image?.image_url ?? null,
-    stock: stockMap.get(p.id) ?? null,
-  }));
+  const productOptions: SelectOption[] = useMemo(
+    () =>
+      selectableProducts.map((p) => ({
+        id: p.id,
+        label: p.name,
+        sublabel: p.unit_detail?.name,
+        thumbnail: p.main_image?.thumbnail_url ?? null,
+        fullImage: p.main_image?.image_url ?? null,
+        stock: stockMap.get(p.id) ?? null,
+      })),
+    [selectableProducts, stockMap],
+  );
 
   // ── Добавление строки по выбору товара (searchable-select над таблицей) ────
 

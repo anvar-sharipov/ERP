@@ -177,7 +177,12 @@ const AppRouter: React.FC = () => {
           <Route path="orders" element={<OrdersPage />} />
           <Route path="returns" element={<ReturnsPage />} />
         </Route>
-        <Route path={ROUTES.APP.DOCUMENTS_CREATE} element={<DocumentFormPage />} />
+        {/* ✅ Один <Route> и на создание (id="new"), и на редактирование — см.
+            комментарий у ROUTES.APP.DOCUMENTS_CREATE в routes.ts: если оставить
+            отдельный <Route> под "/documents/create", react-router размонтирует
+            DocumentFormPage при переходе на ":id/edit" после первого автосохранения
+            (роняя фокус ввода), вместо того чтобы просто сменить :id-параметр у уже
+            смонтированного компонента. */}
         <Route path={ROUTES.APP.DOCUMENTS_EDIT} element={<DocumentFormPage />} />
         <Route path={ROUTES.APP.DOCUMENTS_VIEW} element={<DocumentViewPage />} />
       </Route>

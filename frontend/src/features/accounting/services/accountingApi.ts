@@ -93,6 +93,34 @@ export const accountApi = {
     return res.data as Record<string, { quantity: string; reserved: string; available: string; min_stock_level: number | null; is_low: boolean }>;
   },
 
+  getRevenueByWarehouse: async (params: { date_from: string; date_to: string; warehouse?: string; branch?: string }) => {
+    const res = await api.get('/accounting/reports/revenue-by-warehouse/', { params });
+    return res.data as {
+      total_revenue: string;
+      total_documents: number;
+      by_warehouse: { warehouse_id: number; warehouse_name: string; revenue: string; documents_count: number }[];
+      daily: { date: string; warehouse_id: number; warehouse_name: string; revenue: string }[];
+    };
+  },
+
+  getTopProducts: async (params: { date_from: string; date_to: string; warehouse?: string; branch?: string }) => {
+    const res = await api.get('/accounting/reports/top-products/', { params });
+    return res.data as { product_id: number; product_name: string; revenue: string; quantity: string }[];
+  },
+
+  getTopCounterparties: async (params: { date_from: string; date_to: string; warehouse?: string; branch?: string }) => {
+    const res = await api.get('/accounting/reports/top-counterparties/', { params });
+    return res.data as { counterparty_id: number; counterparty_name: string; revenue: string; documents_count: number }[];
+  },
+
+  getTodayDocuments: async (params: { warehouse?: string; branch?: string }) => {
+    const res = await api.get('/accounting/reports/today-documents/', { params });
+    return res.data as {
+      id: number; number: string; document_type: string;
+      counterparty_name: string; warehouse_name: string; total: string; posted_at: string;
+    }[];
+  },
+
   // est backend paginasiya
   getAuditLogs: async (params?: { page?: number; page_size?: number; action?: string; user?: number; ordering?: string }) => {
     const res = await api.get('/accounting/audit-logs/', { params })

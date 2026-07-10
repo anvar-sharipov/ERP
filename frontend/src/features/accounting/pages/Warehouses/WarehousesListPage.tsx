@@ -35,6 +35,19 @@ interface WarehouseForm {
   payable_account: number | null;
   // ✅ Необязательный — без него скидка просто netted в total, как раньше.
   discount_account: number | null;
+  // ✅ Альтернативная схема проводки "Расхода" — заполняются ВМЕСТЕ (оба или ни одного).
+  // Если заполнены — inventory_account списывается по полной цене продажи (а не
+  // revenue_account), и по каждой строке пишется отдельная нога Дт profit_account/
+  // Кт fund_account на прибыль строки, вместо Дт cogs_account/Кт inventory_account
+  // на себестоимость. См. Document._generate_out_posting.
+  profit_account: number | null;
+  fund_account: number | null;
+  // ✅ Override-счета для контрагентов-поставщиков (Counterparty.type === "supplier") —
+  // если заполнены, берутся вместо обычных receivable_account/payable_account/profit_account,
+  // когда контрагент документа — поставщик. См. Document._resolve_role_account.
+  receivable_account_supplier: number | null;
+  payable_account_supplier: number | null;
+  profit_account_supplier: number | null;
 }
 
 const EMPTY: WarehouseForm = {
@@ -49,6 +62,11 @@ const EMPTY: WarehouseForm = {
   inventory_account: null,
   payable_account: null,
   discount_account: null,
+  profit_account: null,
+  fund_account: null,
+  receivable_account_supplier: null,
+  payable_account_supplier: null,
+  profit_account_supplier: null,
 };
 
 const WarehousesListPage = () => {
@@ -102,6 +120,11 @@ const WarehousesListPage = () => {
         inventory_account: editing.inventory_account ?? null,
         payable_account: editing.payable_account ?? null,
         discount_account: editing.discount_account ?? null,
+        profit_account: editing.profit_account ?? null,
+        fund_account: editing.fund_account ?? null,
+        receivable_account_supplier: editing.receivable_account_supplier ?? null,
+        payable_account_supplier: editing.payable_account_supplier ?? null,
+        profit_account_supplier: editing.profit_account_supplier ?? null,
       });
     } else {
       setForm(EMPTY);
@@ -488,6 +511,89 @@ const WarehousesListPage = () => {
                       <p>
                         <b>Один счёт на несколько складов?</b> Да, по тому же правилу — общий счёт для всех складов одной валютной группы,
                         отдельный — для другой.
+                      </p>
+                    </>
+                  ),
+                },
+                {
+                  key: "profit_account",
+                  label: t("ProfitAccountLabel"),
+                  help: (
+                    <>
+                      <p>
+                        <b>Необязательное поле, часть альтернативной схемы учёта.</b> Заполняется ВМЕСТЕ со «Счётом фонда прибыли» — если хотя
+                        бы одно из двух пусто, используется обычная схема (Счёт выручки + Счёт себестоимости продаж).
+                      </p>
+                      <p>
+                        Если оба поля заполнены — при продаже «Счёт учёта товаров» списывается сразу по <b>полной цене продажи</b> (а не по
+                        себестоимости), а «Счёт выручки»/«Счёт себестоимости продаж» в проводке вообще не участвуют. Отдельной строкой по
+                        каждой позиции документа пишется только прибыль: <b>Дт «Счёт прибыли» — Кт «Счёт фонда прибыли»</b>, на сумму{" "}
+                        <code>(цена продажи − себестоимость) × количество</code>.
+                      </p>
+                      <p>
+                        Эта схема — для складов, у которых учёт исторически ведётся так (перенос данных из другой системы), а не по
+                        классической связке выручка/себестоимость. Для новых складов обычно не нужна — оставьте оба поля пустыми.
+                      </p>
+                    </>
+                  ),
+                },
+                {
+                  key: "fund_account",
+                  label: t("FundAccountLabel"),
+                  help: (
+                    <>
+                      <p>
+                        <b>Необязательное поле, часть альтернативной схемы учёта</b> — см. «Счёт прибыли». Заполняется вместе с ним, оба поля
+                        сразу.
+                      </p>
+                      <p>
+                        Кредитуется на ту же сумму прибыли, что дебетуется на «Счёт прибыли» — это счёт, куда фактически «оседает» заработанная
+                        прибыль (например, фонд/капитал), отдельно от товарооборота на «Счёте учёта товаров».
+                      </p>
+                    </>
+                  ),
+                },
+                {
+                  key: "receivable_account_supplier",
+                  label: t("ReceivableAccountSupplierLabel"),
+                  help: (
+                    <>
+                      <p>
+                        <b>Необязательное override-поле.</b> Если контрагент документа — «Поставщик» (Counterparty.type = supplier), при
+                        проведении «Расхода» вместо обычного «Счёта расчётов с покупателем» используется ЭТОТ счёт. Если не заполнено — для
+                        поставщиков используется обычный счёт, как и для остальных.
+                      </p>
+                      <p>
+                        Нужно, если у вас часть контрагентов заведены как «Поставщики», но с ними тоже бывают операции «Расхода» (например,
+                        возврат/списание товара им), и вести расчёты с ними нужно по отдельному счёту, а не смешивать с обычными покупателями.
+                      </p>
+                    </>
+                  ),
+                },
+                {
+                  key: "payable_account_supplier",
+                  label: t("PayableAccountSupplierLabel"),
+                  help: (
+                    <>
+                      <p>
+                        <b>Необязательное override-поле.</b> Если контрагент документа — «Поставщик», при проведении «Прихода» вместо обычного
+                        «Счёта расчётов с поставщиком» используется ЭТОТ счёт.
+                      </p>
+                      <p>
+                        Полезно, если часть поставщиков на самом деле особые (например, инвесторы/учредители бизнеса) и с ними расчёты ведутся
+                        отдельно от обычных товарных поставщиков.
+                      </p>
+                    </>
+                  ),
+                },
+                {
+                  key: "profit_account_supplier",
+                  label: t("ProfitAccountSupplierLabel"),
+                  help: (
+                    <>
+                      <p>
+                        <b>Необязательное override-поле, только для альтернативной схемы</b> (см. «Счёт прибыли» выше). Если контрагент
+                        документа — «Поставщик», прибыль по строке пишется на ЭТОТ счёт вместо обычного «Счёта прибыли».
                       </p>
                     </>
                   ),

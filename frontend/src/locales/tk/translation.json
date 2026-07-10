@@ -24,6 +24,7 @@
     "GET": "GET (Almak)",
     "POST": "POST (Döretmek)",
     "PUT": "PUT (Täzelemek)",
+    "PATCH": "PATCH (Üýtgetmek)",
     "DELETE": "DELETE (Pozmak)",
 
 
@@ -50,6 +51,7 @@
     "Actions": "Hereketler",
     "Columns": "Sütünler",
     "Column": "Sütün",
+    "ResizeColumn": "Sütüniň ininiň üýtgetmek üçin süýşüriň",
     "ColumnVisibility": "Sütünleriň görünişi",
     "ColumnsHint": "Sütün sazlamalary bu resminama görnüşi üçin awtomatiki ýatda saklanýar",
     "ResetColumns": "Sütün sazlamalaryny arassalamak",
@@ -117,6 +119,8 @@
     "Cancel": "Ýatyrmak",
     "Save": "Ýatda saklamak",
     "Saving": "Ýatda saklanylýar...",
+    "SavedAt": "{{time}} ýatda saklandy",
+    "AutosaveError": "Garalamany awtomatiki ýatda saklap bolmady",
     "DeleteBranch": "Filialy pozmak",
     "ConfirmDelete": "Hakykatdan hem şu filaly pozmak isleýärsiňizmi:",
     "Irreversible": "Bu hereketi yzyna gaýtaryp bolmaz.",
@@ -153,6 +157,9 @@
     "SelectAllResource": "Hemmesini saýlamak",
     "DeselectAllResource": "Hemmesini aýyrmak",
     "LoadingPerms": "Rugsatlar ýüklenýär...",
+    "PermissionsSelected": "rugsat saýlandy",
+    "SearchResource": "Model gözlemek...",
+    "Resource": "Resurs",
     "RoleDeleted": "Rol üstünlikli öçürildi",
     "SaveSuccess": "Rol üstünlikli ýatda saklanyldy",
     "ErrorLoading": "Rol rugsatlary ýüklenende ýalňyşlyk ýüze çykdy",
@@ -518,6 +525,11 @@
     "InventoryAccountLabel": "Haryt hasaba alyş hasaby",
     "PayableAccountLabel": "Üpjün ediji bilen hasaplaşyk hasaby",
     "DiscountAccountLabel": "Arzanladyş hasaby",
+    "ProfitAccountLabel": "Girdeji hasaby (alternatiw shema)",
+    "FundAccountLabel": "Girdeji gaznasy hasaby (alternatiw shema)",
+    "ReceivableAccountSupplierLabel": "Üpjün ediji bilen hasaplaşyk hasaby (Çykyş, override)",
+    "PayableAccountSupplierLabel": "Üpjün ediji bilen hasaplaşyk hasaby (Giriş, override)",
+    "ProfitAccountSupplierLabel": "Üpjün ediji üçin girdeji hasaby (override)",
 
     "Warehouse": "Ammar",
     "AllWarehouses": "Ähli ammarlar",
@@ -728,6 +740,11 @@
     "Emoji": "Emoji",
     "SendingFile": "Faýl iberilýär...",
     "ErrorSendingFile": "Faýly ibermek başartmady",
+    "DropFileHere": "Ibermek üçin faýly şu ýere goýberiň",
+    "MessageDeleted": "Habar öçürildi",
+    "DeleteMessage": "Habary öçürmek",
+    "ConfirmDeleteMessage": "Bu habary öçürmelimi? Onuň ýerine söhbetdeş «Habar öçürildi» diýen belligi görer.",
+    "ErrorDeletingMessage": "Habary öçürmek başartmady",
 
 
     
@@ -764,7 +781,24 @@
     "CloseDaySuccess": "{{date}} güni «{{warehouse}}» ammary üçin ýapyldy",
     "ReopenDayTitle": "Güni açmak",
     "ReopenDayMessage": "{{date}} güni «{{warehouse}}» ammary üçin yzyna açmaly? Bu ammar boýunça ähli soňky günleriň ýapylmandygyna göz ýetiriň.",
-    "ReopenDaySuccess": "{{date}} güni «{{warehouse}}» ammary üçin ýene açyldy"
+    "ReopenDaySuccess": "{{date}} güni «{{warehouse}}» ammary üçin ýene açyldy",
+
+    "TotalRevenue": "Döwür üçin girdeji",
+    "TotalDocuments": "Çykyş resminamalarynyň sany",
+    "RevenueByWarehouse": "Ammarlar boýunça girdeji",
+    "RevenueTrend": "Girdejiniň dinamikasy",
+    "DocumentsCount": "Resminamalaryň sany",
+    "Revenue": "Girdeji",
+    "FilterWarehouses": "Ammarlar boýunça filtr",
+    "PeriodComparison": "Döwürleri deňeşdirmek",
+    "CompareWithPreviousPeriod": "Öňki döwür bilen deňeşdirmek",
+    "PreviousPeriod": "Öňki döwür",
+    "New": "Täze",
+    "AverageCheck": "Ortaça çek",
+    "TopProducts": "Iň köp satylan 5 haryt",
+    "TopCounterparties": "Iň uly 5 müşderi",
+    "TVMode": "TV režimi",
+    "NoInvoicesToday": "Şu gün heniz resminama ýok"
 
 
 

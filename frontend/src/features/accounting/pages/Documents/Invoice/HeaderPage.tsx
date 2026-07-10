@@ -3,7 +3,7 @@ import { BackButton } from "../../../../../components/ui/BackButton";
 import { ROUTES } from "../../../../../core/router/routes";
 import { DOC_TYPES } from "./Vars";
 import { Button } from "../../../../../components/ui/Button";
-import { CheckCircle, XCircle } from "lucide-react";
+import { CheckCircle, XCircle, Check, AlertCircle } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import { useRestoreScroll } from "../../../../../core/hooks/useRestoreScroll";
@@ -21,9 +21,13 @@ interface HeaderProps {
   unpostMutation: { isPending: boolean };
   saveMutation: { isPending: boolean; mutate: () => void };
   disableSave?: boolean;
+  // ✅ Статус автосохранения черновика (см. DocumentFormPage.tsx) — молча
+  // показываем "Сохранено чч:мм:сс", пока пользователь не нажал "Сохранить" сам.
+  lastSavedAt?: Date | null;
+  autosaveError?: boolean;
 }
 
-const Header = ({ docId, isEdit, header, docNumber, isPosted, setPostConfirm, postMutation, setUnpostConfirm, unpostMutation, saveMutation, disableSave }: HeaderProps) => {
+const Header = ({ docId, isEdit, header, docNumber, isPosted, setPostConfirm, postMutation, setUnpostConfirm, unpostMutation, saveMutation, disableSave, lastSavedAt, autosaveError }: HeaderProps) => {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { getBackProps } = useRestoreScroll("selectedDocumentId", () => {});
@@ -44,7 +48,27 @@ const Header = ({ docId, isEdit, header, docNumber, isPosted, setPostConfirm, po
         </div>
       </div>
 
-      <div className="flex gap-2 print:hidden">
+      <div className="flex items-center gap-2 print:hidden">
+        {/* ✅ Статус автосохранения черновика — молча, без тостов на каждую паузу
+            в наборе (см. DocumentFormPage.tsx). Ручное "Сохранить" остаётся рядом
+            для явного форс-сохранения перед уходом со страницы. */}
+        {!isPosted && !saveMutation.isPending && (
+          <span className="text-xs flex items-center gap-1 text-gray-400 dark:text-gray-500 select-none">
+            {autosaveError ? (
+              <>
+                <AlertCircle className="w-3.5 h-3.5 text-red-500" />
+                <span className="text-red-500">{t("AutosaveError")}</span>
+              </>
+            ) : (
+              lastSavedAt && (
+                <>
+                  <Check className="w-3.5 h-3.5 text-emerald-500" />
+                  {t("SavedAt", { time: lastSavedAt.toLocaleTimeString("ru-RU") })}
+                </>
+              )
+            )}
+          </span>
+        )}
         {isEdit && !isPosted && <Button text={t("Post")} variant="danger" icon={<CheckCircle className="w-4 h-4" />} onClick={() => setPostConfirm(true)} disabled={postMutation.isPending} />}
         {isEdit && isPosted && <Button text={t("Unpost")} icon={<XCircle className="w-4 h-4" />} onClick={() => setUnpostConfirm(true)} disabled={unpostMutation.isPending} />}
         <Button

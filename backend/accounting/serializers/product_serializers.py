@@ -208,7 +208,52 @@ class QuantityPromotionSerializer(serializers.ModelSerializer):
         return attrs
 
 
-class ProductSerializer(serializers.ModelSerializer):
+class ProductMainImageMixin:
+    """Общий get_main_image для ProductSerializer/ProductListSerializer — берёт
+    из prefetch (obj.images.all()), чтобы не делать лишний запрос на товар."""
+
+    def get_main_image(self, obj):
+        images = obj.images.all()
+        main = next((img for img in images if img.is_main), None)
+        if main is None and images:
+            main = images[0]
+        if main:
+            return ProductImageSerializer(main, context=self.context).data
+        return None
+
+
+class ProductListSerializer(ProductMainImageMixin, serializers.ModelSerializer):
+    """
+    ✅ Облегчённый сериализатор для GET /products/ (ProductViewSet.list) —
+    отдаёт только то, что реально показывает ProductsListPage.tsx (фото,
+    категория, бренд, ед.изм., себестоимость, статус). Цены/остатки/оборотность
+    список получает отдельными bulk-эндпоинтами (pricesMap/stockBalance/
+    product_turnover), а не через это поле — поэтому здесь сознательно нет
+    prices/bundle_items/volume_discounts/quantity_promotions/tags/
+    allowed_warehouses/description/extra_data и т.д. Полный набор полей
+    остаётся доступен через ProductSerializer при открытии карточки товара
+    (retrieve/create/update) — здесь их просто незачем гонять по сети на
+    каждый товар в списке.
+    """
+    category_detail = ProductCategoryShortSerializer(source="category", read_only=True)
+    brand_detail = BrandShortSerializer(source="brand", read_only=True)
+    unit_detail = UnitShortSerializer(source="unit", read_only=True)
+    images = ProductImageSerializer(many=True, read_only=True)
+    main_image = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Product
+        fields = [
+            "id", "name", "sku",
+            "category", "category_detail",
+            "brand", "brand_detail",
+            "unit", "unit_detail",
+            "cost_price", "is_active",
+            "images", "main_image",
+        ]
+
+
+class ProductSerializer(ProductMainImageMixin, serializers.ModelSerializer):
     category_detail = ProductCategoryShortSerializer(source="category", read_only=True)
     brand_detail = BrandShortSerializer(source="brand", read_only=True)
     unit_detail = UnitShortSerializer(source="unit", read_only=True)
@@ -253,16 +298,6 @@ class ProductSerializer(serializers.ModelSerializer):
             "description", 'bundle_items', 'volume_discounts', 'quantity_promotions'
         ]
         read_only_fields = ["sku", "created_at", "updated_at"]
-
-    def get_main_image(self, obj):
-        # Берём из prefetch чтобы не делать лишний запрос
-        images = obj.images.all()
-        main = next((img for img in images if img.is_main), None)
-        if main is None and images:
-            main = images[0]
-        if main:
-            return ProductImageSerializer(main, context=self.context).data
-        return None
 
 
 
@@ -362,6 +397,15 @@ class WarehouseSerializer(serializers.ModelSerializer):
     inventory_account_name = serializers.CharField(source="inventory_account.name", read_only=True, default=None)
     payable_account_name = serializers.CharField(source="payable_account.name", read_only=True, default=None)
     discount_account_name = serializers.CharField(source="discount_account.name", read_only=True, default=None)
+    # ✅ Альтернативная схема проводки "Расхода" (Warehouse.profit_account/fund_account
+    # оба заполнены) — см. Document._generate_out_posting в accounting/models/document.py.
+    profit_account_name = serializers.CharField(source="profit_account.name", read_only=True, default=None)
+    fund_account_name = serializers.CharField(source="fund_account.name", read_only=True, default=None)
+    # ✅ Override-счета для контрагентов-поставщиков (Counterparty.Type.SUPPLIER) —
+    # см. Document._resolve_role_account в accounting/models/document.py.
+    receivable_account_supplier_name = serializers.CharField(source="receivable_account_supplier.name", read_only=True, default=None)
+    payable_account_supplier_name = serializers.CharField(source="payable_account_supplier.name", read_only=True, default=None)
+    profit_account_supplier_name = serializers.CharField(source="profit_account_supplier.name", read_only=True, default=None)
 
     class Meta:
         model = Warehouse
@@ -373,6 +417,11 @@ class WarehouseSerializer(serializers.ModelSerializer):
             "inventory_account", "inventory_account_name",
             "payable_account", "payable_account_name",
             "discount_account", "discount_account_name",
+            "profit_account", "profit_account_name",
+            "fund_account", "fund_account_name",
+            "receivable_account_supplier", "receivable_account_supplier_name",
+            "payable_account_supplier", "payable_account_supplier_name",
+            "profit_account_supplier", "profit_account_supplier_name",
         ]
 
 

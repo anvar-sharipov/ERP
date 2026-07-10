@@ -121,3 +121,11 @@ input[type="number"] {
     scrollbar-color: #475569 transparent;
   }
 }
+
+/* ✅ Бегущая строка дашборда (DocumentsTicker.tsx) — список рендерится
+   продублированным дважды, translateX(-50%) прокручивает ровно первую копию,
+   создавая бесшовный зацикленный эффект. */
+@keyframes ticker-scroll {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}

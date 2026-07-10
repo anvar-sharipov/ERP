@@ -59,6 +59,14 @@ def _rbac(action: str, resource: str):
         'bulk_saldo':         'GET',
         'product_turnover':        'GET',
         'product_turnover_detail': 'GET',
+        # ✅ Раньше отсутствовал здесь — неизвестный экшен по умолчанию требует
+        # POST (см. ниже action_map.get(action, 'POST')), из-за чего read-only
+        # отчёт об остатках требовал право "создавать" вместо "смотреть".
+        'stock_balance':           'GET',
+        'revenue_by_warehouse':    'GET',
+        'top_products':            'GET',
+        'top_counterparties':      'GET',
+        'today_documents':         'GET',
         'filter_users':   'GET',
         # ✅ Массовое удаление (см. accounting/mixins.py::BulkDestroyMixin) — метод
         # DELETE, а не POST по умолчанию, иначе право "создавать" ошибочно давало
@@ -68,6 +76,9 @@ def _rbac(action: str, resource: str):
         # unresolved_count это GET (просто счётчик), без явной записи в маппинг
         # он бы по умолчанию требовал POST-право, хотя ничего не создаёт.
         'unresolved_count': 'GET',
+        # ✅ Облегчённый список товаров для ProductsListPage.tsx (ProductViewSet.
+        # list_light) — тоже просто чтение, без явной записи ушло бы в POST.
+        'list_light':       'GET',
     }
     method = action_map.get(action, 'POST')  # неизвестные экшены → POST
     return [IsAuthenticated(), HasPermission(resource, method)()]

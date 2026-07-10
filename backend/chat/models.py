@@ -50,6 +50,7 @@ class Message(models.Model):
     attachment_size = models.PositiveIntegerField(null=True, blank=True)
     attachment_content_type = models.CharField(max_length=100, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
+    is_deleted = models.BooleanField(default=False)
 
     class Meta:
         ordering = ["created_at"]

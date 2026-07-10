@@ -2,7 +2,8 @@
 import datetime
 from decimal import Decimal
 
-from django.db.models import Q, Sum
+from django.db.models import Q, Sum, Case, When, Count, F, DecimalField, ExpressionWrapper, Value
+from django.utils import timezone
 from rest_framework import viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -40,7 +41,10 @@ def _resolve_warehouse_ids(request):
     branch_param = request.query_params.get('branch')
 
     if warehouse_param:
-        selected_ids = {int(warehouse_param)}
+        # ✅ Поддержка списка через запятую (?warehouse=1,2,3) — используется
+        # фильтром складов дашборда (правый сайдбар), а не только выбором
+        # одного склада в шапке; одиночный id по-прежнему работает как раньше.
+        selected_ids = {int(x) for x in warehouse_param.split(',') if x.strip().isdigit()}
     elif branch_param:
         selected_ids = set(Warehouse.objects.filter(branch_id=branch_param).values_list('id', flat=True))
     else:
@@ -166,35 +170,276 @@ class ReportViewSet(viewsets.ViewSet):
         # и фильтра "Только с нехваткой" в сайдбаре.
         min_stock_map = dict(Product.objects.filter(min_stock_level__gt=0, is_active=True).values_list('id', 'min_stock_level'))
 
+        # ✅ "Мало" считаем ТОЛЬКО для товара, который хоть раз реально фигурировал
+        # в накладной (любой, необязательно проведённой) — иначе остаток 0 у
+        # товара, который никогда не закупали/продавали (например заведён
+        # массовым импортом с WarehouseStock=0), даёт ложную "нехватку", а не
+        # настоящий сигнал. Проверяем ОДИН РАЗ для всех кандидатов сразу — раньше
+        # эта проверка была только в ветке "нет вообще никаких строк" (ниже), из-за
+        # чего в ProductsListPage всё ещё подсвечивалось намного больше товаров,
+        # чем реальных уведомлений в колокольчике (accounting/tasks.py::_check_low_stock,
+        # там та же проверка уже применяется ко всем случаям). Тот же принцип —
+        # единообразно на все три ветки ниже (со строкой WarehouseStock, с резервом,
+        # и вообще без движений).
+        pids_with_turnover = set(
+            DocumentItem.objects.filter(product_id__in=list(min_stock_map)).values_list('product_id', flat=True).distinct()
+        ) if min_stock_map else set()
+
+        def is_low(pid, qty):
+            min_level = min_stock_map.get(pid)
+            return min_level is not None and pid in pids_with_turnover and qty < min_level
+
         result = {}
         for r in stock_rows:
             pid = r['product_id']
             qty = r['qty'] or Decimal('0')
             reserved = reserved_map.pop(pid, Decimal('0'))
-            min_level = min_stock_map.get(pid)
             result[str(pid)] = {
                 'quantity': str(qty), 'reserved': str(reserved), 'available': str(qty - reserved),
-                'min_stock_level': min_level, 'is_low': min_level is not None and qty < min_level,
+                'min_stock_level': min_stock_map.get(pid), 'is_low': is_low(pid, qty),
             }
         # ✅ Товар без строк WarehouseStock (остаток 0), но с резервом по черновикам —
         # тоже нужно показать: остаток 0, доступно уходит в минус — явный сигнал,
         # что заказано больше, чем реально есть на складе.
         for pid, reserved in reserved_map.items():
-            min_level = min_stock_map.get(pid)
             result[str(pid)] = {
                 'quantity': '0', 'reserved': str(reserved), 'available': str(Decimal('0') - reserved),
-                'min_stock_level': min_level, 'is_low': min_level is not None,
+                'min_stock_level': min_stock_map.get(pid), 'is_low': is_low(pid, Decimal('0')),
             }
 
         # ✅ Товар без ЛЮБЫХ движений в этом scope (ни остатка, ни резерва), но с
-        # min_stock_level > 0 — тоже "мало" (остаток фактически 0 < порога), иначе
-        # такие товары вообще не появились бы в result и не подсветились бы в списке.
+        # min_stock_level > 0 — тоже нужно вернуть (остаток фактически 0 < порога),
+        # is_low считаем той же общей функцией is_low() выше.
         for pid, min_level in min_stock_map.items():
             key = str(pid)
             if key not in result:
-                result[key] = {'quantity': '0', 'reserved': '0', 'available': '0', 'min_stock_level': min_level, 'is_low': True}
+                result[key] = {
+                    'quantity': '0', 'reserved': '0', 'available': '0',
+                    'min_stock_level': min_level, 'is_low': is_low(pid, Decimal('0')),
+                }
 
         return Response(result)
+
+    @action(detail=False, methods=['get'], url_path='revenue-by-warehouse')
+    def revenue_by_warehouse(self, request):
+        """
+        Выручка = сумма Document.total проведённых "Расходных" накладных (out)
+        минус "Возврат поставщику" (return_out) — то есть ровно то значение,
+        что стоит на самом документе (см. CLAUDE.md: "система никогда не
+        хардкодит, откуда взялось значение"), без пересчёта через проводки.
+        Разбивка по складам — тот же принцип пересечения выбора в шапке
+        (WorkDateWidget) со scope пользователя, что и в остальных отчётах
+        (см. _resolve_warehouse_ids).
+        """
+        date_from = request.query_params.get('date_from')
+        date_to = request.query_params.get('date_to')
+        if not date_from or not date_to:
+            return Response({'detail': 'Укажите date_from и date_to'}, status=400)
+
+        wh_set = _resolve_warehouse_ids(request)
+        if not wh_set:
+            return Response({'total_revenue': '0', 'total_documents': 0, 'by_warehouse': [], 'daily': []})
+
+        base_qs = Document.objects.filter(
+            status='posted',
+            document_type__in=[Document.Type.OUT, Document.Type.RETURN_OUT],
+            date__gte=date_from,
+            date__lte=date_to,
+            warehouse_id__in=wh_set,
+        )
+        revenue_expr = Sum(Case(
+            When(document_type=Document.Type.OUT, then=F('total')),
+            When(document_type=Document.Type.RETURN_OUT, then=-F('total')),
+            default=0, output_field=DecimalField(max_digits=18, decimal_places=2),
+        ))
+
+        by_warehouse_rows = (
+            base_qs
+            .values('warehouse_id', 'warehouse__name')
+            .annotate(
+                revenue=revenue_expr,
+                documents_count=Count('id', filter=Q(document_type=Document.Type.OUT)),
+            )
+            .order_by('-revenue')
+        )
+        by_warehouse = [
+            {
+                'warehouse_id': r['warehouse_id'],
+                'warehouse_name': r['warehouse__name'],
+                'revenue': r['revenue'] or Decimal('0'),
+                'documents_count': r['documents_count'],
+            }
+            for r in by_warehouse_rows
+        ]
+
+        # ✅ Группировка по (дата, склад), а не только по дате — иначе фильтр складов
+        # в сайдбаре (правый сайдбар дашборда) не мог бы корректно пересчитать тренд
+        # под выбранное подмножество складов, только общий график по всем сразу.
+        daily_rows = base_qs.values('date', 'warehouse_id', 'warehouse__name').annotate(revenue=revenue_expr).order_by('date')
+        daily = [
+            {
+                'date': r['date'],
+                'warehouse_id': r['warehouse_id'],
+                'warehouse_name': r['warehouse__name'],
+                'revenue': r['revenue'] or Decimal('0'),
+            }
+            for r in daily_rows
+        ]
+
+        total_revenue = sum((w['revenue'] for w in by_warehouse), Decimal('0'))
+        total_documents = sum(w['documents_count'] for w in by_warehouse)
+
+        return Response({
+            'total_revenue': total_revenue,
+            'total_documents': total_documents,
+            'by_warehouse': by_warehouse,
+            'daily': daily,
+        })
+
+    @action(detail=False, methods=['get'], url_path='top-products')
+    def top_products(self, request):
+        """
+        Топ-5 товаров по выручке за период — на уровне строк документа
+        (DocumentItem), а не Document.total, потому что нужна разбивка по
+        товару. Та же логика "out минус return_out", что и в product_turnover
+        выше: "Расход" — по факту документа СО СКИДКОЙ (net), "Возврат
+        поставщику" — БЕЗ скидки (gross), см. комментарий в product_turnover.
+        """
+        date_from = request.query_params.get('date_from')
+        date_to = request.query_params.get('date_to')
+        if not date_from or not date_to:
+            return Response({'detail': 'Укажите date_from и date_to'}, status=400)
+
+        wh_set = _resolve_warehouse_ids(request)
+        if not wh_set:
+            return Response([])
+
+        dec_field = DecimalField(max_digits=18, decimal_places=2)
+        line_factor = Value(Decimal('1')) - F('discount_percent') / Value(Decimal('100'))
+        net_expr = ExpressionWrapper(F('quantity') * F('price') * line_factor, output_field=dec_field)
+        gross_expr = ExpressionWrapper(F('quantity') * F('price'), output_field=dec_field)
+
+        rows = (
+            DocumentItem.objects
+            .filter(
+                document__status='posted',
+                document__document_type__in=[Document.Type.OUT, Document.Type.RETURN_OUT],
+                document__date__gte=date_from,
+                document__date__lte=date_to,
+                document__warehouse_id__in=wh_set,
+            )
+            .values('product_id', 'product__name')
+            .annotate(
+                revenue=Sum(Case(
+                    When(document__document_type=Document.Type.OUT, then=net_expr),
+                    When(document__document_type=Document.Type.RETURN_OUT, then=-gross_expr),
+                    default=0, output_field=dec_field,
+                )),
+                quantity=Sum(Case(
+                    When(document__document_type=Document.Type.OUT, then=F('quantity')),
+                    When(document__document_type=Document.Type.RETURN_OUT, then=-F('quantity')),
+                    default=0, output_field=dec_field,
+                )),
+            )
+            .order_by('-revenue')[:5]
+        )
+        return Response([
+            {
+                'product_id': r['product_id'],
+                'product_name': r['product__name'],
+                # ✅ ExpressionWrapper-умножение/деление (line_factor) даёт NUMERIC
+                # произвольной точности от Postgres — округляем явно, как и в
+                # Document.recalculate(), а не отдаём "600.0000000000000000000000000".
+                'revenue': (r['revenue'] or Decimal('0')).quantize(Decimal('0.01')),
+                'quantity': (r['quantity'] or Decimal('0')).quantize(Decimal('0.001')),
+            }
+            for r in rows
+        ])
+
+    @action(detail=False, methods=['get'], url_path='top-counterparties')
+    def top_counterparties(self, request):
+        """
+        Топ-5 контрагентов по выручке за период — та же выручка (out минус
+        return_out по Document.total), что и в revenue_by_warehouse, только
+        сгруппированная по контрагенту, а не по складу.
+        """
+        date_from = request.query_params.get('date_from')
+        date_to = request.query_params.get('date_to')
+        if not date_from or not date_to:
+            return Response({'detail': 'Укажите date_from и date_to'}, status=400)
+
+        wh_set = _resolve_warehouse_ids(request)
+        if not wh_set:
+            return Response([])
+
+        revenue_expr = Sum(Case(
+            When(document_type=Document.Type.OUT, then=F('total')),
+            When(document_type=Document.Type.RETURN_OUT, then=-F('total')),
+            default=0, output_field=DecimalField(max_digits=18, decimal_places=2),
+        ))
+        rows = (
+            Document.objects
+            .filter(
+                status='posted',
+                document_type__in=[Document.Type.OUT, Document.Type.RETURN_OUT],
+                date__gte=date_from,
+                date__lte=date_to,
+                warehouse_id__in=wh_set,
+            )
+            .values('counterparty_id', 'counterparty__name')
+            .annotate(
+                revenue=revenue_expr,
+                documents_count=Count('id', filter=Q(document_type=Document.Type.OUT)),
+            )
+            .order_by('-revenue')[:5]
+        )
+        return Response([
+            {
+                'counterparty_id': r['counterparty_id'],
+                'counterparty_name': r['counterparty__name'],
+                'revenue': r['revenue'] or Decimal('0'),
+                'documents_count': r['documents_count'],
+            }
+            for r in rows
+        ])
+
+    @action(detail=False, methods=['get'], url_path='today-documents')
+    def today_documents(self, request):
+        """
+        Проведённые сегодня "Расходные"/"Возврат поставщику" — источник данных
+        для бегущей строки на дашборде. Всегда СЕГОДНЯШНЯЯ дата сервера (не
+        periodFrom/periodTo из шапки — бегущая строка про "прямо сейчас", а не
+        про выбранный отчётный период), но тот же принцип scope/фильтра
+        складов (_resolve_warehouse_ids), что и у остальных виджетов дашборда.
+        """
+        wh_set = _resolve_warehouse_ids(request)
+        if not wh_set:
+            return Response([])
+
+        today = timezone.localdate()
+        rows = (
+            Document.objects
+            .filter(
+                status='posted',
+                document_type__in=[Document.Type.OUT, Document.Type.RETURN_OUT],
+                date=today,
+                warehouse_id__in=wh_set,
+            )
+            .select_related('counterparty', 'warehouse')
+            .order_by('-posted_at')[:30]
+        )
+        return Response([
+            {
+                'id': d.id,
+                'number': d.number,
+                'document_type': d.document_type,
+                'counterparty_name': d.counterparty.name if d.counterparty_id else '',
+                'warehouse_name': d.warehouse.name if d.warehouse_id else '',
+                'total': d.total,
+                'posted_at': d.posted_at,
+            }
+            for d in rows
+        ])
 
     @action(detail=False, methods=['get'], url_path='product-turnover')
     def product_turnover(self, request):

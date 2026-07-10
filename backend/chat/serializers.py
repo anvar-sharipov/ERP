@@ -53,10 +53,12 @@ class MessageSerializer(serializers.ModelSerializer):
         fields = [
             "id", "conversation", "sender", "text", "created_at", "reads", "is_read_by_me",
             "attachment_url", "attachment_name", "attachment_size", "attachment_content_type",
+            "is_deleted",
         ]
         read_only_fields = [
             "id", "sender", "created_at", "reads", "is_read_by_me",
             "attachment_url", "attachment_name", "attachment_size", "attachment_content_type",
+            "is_deleted",
         ]
 
     def get_is_read_by_me(self, obj):
@@ -66,7 +68,7 @@ class MessageSerializer(serializers.ModelSerializer):
         return obj.reads.filter(user=request.user).exists()
 
     def get_attachment_url(self, obj):
-        return obj.attachment.url if obj.attachment else None
+        return obj.attachment.url if obj.attachment and not obj.is_deleted else None
 
 
 class ConversationSerializer(serializers.ModelSerializer):

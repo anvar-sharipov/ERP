@@ -1,8 +1,9 @@
 // src/features/users/components/pages/admin/Roles/RoleFormPage.tsx
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
+import { Search } from "lucide-react";
 import { useNotify } from "../../../../../../core/context/NotificationContext";
 import { usePageAccess } from "../../../../../../core/hooks/usePageAccess";
 import { useSidebar } from "../../../../../../core/context/SidebarRightContext";
@@ -15,72 +16,138 @@ import { RBACGuard } from "../../../../../../components/ui/RBACGuard";
 import { BackButton } from "../../../../../../components/ui/BackButton";
 import { SegmentedControl } from "../../../../../../components/ui/Tabs/SegmentedControl";
 import { useRestoreScroll } from "../../../../../../core/hooks/useRestoreScroll";
-import { PermissionCheckbox } from "../../../../../../components/ui/CheckBox/PermissionCheckbox";
+import { Loader } from "../../../../../../components/ui/Loader";
 
 type Tab = "Основное" | "Права";
 const TABS: Tab[] = ["Основное", "Права"];
 
+// ✅ sync_permissions (backend/users/management/commands/sync_permissions.py) всегда
+// создаёт ровно эти 5 действий на каждый resource — матрица всегда прямоугольная,
+// поэтому колонки фиксированы и не нужно их вычислять из данных.
+const ACTIONS = ["GET", "POST", "PUT", "PATCH", "DELETE"] as const;
+type PermAction = (typeof ACTIONS)[number];
+interface PermEntry {
+  id: number;
+  action: PermAction;
+}
+
 // ── Таб: Матрица прав ────────────────────────────────────────────────────────
+// ✅ Компактная таблица (модели — строки, GET/POST/PUT/PATCH/DELETE — колонки) в
+// духе диалога "Свойства → Безопасность" в Windows, вместо прежнего "стога карточек"
+// с кнопками-пилюлями — тот же набор данных, но без прокрутки на каждый resource
+// по отдельности и с реальными чекбоксами. Поиск фильтрует строки по названию
+// модели (переведённому и техническому), чекбоксы в шапке колонки массово
+// переключают это действие по всем ВИДИМЫМ (отфильтрованным) строкам — так поиск
+// и массовое переключение работают согласованно (сузили список — переключили то,
+// что видно), а не тихо трогают то, что сейчас скрыто фильтром.
 
 interface PermissionsTabProps {
-  matrix: Record<string, any[]> | undefined;
+  matrix: Record<string, PermEntry[]> | undefined;
   matrixLoading: boolean;
   selectedPerms: number[];
   onToggle: (id: number) => void;
-  onToggleResource: (actions: any[], select: boolean) => void;
+  onBulkToggle: (ids: number[], select: boolean) => void;
   onToggleAll: (select: boolean) => void;
 }
 
-const PermissionsTab = ({ matrix, matrixLoading, selectedPerms, onToggle, onToggleResource, onToggleAll }: PermissionsTabProps) => {
+const PermissionsTab = ({ matrix, matrixLoading, selectedPerms, onToggle, onBulkToggle, onToggleAll }: PermissionsTabProps) => {
   const { t } = useTranslation();
+  const [search, setSearch] = useState("");
 
-  if (matrixLoading) return <p className="text-sm text-gray-400">{t("LoadingPerms")}</p>;
+  const resourceEntries = useMemo(() => Object.entries(matrix ?? {}), [matrix]);
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return resourceEntries;
+    return resourceEntries.filter(([resource]) => resource.toLowerCase().includes(q) || t(resource).toLowerCase().includes(q));
+  }, [resourceEntries, search, t]);
+
+  if (matrixLoading) return <Loader containerClass="py-10" text={t("LoadingPerms")} progress="indeterminate" />;
 
   return (
     <div className="space-y-3">
-      {/* Глобальные кнопки */}
-      <div className="flex gap-2 pb-2 border-b dark:border-slate-700">
-        <Button text={t("SelectAll")} onClick={() => onToggleAll(true)} />
-        <Button text={t("ResetAll")} onClick={() => onToggleAll(false)} />
+      {/* ── Панель инструментов: поиск + глобальные кнопки ── */}
+      <div className="flex flex-wrap items-center gap-2 pb-2 border-b border-slate-200 dark:border-slate-700">
+        <Input value={search} onChange={(e) => setSearch(e.target.value)} onClear={() => setSearch("")} placeholder={t("SearchResource")} leftIcon={<Search size={15} />} className="!w-56" />
+        <span className="text-xs text-slate-400 dark:text-slate-500">
+          {selectedPerms.length} {t("PermissionsSelected")}
+        </span>
+        <div className="flex-1" />
+        <Button size="sm" variant="secondary" text={t("SelectAll")} onClick={() => onToggleAll(true)} />
+        <Button size="sm" variant="secondary" text={t("ResetAll")} onClick={() => onToggleAll(false)} />
       </div>
 
-      <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-1">
-        {Object.entries(matrix || {}).map(([resource, actions]) => {
-          const allSelected = actions.every((p: any) => selectedPerms.includes(p.id));
-          return (
-            <div
-              key={resource}
-              className="
-    rounded-2xl
-    border border-slate-200
-    dark:border-slate-700
-    p-4
-    bg-white
-    dark:bg-slate-800
-    shadow-sm
-  "
-            >
-              <div className="flex items-center justify-between mb-4">
-                <div>
-                  <h4 className="font-semibold text-indigo-500">
-                    {t(resource)}
-                    <span className="ml-2 text-xs text-slate-400">({resource})</span>
-                  </h4>
-
-                  <p className="text-xs text-slate-400">{actions.length} permissions</p>
-                </div>
-
-                <Button size="sm" variant="1c" text={allSelected ? t("DeselectAllResource") : t("SelectAllResource")} onClick={() => onToggleResource(actions, !allSelected)} />
-              </div>
-
-              <div className="flex flex-wrap gap-2">
-                {actions.map((perm: any) => (
-                  <PermissionCheckbox key={perm.id} checked={selectedPerms.includes(perm.id)} label={t(perm.action)} onChange={() => onToggle(perm.id)} />
-                ))}
-              </div>
-            </div>
-          );
-        })}
+      {/* ── Компактная сетка-таблица, как окно "Разрешения" в Windows ── */}
+      <div className="rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 shadow-inner overflow-hidden">
+        <div className="max-h-[55vh] overflow-auto">
+          <table className="w-full text-xs md:text-sm border-collapse">
+            <thead className="sticky top-0 z-10">
+              <tr className="bg-slate-100 dark:bg-slate-800 border-b border-slate-300 dark:border-slate-600">
+                <th className="text-left px-3 py-2 font-semibold text-slate-600 dark:text-slate-300 whitespace-nowrap">{t("Resource")}</th>
+                {ACTIONS.map((action) => {
+                  const colIds = filtered.flatMap(([, actions]) => actions.filter((p) => p.action === action).map((p) => p.id));
+                  const allChecked = colIds.length > 0 && colIds.every((id) => selectedPerms.includes(id));
+                  return (
+                    <th key={action} className="px-2 py-1.5 text-center font-semibold text-slate-600 dark:text-slate-300 border-l border-slate-200 dark:border-slate-700">
+                      <div className="flex flex-col items-center gap-1">
+                        <span className="text-[10px] md:text-xs tracking-wide">{action}</span>
+                        <input
+                          type="checkbox"
+                          checked={allChecked}
+                          onChange={() => onBulkToggle(colIds, !allChecked)}
+                          disabled={colIds.length === 0}
+                          className="w-3.5 h-3.5 accent-indigo-600 cursor-pointer disabled:cursor-not-allowed disabled:opacity-30"
+                          title={`${t(action)} — ${allChecked ? t("DeselectAllResource") : t("SelectAllResource")}`}
+                        />
+                      </div>
+                    </th>
+                  );
+                })}
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map(([resource, actions], idx) => {
+                const allSelected = actions.every((p) => selectedPerms.includes(p.id));
+                return (
+                  <tr
+                    key={resource}
+                    className={`border-b border-slate-100 dark:border-slate-800 hover:bg-indigo-50/60 dark:hover:bg-indigo-950/20 ${idx % 2 === 1 ? "bg-slate-50/70 dark:bg-slate-800/30" : ""}`}
+                  >
+                    <td className="px-3 py-1.5 whitespace-nowrap">
+                      <label className="flex items-center gap-2 cursor-pointer select-none">
+                        <input
+                          type="checkbox"
+                          checked={allSelected}
+                          onChange={() => onBulkToggle(actions.map((p) => p.id), !allSelected)}
+                          className="w-3.5 h-3.5 accent-indigo-600 cursor-pointer shrink-0"
+                          title={allSelected ? t("DeselectAllResource") : t("SelectAllResource")}
+                        />
+                        <span className="font-medium text-slate-700 dark:text-slate-200">{t(resource)}</span>
+                        <span className="text-[10px] text-slate-400 dark:text-slate-500 font-mono">({resource})</span>
+                      </label>
+                    </td>
+                    {ACTIONS.map((action) => {
+                      const perm = actions.find((p) => p.action === action);
+                      if (!perm) return <td key={action} className="text-center text-slate-300 dark:text-slate-700 border-l border-slate-100 dark:border-slate-800">—</td>;
+                      const checked = selectedPerms.includes(perm.id);
+                      return (
+                        <td key={action} className="text-center border-l border-slate-100 dark:border-slate-800">
+                          <input type="checkbox" checked={checked} onChange={() => onToggle(perm.id)} className="w-4 h-4 accent-indigo-600 cursor-pointer" />
+                        </td>
+                      );
+                    })}
+                  </tr>
+                );
+              })}
+              {filtered.length === 0 && (
+                <tr>
+                  <td colSpan={ACTIONS.length + 1} className="text-center py-8 text-slate-400 dark:text-slate-500">
+                    {t("NotFound")}
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   );
@@ -177,8 +244,10 @@ const RoleFormPage = () => {
 
   const togglePerm = (id: number) => setSelectedPerms((prev) => (prev.includes(id) ? prev.filter((p) => p !== id) : [...prev, id]));
 
-  const toggleResource = (actions: any[], select: boolean) => {
-    const ids = actions.map((p: any) => p.id);
+  // ✅ Общий батч-переключатель — используется и для чекбокса строки (все действия
+  // одной модели), и для чекбокса в шапке колонки (одно действие по всем видимым
+  // моделям после фильтра поиска, см. PermissionsTab).
+  const bulkToggle = (ids: number[], select: boolean) => {
     setSelectedPerms((prev) => (select ? Array.from(new Set([...prev, ...ids])) : prev.filter((id) => !ids.includes(id))));
   };
 
@@ -237,7 +306,7 @@ const RoleFormPage = () => {
           )}
 
           {activeTab === "Права" && (
-            <PermissionsTab matrix={matrix} matrixLoading={matrixLoading} selectedPerms={selectedPerms} onToggle={togglePerm} onToggleResource={toggleResource} onToggleAll={toggleAll} />
+            <PermissionsTab matrix={matrix} matrixLoading={matrixLoading} selectedPerms={selectedPerms} onToggle={togglePerm} onBulkToggle={bulkToggle} onToggleAll={toggleAll} />
           )}
         </div>
       </div>

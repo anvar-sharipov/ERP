@@ -141,6 +141,48 @@ class MessageReadView(APIView):
         return Response({"marked": len(reads)})
 
 
+class MessageDeleteView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def delete(self, request, conv_id, message_id):
+        conv = Conversation.objects.filter(
+            id=conv_id, participants=request.user
+        ).first()
+        if not conv:
+            return Response({"detail": "Not found"}, status=404)
+
+        message = conv.messages.filter(id=message_id).first()
+        if not message:
+            return Response({"detail": "Not found"}, status=404)
+
+        if message.sender_id != request.user.id:
+            return Response({"detail": "Можно удалять только свои сообщения"}, status=403)
+
+        if not message.is_deleted:
+            if message.attachment:
+                message.attachment.delete(save=False)
+            message.text = ""
+            message.attachment_name = ""
+            message.attachment_size = None
+            message.attachment_content_type = ""
+            message.is_deleted = True
+            message.save(update_fields=[
+                "text", "attachment", "attachment_name",
+                "attachment_size", "attachment_content_type", "is_deleted",
+            ])
+
+            channel_layer = get_channel_layer()
+            async_to_sync(channel_layer.group_send)(
+                f"chat_{conv_id}",
+                {
+                    "type": "message_deleted",
+                    "message_id": message.id,
+                }
+            )
+
+        return Response(MessageSerializer(message, context={"request": request}).data)
+
+
 class MessageAttachmentUploadView(APIView):
     permission_classes = [IsAuthenticated]
 

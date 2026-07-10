@@ -53,7 +53,14 @@ export const ROUTES = {
     DOCUMENTS_INVOICES: '/documents/invoices',
     DOCUMENTS_ORDERS: '/documents/orders',
     DOCUMENTS_RETURNS: '/documents/returns',
-    DOCUMENTS_CREATE: '/documents/create',
+    // ✅ DOCUMENTS_CREATE намеренно резолвится в ТОТ ЖЕ маршрут ":id/edit" (id="new")
+    // вместо отдельного "/documents/create" — иначе первое автосохранение черновика
+    // (DocumentFormPage.tsx), переходя с create на ":id/edit" после получения id с
+    // сервера, попадало бы на ДРУГОЙ <Route>, и react-router полностью размонтировал
+    // бы DocumentFormPage (роняя фокус ввода) вместо обычной смены :id-параметра у
+    // уже смонтированного компонента. См. AppRouter.tsx — отдельного <Route> для
+    // DOCUMENTS_CREATE больше нет, регистрация только одна (DOCUMENTS_EDIT).
+    DOCUMENTS_CREATE: '/documents/new/edit',
     DOCUMENTS_EDIT: '/documents/:id/edit',
     DOCUMENTS_VIEW: '/documents/:id/view',
 
