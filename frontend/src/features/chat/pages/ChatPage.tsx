@@ -42,7 +42,7 @@ const ChatPage = () => {
           <span className="text-sm font-semibold text-slate-200">{t("Messages")}</span>
           <button
             onClick={() => setNewChatOpen(true)}
-            className="w-7 h-7 rounded-lg bg-gradient-to-br from-indigo-500 to-violet-600 hover:from-indigo-400 hover:to-violet-500 shadow-[0_0_10px_rgba(99,102,241,0.45)] hover:shadow-[0_0_16px_rgba(99,102,241,0.65)] flex items-center justify-center transition-all"
+            className="w-7 h-7 rounded-full bg-[#3390ec] hover:bg-[#2f80d8] flex items-center justify-center transition-colors"
             title={t("NewConversation")}
           >
             <Plus className="w-4 h-4 text-white" />
@@ -57,12 +57,12 @@ const ChatPage = () => {
         {selectedConvId ? (
           <ConversationWindow convId={selectedConvId} convName={selectedConvName} />
         ) : (
-          <div className="flex-1 flex flex-col items-center justify-center text-indigo-400/40 gap-3">
+          <div className="flex-1 flex flex-col items-center justify-center text-[#3390ec]/40 gap-3">
             <MessageSquare className="w-16 h-16" />
             <span className="text-sm">{t("SelectChat")}</span>
             <button
               onClick={() => setNewChatOpen(true)}
-              className="mt-2 px-4 py-2 rounded-lg bg-gradient-to-br from-indigo-600/20 to-violet-600/20 hover:from-indigo-600/40 hover:to-violet-600/40 text-indigo-400 text-sm transition-all"
+              className="mt-2 px-4 py-2 rounded-full bg-[#3390ec]/15 hover:bg-[#3390ec]/25 text-[#3390ec] dark:text-[#6ab2f2] text-sm transition-colors"
             >
               + {t("NewConversation")}
             </button>

@@ -22,6 +22,7 @@ interface BundleRowsProps {
 }
 
 const fmt = (n: number) => n.toLocaleString("ru-RU", { minimumFractionDigits: 2 });
+const fmt3 = (n: number) => n.toLocaleString("ru-RU", { minimumFractionDigits: 3 });
 
 const BundleRows = ({ isPosted, bundleItems, lineTotal, updateItem, onRemove, columns, selectedCell, onSelectCell, onPreviewImage, viewMode }: BundleRowsProps) => {
   const { t } = useTranslation();
@@ -141,18 +142,18 @@ const BundleCellContent = ({
     case "price":
       // Bundle цену можно редактировать
       return isPosted ? (
-        <span className={`block text-right font-mono font-semibold ${viewMode ? "text-xl" : "text-base print:text-xl"}`}>{fmt(parseFloat(row.price) || 0)}</span>
+        <span className={`block text-right font-mono font-semibold ${viewMode ? "text-xl" : "text-base print:text-xl"}`}>{fmt3(parseFloat(row.price) || 0)}</span>
       ) : (
         <>
           <input
             type="number"
             value={row.price}
             min="0"
-            step="0.01"
+            step="0.001"
             onChange={(e) => updateItem(row._key, "price", e.target.value)}
             className={`${inputCell} !text-base font-semibold print:hidden`}
           />
-          <span className="hidden print:block text-right font-mono print:text-xl">{fmt(parseFloat(row.price) || 0)}</span>
+          <span className="hidden print:block text-right font-mono print:text-xl">{fmt3(parseFloat(row.price) || 0)}</span>
         </>
       );
 

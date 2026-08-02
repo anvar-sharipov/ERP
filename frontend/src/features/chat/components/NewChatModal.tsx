@@ -79,12 +79,8 @@ export const NewChatModal: React.FC<Props> = ({ isOpen, onClose, onCreated }) =>
                 setSelectedIds([]);
               }}
               className={`
-                flex-1 py-2 rounded-lg text-sm font-medium transition-all
-                ${
-                  type === tType
-                    ? "bg-gradient-to-br from-indigo-500 to-violet-600 text-white shadow-[0_0_10px_rgba(99,102,241,0.45)]"
-                    : "bg-slate-700 text-slate-300 hover:bg-slate-600"
-                }
+                flex-1 py-2 rounded-lg text-sm font-medium transition-colors
+                ${type === tType ? "bg-[#3390ec] text-white" : "bg-slate-700 text-slate-300 hover:bg-slate-600"}
               `}
             >
               {tType === "direct" ? t("Direct") : t("Group")}
@@ -107,19 +103,11 @@ export const NewChatModal: React.FC<Props> = ({ isOpen, onClose, onCreated }) =>
                   key={u.id}
                   onClick={() => toggleUser(u.id)}
                   className={`
-                    w-full flex items-center gap-3 px-3 py-2.5 text-left transition-all
-                    ${
-                      isSelected
-                        ? "bg-gradient-to-r from-indigo-600/25 via-violet-600/10 to-transparent text-indigo-200 shadow-[inset_0_0_16px_-6px_rgba(99,102,241,0.5)]"
-                        : "text-slate-200 hover:bg-slate-700/50"
-                    }
+                    w-full flex items-center gap-3 px-3 py-2.5 text-left transition-colors
+                    ${isSelected ? "bg-[#3390ec]/15 text-[#6ab2f2]" : "text-slate-200 hover:bg-slate-700/50"}
                   `}
                 >
-                  <div
-                    className={`w-8 h-8 rounded flex items-center justify-center text-xs font-bold shrink-0 ${
-                      isSelected ? "bg-gradient-to-br from-indigo-500 to-violet-600 shadow-[0_0_8px_rgba(99,102,241,0.5)]" : "bg-slate-600"
-                    }`}
-                  >
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white shrink-0 ${isSelected ? "bg-[#3390ec]" : "bg-slate-600"}`}>
                     {getFullName(u).slice(0, 2).toUpperCase()}
                   </div>
 
@@ -129,7 +117,7 @@ export const NewChatModal: React.FC<Props> = ({ isOpen, onClose, onCreated }) =>
                   </div>
 
                   {isSelected && (
-                    <span className="w-5 h-5 rounded-full bg-gradient-to-br from-fuchsia-500 to-indigo-500 shadow-[0_0_8px_rgba(217,70,239,0.55)] flex items-center justify-center shrink-0">
+                    <span className="w-5 h-5 rounded-full bg-[#3390ec] flex items-center justify-center shrink-0">
                       <svg viewBox="0 0 10 10" className="w-3 h-3" fill="none">
                         <path d="M1.5 5l2.5 2.5 4.5-4.5" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
                       </svg>
@@ -141,7 +129,7 @@ export const NewChatModal: React.FC<Props> = ({ isOpen, onClose, onCreated }) =>
           )}
         </div>
 
-        {type === "group" && selectedIds.length > 0 && <div className="text-xs text-indigo-400">{t("Selected", { count: selectedIds.length })}</div>}
+        {type === "group" && selectedIds.length > 0 && <div className="text-xs text-[#3390ec] dark:text-[#6ab2f2]">{t("Selected", { count: selectedIds.length })}</div>}
 
         <div className="flex justify-end gap-2 pt-1">
           <Button text={t("Cancel")} onClick={handleClose} variant="secondary" />

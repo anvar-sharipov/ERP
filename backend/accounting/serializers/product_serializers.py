@@ -222,24 +222,25 @@ class ProductMainImageMixin:
         return None
 
 
-class ProductListSerializer(ProductMainImageMixin, serializers.ModelSerializer):
+class ProductListSerializer(serializers.ModelSerializer):
     """
-    ✅ Облегчённый сериализатор для GET /products/ (ProductViewSet.list) —
-    отдаёт только то, что реально показывает ProductsListPage.tsx (фото,
-    категория, бренд, ед.изм., себестоимость, статус). Цены/остатки/оборотность
-    список получает отдельными bulk-эндпоинтами (pricesMap/stockBalance/
-    product_turnover), а не через это поле — поэтому здесь сознательно нет
-    prices/bundle_items/volume_discounts/quantity_promotions/tags/
-    allowed_warehouses/description/extra_data и т.д. Полный набор полей
-    остаётся доступен через ProductSerializer при открытии карточки товара
-    (retrieve/create/update) — здесь их просто незачем гонять по сети на
-    каждый товар в списке.
+    ✅ Облегчённый сериализатор для ProductViewSet.list_light (ProductsListPage.tsx)
+    — только текстовые поля (фото/категория/бренд/ед.изм./себестоимость/статус).
+    Цены/остатки/оборотность список получает отдельными bulk-эндпоинтами
+    (pricesMap/stockBalance/product_turnover), а не через это поле.
+
+    ✅ ФОТО (images/main_image) сюда сознательно НЕ включено, хотя раньше было —
+    django-imagekit генерирует thumbnail.url СИНХРОННО при первом обращении
+    (см. get_thumbnail_url), и на каталоге в тысячи товаров с ещё не
+    сгенерированным кэшем превью это и было причиной долгой загрузки всей
+    страницы (ни одна строка не отрисовывалась, пока не сгенерировались ВСЕ
+    превью). Фото теперь отдаёт отдельный bulk-эндпоинт (list_light_images) —
+    ProductsListPage.tsx рендерит текст сразу по этому сериализатору, а фото
+    дорисовывается по мере готовности второго запроса, с спиннером на ячейку.
     """
     category_detail = ProductCategoryShortSerializer(source="category", read_only=True)
     brand_detail = BrandShortSerializer(source="brand", read_only=True)
     unit_detail = UnitShortSerializer(source="unit", read_only=True)
-    images = ProductImageSerializer(many=True, read_only=True)
-    main_image = serializers.SerializerMethodField()
 
     class Meta:
         model = Product
@@ -249,7 +250,55 @@ class ProductListSerializer(ProductMainImageMixin, serializers.ModelSerializer):
             "brand", "brand_detail",
             "unit", "unit_detail",
             "cost_price", "is_active",
-            "images", "main_image",
+        ]
+
+
+class ProductDocumentPriceSerializer(serializers.ModelSerializer):
+    """
+    ✅ Цена товара только теми двумя полями, что реально читает форма документа
+    (Invoice/Interface.ts::Product.prices: {price_type, price} — используется в
+    ProductRow.tsx для автоподстановки цены строки по выбранному типу цены).
+    Полный ProductPriceSerializer (warehouse_name/branch_name/valid_from/
+    valid_to/is_active/id/product) тут не нужен — с ~24 тыс. строк цен на
+    каталоге polisem (в среднем ~8 цен на товар) именно этот вложенный список
+    был основным весом ответа /products/list-for-document/.
+    """
+    class Meta:
+        model = ProductPrice
+        fields = ["price_type", "price"]
+
+
+class ProductDocumentSerializer(ProductMainImageMixin, serializers.ModelSerializer):
+    """
+    ✅ Облегчённый сериализатор для GET /products/list-for-document/ —
+    специально под DocumentFormPage.tsx/ProductRow.tsx (SearchableSelect выбора
+    товара в строке документа + автоподстановка цены/себестоимости/
+    комплектующих/акции "количество за количество"). В отличие от полного
+    ProductSerializer (который этот экран раньше использовал через обычный
+    getAll()) здесь НЕТ tags/category/allowed_warehouses/description/
+    extra_data/полной галереи images — на каталоге в тысячи товаров (см.
+    расследование "долго грузится SearchableSelect" на polisem: 3158 товаров ×
+    полный ProductSerializer с вложенными tags/images/bundle_items/
+    volume_discounts/quantity_promotions на КАЖДЫЙ) это и было причиной
+    долгой загрузки формы накладной. Набор полей — ровно то, что читает
+    Invoice/Interface.ts::Product (ни поля больше, ни меньше) — если форма
+    начнёт использовать новое поле товара, добавлять его нужно в обоих местах.
+    """
+    unit_detail = UnitShortSerializer(source="unit", read_only=True)
+    main_image = serializers.SerializerMethodField()
+    prices = ProductDocumentPriceSerializer(many=True, read_only=True)
+    bundle_items = BundleItemSerializer(many=True, read_only=True)
+    volume_discounts = VolumeDiscountSerializer(many=True, read_only=True)
+    quantity_promotions = QuantityPromotionSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = Product
+        fields = [
+            "id", "name", "sku", "barcode", "is_active",
+            "unit", "unit_detail", "cost_price",
+            "prices", "bundle_items", "volume_discounts", "quantity_promotions",
+            "weight", "volume_m3", "length", "width", "height",
+            "main_image",
         ]
 
 
@@ -362,7 +411,7 @@ class CounterpartySerializer(serializers.ModelSerializer):
             "id", "name", "type",
             "inn", "phone", "email", "address",
             "is_active", "photo", "photo_thumbnail", "created_at", "extra_data",
-            "agent", "agent_detail", "district",
+            "agent", "agent_detail", "district", "delivery_percent",
         ]
         read_only_fields = ["created_at"]
 
@@ -406,11 +455,16 @@ class WarehouseSerializer(serializers.ModelSerializer):
     receivable_account_supplier_name = serializers.CharField(source="receivable_account_supplier.name", read_only=True, default=None)
     payable_account_supplier_name = serializers.CharField(source="payable_account_supplier.name", read_only=True, default=None)
     profit_account_supplier_name = serializers.CharField(source="profit_account_supplier.name", read_only=True, default=None)
+    # ✅ Проводка ЗП водителя за рейс (см. accounting/models/trip.py::Trip.deliver) —
+    # тот же принцип "заполняются вручную", что и остальные счета склада.
+    delivery_expense_account_name = serializers.CharField(source="delivery_expense_account.name", read_only=True, default=None)
+    driver_payable_account_name = serializers.CharField(source="driver_payable_account.name", read_only=True, default=None)
 
     class Meta:
         model = Warehouse
         fields = [
             "id", "name", "branch", "branch_name", "address", "is_active", "is_main",
+            "currency",
             "receivable_account", "receivable_account_name",
             "revenue_account", "revenue_account_name",
             "cogs_account", "cogs_account_name",
@@ -422,6 +476,8 @@ class WarehouseSerializer(serializers.ModelSerializer):
             "receivable_account_supplier", "receivable_account_supplier_name",
             "payable_account_supplier", "payable_account_supplier_name",
             "profit_account_supplier", "profit_account_supplier_name",
+            "delivery_expense_account", "delivery_expense_account_name",
+            "driver_payable_account", "driver_payable_account_name",
         ]
 
 
@@ -453,7 +509,7 @@ class ProductHistorySerializer(serializers.Serializer):
     history_user = serializers.SerializerMethodField()
 
     name = serializers.CharField()
-    cost_price = serializers.DecimalField(max_digits=15, decimal_places=2)
+    cost_price = serializers.DecimalField(max_digits=15, decimal_places=3)
 
     def get_history_user(self, obj):
         if obj.history_user:

@@ -8,6 +8,7 @@ import { useUser } from "../../../core/context/UserContext";
 import { useChat } from "../context/ChatContext";
 import { MessageItem } from "./MessageItem";
 import { MessageInput } from "./MessageInput";
+import { TypingDots } from "./TypingDots";
 import { useTranslation } from "react-i18next";
 import { useNotify } from "../../../core/context/NotificationContext";
 
@@ -256,9 +257,9 @@ export const ConversationWindow: React.FC<Props> = ({ convId, convName }) => {
 
   if (isInitialLoad) {
     return (
-      <div className="flex-1 flex items-center justify-center text-indigo-400/50">
+      <div className="flex-1 flex items-center justify-center text-[#3390ec]/50">
         <div className="flex flex-col items-center gap-2">
-          <div className="w-8 h-8 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+          <div className="w-8 h-8 border-2 border-[#3390ec] border-t-transparent rounded-full animate-spin" />
           <span className="text-sm">{t("Loading")}</span>
         </div>
       </div>
@@ -269,29 +270,31 @@ export const ConversationWindow: React.FC<Props> = ({ convId, convName }) => {
     <div className="relative flex flex-col h-full" onDragEnter={handleDragEnter} onDragOver={handleDragOver} onDragLeave={handleDragLeave} onDrop={handleDrop}>
       {/* ✅ Оверлей drag-and-drop файла */}
       {isDraggingFile && (
-        <div className="absolute inset-0 z-30 flex flex-col items-center justify-center gap-2 bg-indigo-950/85 backdrop-blur-sm border-2 border-dashed border-indigo-400 rounded-lg pointer-events-none">
-          <Upload className="w-10 h-10 text-indigo-300 drop-shadow-[0_0_10px_rgba(99,102,241,0.8)]" />
-          <span className="text-sm font-medium text-indigo-100">{t("DropFileHere")}</span>
+        <div className="absolute inset-0 z-30 flex flex-col items-center justify-center gap-2 bg-[#17212b]/90 backdrop-blur-sm border-2 border-dashed border-[#3390ec] rounded-lg pointer-events-none">
+          <Upload className="w-10 h-10 text-[#6ab2f2]" />
+          <span className="text-sm font-medium text-[#bcd9f7]">{t("DropFileHere")}</span>
         </div>
       )}
 
       {/* Шапка */}
       <div className="flex items-center gap-3 px-4 py-3 border-b border-slate-200 dark:border-slate-700/50 bg-white dark:bg-slate-800/50 shrink-0">
         <div className="relative">
-          <div className="w-9 h-9 rounded bg-gradient-to-br from-indigo-500 to-violet-600 shadow-[0_0_10px_rgba(99,102,241,0.45)] flex items-center justify-center text-sm font-bold text-white">
+          <div className="w-9 h-9 rounded-full bg-[#3390ec] dark:bg-[#2b5278] flex items-center justify-center text-sm font-bold text-white">
             {convName.slice(0, 2).toUpperCase()}
           </div>
           {[...onlineUsers].some((id) => id !== user?.id) && (
-            <span className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-green-500 shadow-[0_0_6px_rgba(34,197,94,0.9)] ring-2 ring-white dark:ring-slate-800" />
+            <span className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-green-500 ring-2 ring-white dark:ring-slate-800" />
           )}
         </div>
         <div>
           <div className="text-sm font-semibold text-gray-900 dark:text-slate-100">{convName}</div>
           <div className="text-xs h-4">
             {typingLabel() ? (
-              <span className="text-indigo-400 animate-pulse">{typingLabel()}</span>
+              <span className="flex items-center gap-1.5 text-[#3390ec] dark:text-[#6ab2f2]">
+                <TypingDots /> {typingLabel()}
+              </span>
             ) : [...onlineUsers].some((id) => id !== user?.id) ? (
-              <span className="text-green-400">{t("Online")}</span>
+              <span className="text-green-500 dark:text-green-400">{t("Online")}</span>
             ) : (
               <span className="text-slate-400">{t("Offline")}</span>
             )}
@@ -300,23 +303,31 @@ export const ConversationWindow: React.FC<Props> = ({ convId, convName }) => {
       </div>
 
       {/* Сообщения */}
-      <div ref={scrollRef} onScroll={handleScroll} className="flex-1 overflow-y-auto py-2 space-y-1 bg-gray-50 dark:bg-transparent">
-        {/* ✅ Индикатор загрузки старых сообщений */}
-        {isLoadingMore && (
-          <div className="flex justify-center py-2">
-            <div className="w-5 h-5 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
-          </div>
-        )}
+      <div className="relative flex-1 overflow-hidden bg-[#f0f2f5] dark:bg-[#0e1621]">
+        {/* ✅ Фон-«обои» — неподвижен, скроллится только список сообщений ниже */}
+        <div
+          className="absolute inset-0 bg-no-repeat bg-cover bg-center opacity-50 dark:opacity-25 pointer-events-none"
+          style={{ backgroundImage: "url(/images/chat-bg.webp)" }}
+        />
 
-        {messages.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-full text-indigo-400/40 gap-2">
-            <span className="text-4xl">✉️</span>
-            <span className="text-sm">{t("NoMessagesYet")}</span>
-          </div>
-        ) : (
-          messages.map((msg) => <MessageItem key={msg.id} message={msg} onVisible={handleMessageVisible} onDelete={handleDeleteMessage} />)
-        )}
-        <div ref={bottomRef} />
+        <div ref={scrollRef} onScroll={handleScroll} className="relative h-full overflow-y-auto py-2 space-y-1">
+          {/* ✅ Индикатор загрузки старых сообщений */}
+          {isLoadingMore && (
+            <div className="flex justify-center py-2">
+              <div className="w-5 h-5 border-2 border-[#3390ec] border-t-transparent rounded-full animate-spin" />
+            </div>
+          )}
+
+          {messages.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-full text-[#3390ec]/40 gap-2">
+              <span className="text-4xl">✉️</span>
+              <span className="text-sm">{t("NoMessagesYet")}</span>
+            </div>
+          ) : (
+            messages.map((msg) => <MessageItem key={msg.id} message={msg} onVisible={handleMessageVisible} onDelete={handleDeleteMessage} />)
+          )}
+          <div ref={bottomRef} />
+        </div>
       </div>
 
       {/* Ввод */}

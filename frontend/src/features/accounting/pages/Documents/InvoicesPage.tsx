@@ -1,5 +1,5 @@
 // frontend/src/features/accounting/pages/Documents/InvoicesPage.tsx
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { Plus, Percent, Gift, Package } from "lucide-react";
@@ -9,7 +9,7 @@ import { useNotify } from "../../../../core/context/NotificationContext";
 import { usePageAccess } from "../../../../core/hooks/usePageAccess";
 import { useSidebar } from "../../../../core/context/SidebarRightContext";
 import { usePageHotkeys } from "../../../../core/hooks/usePageHotkeys";
-import { useTableFilter } from "../../../../core/hooks/useTableFilter";
+import { useDebouncedValue } from "../../../../core/hooks/useDebouncedValue";
 
 import { Table, type Column } from "../../../../components/ui/Table/Table";
 import { Button } from "../../../../components/ui/Button";
@@ -24,12 +24,79 @@ import { useNavigate } from "react-router-dom";
 import { ROUTES } from "../../../../core/router/routes";
 import { useDateStore } from "../../../../core/store/dateStore";
 import { useRestoreScroll } from "../../../../core/hooks/useRestoreScroll";
-import { DOC_TYPE_ICONS } from "./Invoice/Interface";
 import { shortDocumentNumber } from "../../../../core/utils/documentNumber";
 
 // Приходная = "in", Расходная = "out"
 // Эта страница показывает оба типа (накладные)
 const INVOICE_TYPES = ["in", "out", "move", "return_in", "return_out"];
+
+// ✅ Цветовая подсветка строк по типу документа — так удобнее глазами отличать
+// приход/расход/возврат в общем списке, не читая колонку "Тип" на каждой строке.
+// "move" не входит ни в одну из этих трёх смысловых групп — остаётся без подсветки.
+const DOC_TYPE_ROW_COLOR: Record<string, string> = {
+  out: "bg-green-100/80 dark:bg-green-800/30 hover:bg-green-200 dark:hover:bg-green-800/50 border-l-4 border-green-500",
+  return_in: "bg-red-100/80 dark:bg-red-800/30 hover:bg-red-200 dark:hover:bg-red-800/50 border-l-4 border-red-500",
+  return_out: "bg-red-100/80 dark:bg-red-800/30 hover:bg-red-200 dark:hover:bg-red-800/50 border-l-4 border-red-500",
+  in: "bg-blue-100/80 dark:bg-blue-800/30 hover:bg-blue-200 dark:hover:bg-blue-800/50 border-l-4 border-blue-500",
+};
+
+// ✅ Серверная пагинация (см. CLAUDE.md) — Table.tsx видит только уже загруженную
+// с бэкенда страницу, поэтому его собственный "переключиться на страницу с нужной
+// строкой" (см. Table.tsx::selectedRowId-эффект по sortedData) для неё не работает:
+// нужной строки просто нет в текущих данных, если она была на другой странице.
+// Страницу, с которой открыли конкретный документ, HeaderPage.tsx проактивно
+// пишет в sessionStorage (см. её собственный комментарий) — но ТОЛЬКО когда документ
+// открыт двойным кликом по строке этого списка (через location.state.fromInvoicesPage,
+// см. onRowDoubleClick ниже), а не при любом уходе со страницы. Читаем и сразу же
+// удаляем ключ (одноразовое потребление, как selectedDocumentId в useRestoreScroll) —
+// иначе он остался бы "прилипшим" навсегда и подставлялся бы при любом случайном
+// повторном заходе на список, а не только при возврате именно с того документа.
+const RETURN_PAGE_STORAGE_KEY = "invoices_list_return_page";
+const consumeSessionPage = (): number | null => {
+  try {
+    const v = sessionStorage.getItem(RETURN_PAGE_STORAGE_KEY);
+    if (!v) return null;
+    sessionStorage.removeItem(RETURN_PAGE_STORAGE_KEY);
+    return Number(v);
+  } catch {
+    return null;
+  }
+};
+
+// ✅ Страница (см. выше) восстанавливалась при возврате с документа, а сами
+// фильтры/поиск/сортировка — нет (чистый локальный useState, обнуляющийся при
+// любом размонтировании страницы). Из-за этого на восстановленной странице
+// оказывался уже другой набор строк (фильтр сброшен на "все"), нужного документа
+// там не было — и подсветка (см. useRestoreScroll выше) молча "терялась" вместе
+// с фильтром. Как и страница — это ОДНОРАЗОВОЕ потребление, привязанное именно к
+// открытию документа двойным кликом по строке этого списка (см. onRowDoubleClick
+// ниже и HeaderPage.tsx): переход на любую ДРУГУЮ вкладку/страницу приложения и
+// обратно на список НЕ должен подставлять старые фильтры — только настоящий
+// "туда и обратно" с конкретного документа.
+const FILTERS_STORAGE_KEY = "invoices_list_filters";
+type InvoiceTypeFilter = "all" | "in" | "out" | "move" | "return_in" | "return_out";
+type InvoiceStatusFilter = "all" | "draft" | "posted";
+type PersistedInvoiceFilters = {
+  searchQuery: string;
+  typeFilter: InvoiceTypeFilter;
+  statusFilter: InvoiceStatusFilter;
+  giftFilter: boolean;
+  bundleFilter: boolean;
+  createdByFilter: number | null;
+  postedByFilter: number | null;
+  sortBy: string | null;
+  sortDir: "asc" | "desc";
+};
+const consumePersistedFilters = (): Partial<PersistedInvoiceFilters> => {
+  try {
+    const raw = sessionStorage.getItem(FILTERS_STORAGE_KEY);
+    if (!raw) return {};
+    sessionStorage.removeItem(FILTERS_STORAGE_KEY);
+    return JSON.parse(raw);
+  } catch {
+    return {};
+  }
+};
 
 const InvoicesPage = () => {
   const { t } = useTranslation();
@@ -40,13 +107,14 @@ const InvoicesPage = () => {
 
   const [highlightedId, setHighlightedId] = useState<number | null>(null);
   const {} = useRestoreScroll("selectedDocumentId", setHighlightedId);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [typeFilter, setTypeFilter] = useState<"all" | "in" | "out" | "move" | "return_in" | "return_out">("all");
-  const [statusFilter, setStatusFilter] = useState<"all" | "draft" | "posted">("all");
-  const [giftFilter, setGiftFilter] = useState(false);
-  const [bundleFilter, setBundleFilter] = useState(false);
-  const [createdByFilter, setCreatedByFilter] = useState<number | null>(null);
-  const [postedByFilter, setPostedByFilter] = useState<number | null>(null);
+  const [persistedFilters] = useState(consumePersistedFilters);
+  const [searchQuery, setSearchQuery] = useState(persistedFilters.searchQuery ?? "");
+  const [typeFilter, setTypeFilter] = useState<InvoiceTypeFilter>(persistedFilters.typeFilter ?? "all");
+  const [statusFilter, setStatusFilter] = useState<InvoiceStatusFilter>(persistedFilters.statusFilter ?? "all");
+  const [giftFilter, setGiftFilter] = useState(persistedFilters.giftFilter ?? false);
+  const [bundleFilter, setBundleFilter] = useState(persistedFilters.bundleFilter ?? false);
+  const [createdByFilter, setCreatedByFilter] = useState<number | null>(persistedFilters.createdByFilter ?? null);
+  const [postedByFilter, setPostedByFilter] = useState<number | null>(persistedFilters.postedByFilter ?? null);
   const [deleteModal, setDeleteModal] = useState(false);
   const [deleteId, setDeleteId] = useState<number | null>(null);
   // ✅ Раньше "Провести"/"Распровести" срабатывали сразу по клику, без
@@ -59,8 +127,8 @@ const InvoicesPage = () => {
   // именно эта страница знает, что реально нужно переспросить с бэкенда с новым
   // ordering (см. document_views.py::DOCUMENT_ORDERING_FIELDS). Ключ — accessor
   // колонки из columns ниже (совпадает 1:1 с ключами DOCUMENT_ORDERING_FIELDS).
-  const [sortBy, setSortBy] = useState<string | null>(null);
-  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+  const [sortBy, setSortBy] = useState<string | null>(persistedFilters.sortBy ?? null);
+  const [sortDir, setSortDir] = useState<"asc" | "desc">(persistedFilters.sortDir ?? "asc");
   const navigate = useNavigate();
   // ✅ Раньше эта страница смотрела только на branch/warehouse из WorkDateWidget,
   // но не на periodFrom/periodTo — список накладных не реагировал на диапазон
@@ -74,7 +142,7 @@ const InvoicesPage = () => {
   // а не целиком. Фильтры (тип/статус/скидка/подарок/комплектующие) тоже уходят
   // на сервер как query-параметры — иначе они бы работали только в пределах одной
   // уже загруженной страницы, а не по всем накладным (см. document_views.py::DocumentViewSet.get_queryset).
-  const [page, setPage] = useState(1);
+  const [page, setPage] = useState(() => consumeSessionPage() ?? 1);
   const [pageSize, setPageSize] = useState(() => {
     try {
       const saved = localStorage.getItem("table:invoices_list:pageSize");
@@ -84,19 +152,56 @@ const InvoicesPage = () => {
     }
   });
 
+  // ✅ Дебаунс поиска — раньше поиск фильтровал только уже загруженную с бэкенда
+  // страницу (useTableFilter), из-за чего документ мог реально существовать, но
+  // не находиться, если попадал на другую страницу. Теперь уходит в бэкенд как
+  // query-параметр (см. document_views.py), поэтому нужен дебаунс, чтобы не
+  // слать запрос на каждое нажатие клавиши.
+  const debouncedSearch = useDebouncedValue(searchQuery, 350);
+
+  // ✅ armedRef — сброс страницы на 1 при смене фильтров не активируется первые
+  // ~800мс после монтирования. За это время может незаметно "устаканиться" что
+  // угодно асинхронное, что меняет значения этих же зависимостей САМО ПО СЕБЕ, без
+  // участия пользователя (например useDateStore — zustand+persist — отдаёт
+  // дефолтные workBranch/workWarehouse/periodFrom/periodTo на первом рендере и
+  // подменяет их на реально сохранённые чуть позже, асинхронно). Флага "не первый
+  // рендер" одного недостаточно — он гасит только САМЫЙ первый прогон эффекта, а
+  // любое такое "устаканивание" бьёт вторым, уже неотличимым от настоящего
+  // изменения фильтра — и без задержки восстановленная из sessionStorage страница
+  // тут же сбрасывалась обратно на 1.
+  const armedRef = useRef(false);
   useEffect(() => {
+    const timer = setTimeout(() => {
+      armedRef.current = true;
+    }, 800);
+    return () => clearTimeout(timer);
+  }, []);
+
+  const didMountRef = useRef(false);
+  useEffect(() => {
+    if (!didMountRef.current) {
+      didMountRef.current = true;
+      return;
+    }
+    if (!armedRef.current) return;
     setPage(1);
-  }, [typeFilter, statusFilter, giftFilter, bundleFilter, createdByFilter, postedByFilter, workWarehouse?.id, workBranch?.id, periodFrom, periodTo, sortBy, sortDir]);
+  }, [typeFilter, statusFilter, giftFilter, bundleFilter, createdByFilter, postedByFilter, workWarehouse?.id, workBranch?.id, periodFrom, periodTo, sortBy, sortDir, debouncedSearch]);
 
   // ✅ Списки для фильтров "Создал"/"Провёл" — только пользователи, реально
   // фигурирующие в документах текущего scope (см. DocumentViewSet.filter_users),
   // а не весь справочник пользователей (не требует отдельного RBAC-права "user").
-  const { data: filterUsers = [] } = useQuery({
+  const { data: filterUsersData } = useQuery({
     queryKey: ["documents", "filter-users"],
     queryFn: documentApi.getFilterUsers,
     enabled: canView,
     staleTime: 5 * 60 * 1000,
   });
+  // ✅ "filterUsersData ?? []" деструктуризацией (data: filterUsers = []) создавал
+  // бы НОВУЮ ссылку на каждый рендер, пока запрос ещё грузится (data===undefined) —
+  // useMemo ниже эту нестабильность не спасал, т.к. сам зависел от уже нестабильного
+  // filterUsers. useMemo здесь кэширует и сам fallback, пока filterUsersData не
+  // изменится по ===, устраняя нестабильность на входе.
+  const filterUsers = useMemo(() => filterUsersData ?? [], [filterUsersData]);
   // ✅ Обязательно useMemo, а не просто .map() на каждый рендер — этот массив
   // используется в deps эффекта setSidebarContent ниже; setSidebarContent меняет
   // context state (даже при визуально том же JSX, т.к. JSX — всегда новый объект),
@@ -115,6 +220,7 @@ const InvoicesPage = () => {
     ...(bundleFilter ? { has_bundle: "true" } : {}),
     ...(createdByFilter ? { created_by: String(createdByFilter) } : {}),
     ...(postedByFilter ? { posted_by: String(postedByFilter) } : {}),
+    ...(debouncedSearch ? { search: debouncedSearch } : {}),
     // Фильтр по складу если выбран
     ...(workWarehouse?.id ? { warehouse: String(workWarehouse.id) } : {}),
     // Фильтр по филиалу если выбран (и склад не выбран)
@@ -298,14 +404,6 @@ const InvoicesPage = () => {
     );
   }, [setSidebarContent, canCreateInvoice, t, typeFilter, statusFilter, giftFilter, bundleFilter, createdByFilter, postedByFilter, userOptions]);
 
-  // ✅ Тип/статус/скидка/подарок/комплектующие фильтруются на сервере (см. queryParams
-  // выше) — здесь остаётся только поиск по номеру/контрагенту в пределах уже
-  // загруженной страницы (тот же паттерн, что и в AuditLogPage).
-  const filtered = useTableFilter(invoices, {
-    search: searchQuery,
-    searchFields: ["number", "counterparty_detail.name"],
-  });
-
   const toDelete = invoices.find((d) => d.id === deleteId);
 
   const columns: Column<DocumentList>[] = [
@@ -323,29 +421,6 @@ const InvoicesPage = () => {
     //     </div>
     //   ),
     // },
-    {
-      header: t("Number"),
-      accessor: "number",
-      sortable: true,
-      excelWidth: 14,
-      render: (item) => (
-        <div className="flex items-center gap-2">
-          <StatusBadge isActive={item.status === "posted"} onlyIcon />
-
-          {DOC_TYPE_ICONS[item.document_type]}
-
-          <span>{shortDocumentNumber(item.number)}</span>
-        </div>
-      ),
-    },
-    {
-      header: t("Type"),
-      accessor: "document_type_display",
-      sortable: true,
-      excelWidth: 20,
-      render: (item) => `${t(item.document_type)}`,
-    },
-    { header: t("Date"), accessor: "date", sortable: true, excelWidth: 12, render: (item) => new Date(item.date).toLocaleDateString("ru-RU") },
     {
       header: t("Counterparty"),
       accessor: "counterparty_detail",
@@ -381,6 +456,27 @@ const InvoicesPage = () => {
       },
     },
     {
+      header: t("Type"),
+      accessor: "document_type_display",
+      sortable: true,
+      excelWidth: 20,
+      render: (item) => `${t(item.document_type)}`,
+    },
+    { header: t("Date"), accessor: "date", sortable: true, excelWidth: 12, render: (item) => new Date(item.date).toLocaleDateString("ru-RU") },
+    {
+      header: t("Number"),
+      accessor: "number",
+      sortable: true,
+      excelWidth: 14,
+      render: (item) => (
+        <div className="flex items-center gap-2">
+          <StatusBadge isActive={item.status === "posted"} onlyIcon />
+
+          <span>{shortDocumentNumber(item.number)}</span>
+        </div>
+      ),
+    },
+    {
       header: t("Branch"),
       accessor: "branch_detail",
       sortable: true,
@@ -390,13 +486,26 @@ const InvoicesPage = () => {
       render: (item) => item.branch_detail?.name ?? "—",
     },
     {
-      header: t("Warehouse"),
-      accessor: "warehouse_detail",
+      header: t("Total"),
+      accessor: "total",
       sortable: true,
-      excelWidth: 20,
-      excelValue: (item) => item.warehouse_detail?.name ?? "",
-      sortValue: (item) => item.warehouse_detail?.name ?? "",
-      render: (item) => item.warehouse_detail?.name ?? "—",
+      excelWidth: 14,
+      render: (item) => (
+        <span className="inline-block px-2 py-0.5 rounded-md bg-indigo-50 dark:bg-indigo-900/30 font-mono font-bold text-sm text-indigo-700 dark:text-indigo-300">
+          {Number(item.total).toLocaleString("ru-RU", {
+            minimumFractionDigits: 2,
+          })}
+        </span>
+      ),
+    },
+    {
+      header: t("Note"),
+      accessor: "note",
+      sortable: false,
+      excelWidth: 24,
+      excelWrapText: true,
+      excelValue: (item) => item.note ?? "",
+      render: (item) => <span className="text-xs md:text-sm text-gray-500 dark:text-gray-400">{item.note || "—"}</span>,
     },
     {
       header: t("Marks"),
@@ -424,19 +533,6 @@ const InvoicesPage = () => {
       ),
     },
     {
-      header: t("Total"),
-      accessor: "total",
-      sortable: true,
-      excelWidth: 14,
-      render: (item) => (
-        <span className="inline-block px-2 py-0.5 rounded-md bg-indigo-50 dark:bg-indigo-900/30 font-mono font-bold text-sm text-indigo-700 dark:text-indigo-300">
-          {Number(item.total).toLocaleString("ru-RU", {
-            minimumFractionDigits: 2,
-          })}
-        </span>
-      ),
-    },
-    {
       header: t("Status"),
       accessor: "status",
       sortable: true,
@@ -447,13 +543,24 @@ const InvoicesPage = () => {
       render: (item) => <StatusBadge isActive={item.status === "posted"} activeLabel={t("Posted")} inactiveLabel={t("Draft")} />,
     },
     {
-      header: t("Note"),
-      accessor: "note",
-      sortable: false,
-      excelWidth: 24,
-      excelWrapText: true,
-      excelValue: (item) => item.note ?? "",
-      render: (item) => <span className="text-xs md:text-sm text-gray-500 dark:text-gray-400">{item.note || "—"}</span>,
+      header: t("Warehouse"),
+      accessor: "warehouse_detail",
+      sortable: true,
+      excelWidth: 20,
+      excelValue: (item) => item.warehouse_detail?.name ?? "",
+      sortValue: (item) => item.warehouse_detail?.name ?? "",
+      render: (item) => item.warehouse_detail?.name ?? "—",
+    },
+    {
+      // ✅ driver_name — вычисляемое поле (участник накладной с ролью "водитель",
+      // см. DocumentListSerializer.get_driver_name), не колонка БД — сортировка
+      // через серверную пагинацию (DOCUMENT_ORDERING_FIELDS) для него не заведена,
+      // поэтому sortable не ставим, чтобы не обещать нерабочую сортировку.
+      header: t("Driver"),
+      accessor: "driver_name",
+      excelWidth: 18,
+      excelValue: (item) => item.driver_name ?? "",
+      render: (item) => item.driver_name ?? "—",
     },
     {
       header: t("CreatedBy"),
@@ -524,12 +631,18 @@ const InvoicesPage = () => {
     <RBACGuard isLoading={isLoading} error={error} canView={canView} forbiddenText={t("ForbiddenText")}>
       <Table
         columns={columns}
-        data={filtered}
+        data={invoices}
         tableId="invoices_list"
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
+        rowClassName={(item) => DOC_TYPE_ROW_COLOR[item.document_type] ?? ""}
         onRowDoubleClick={(item) => {
-          navigate(ROUTES.APP.DOCUMENTS_EDIT.replace(":id", String(item.id)));
+          navigate(ROUTES.APP.DOCUMENTS_EDIT.replace(":id", String(item.id)), {
+            state: {
+              fromInvoicesPage: page,
+              fromInvoicesFilters: { searchQuery, typeFilter, statusFilter, giftFilter, bundleFilter, createdByFilter, postedByFilter, sortBy, sortDir },
+            },
+          });
         }}
         selectedRowId={highlightedId}
         onHighlightConsumed={() => setHighlightedId(null)}

@@ -8,11 +8,29 @@ from rest_framework import viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
-from accounting.models import Document, DocumentItem, Product, Warehouse, WarehouseStock, WarehouseProductSnapshot
+from accounting.models import Document, DocumentItem, DocumentParticipant, Product, Warehouse, WarehouseStock, WarehouseProductSnapshot
 from users.permissions import _rbac
-from users.scoping import get_user_scope
+from users.scoping import get_user_scope, apply_agent_scope
 
 TURNOVER_TYPES = ['in', 'out', 'move', 'return_in', 'return_out']
+
+# ✅ "Продажные" типы документов — только для них имеет смысл прибыль
+# (цена продажи минус себестоимость), см. universal_filter/_aggregate_universal_filter
+# ниже и Document.recalculate() (models/document.py), которая точно так же считает
+# total_profit только для этих двух типов.
+SALES_PROFIT_TYPES = {Document.Type.OUT, Document.Type.RETURN_IN}
+
+# ✅ Единая точка для universal_filter: поле группировки + поле человекочитаемой
+# метки (None — метка формируется отдельно, см. document_type в
+# _aggregate_universal_filter). Добавление новой группировки — одна строка здесь,
+# без копирования всей функции агрегации (см. CLAUDE.md/план: анти-паттерн
+# Polisem — 10 захардкоженных python-веток на каждый вариант таблицы).
+UNIVERSAL_FILTER_GROUP_FIELDS = {
+    'product':       ('product_id', 'product__name'),
+    'counterparty':  ('document__counterparty_id', 'document__counterparty__name'),
+    'warehouse':     ('document__warehouse_id', 'document__warehouse__name'),
+    'document_type': ('document__document_type', None),
+}
 
 
 def _resolve_warehouse_ids(request):
@@ -53,6 +71,195 @@ def _resolve_warehouse_ids(request):
     return selected_ids & scope_warehouse_ids
 
 
+def _parse_ids(value):
+    """CSV из id ("1,2,3") -> [1,2,3] — тот же идиом, что уже был инлайном
+    для category в product_turnover, вынесен сюда, т.к. universal_filter
+    использует его на 5 разных параметрах (warehouse_to/counterparty/product/
+    category/employee)."""
+    if not value:
+        return []
+    return [int(x) for x in value.split(',') if x.strip().isdigit()]
+
+
+def _parse_document_types(value):
+    """CSV типов документа, отфильтрованный по допустимым TURNOVER_TYPES —
+    если параметр не передан, по умолчанию все 5 типов (как и везде в
+    report_views.py). Если передан, но после фильтрации список пуст (мусор
+    или пользователь снял все чекбоксы на фронте) — намеренно возвращаем
+    пустой список, а не откатываемся на "все типы": это даст честный пустой
+    результат вместо молчаливого "проигнорировали фильтр"."""
+    if value is None:
+        return list(TURNOVER_TYPES)
+    valid = set(TURNOVER_TYPES)
+    return [t.strip() for t in value.split(',') if t.strip() in valid]
+
+
+def _universal_filter_expressions():
+    """
+    net/profit per-line — те же формулы, что Document.recalculate() (см.
+    models/document.py) использует для total/total_profit, продублированные
+    как annotate-выражения для агрегации по множеству строк сразу (a не
+    пересчёт одного документа, как в recalculate()).
+    """
+    dec_field = DecimalField(max_digits=18, decimal_places=2)
+    line_factor = Value(Decimal('1')) - F('discount_percent') / Value(Decimal('100'))
+    net_expr = ExpressionWrapper(F('quantity') * F('price') * line_factor, output_field=dec_field)
+    profit_expr = ExpressionWrapper(
+        F('quantity') * F('price') * line_factor - F('quantity') * F('cost_price'),
+        output_field=dec_field,
+    )
+    return net_expr, profit_expr
+
+
+def _aggregate_universal_filter_by_employee(qs, has_profit):
+    """
+    group_by='employee' — отдельная ветка, а НЕ дублирование всей функции
+    агрегации: DocumentParticipant — связь документ->несколько сотрудников
+    (роли), у DocumentItem нет прямого FK на сотрудника. Прямой join
+    document__participants__employee_id перемножил бы строки DocumentItem
+    (см. universal_filter — там же по этой причине employee-фильтр резолвится
+    через id документов, а не join). Поэтому здесь: сначала суммы по
+    document_id из qs (один Sum-проход), затем участники документов отдельным
+    запросом, свод — в Python по document_id.
+    """
+    net_expr, profit_expr = _universal_filter_expressions()
+    doc_ids = list(qs.values_list('document_id', flat=True).distinct())
+    if not doc_ids:
+        return []
+
+    # ✅ Алиас 'total_quantity', а НЕ 'quantity' — Sum('quantity') с алиасом,
+    # совпадающим с именем самого поля, роняет Django с FieldError ("'quantity'
+    # is an aggregate"), см. тот же приём в _aggregate_universal_filter/
+    # _universal_filter_totals ниже.
+    doc_aggregates = {'total_quantity': Sum('quantity'), 'amount': Sum(net_expr)}
+    if has_profit:
+        doc_aggregates['profit'] = Sum(profit_expr)
+    doc_totals = {r['document_id']: r for r in qs.values('document_id').annotate(**doc_aggregates)}
+
+    participant_rows = (
+        DocumentParticipant.objects
+        .filter(document_id__in=doc_ids)
+        .values('employee_id', 'employee__full_name', 'document_id')
+    )
+
+    buckets = {}
+    for p in participant_rows:
+        doc_total = doc_totals.get(p['document_id'])
+        if not doc_total:
+            continue
+        b = buckets.setdefault(p['employee_id'], {
+            'group_id': p['employee_id'],
+            'group_label': p['employee__full_name'],
+            'quantity': Decimal('0'), 'amount': Decimal('0'), 'profit': Decimal('0'),
+            'document_ids': set(),
+        })
+        b['quantity'] += doc_total['total_quantity'] or Decimal('0')
+        b['amount'] += doc_total['amount'] or Decimal('0')
+        if has_profit:
+            b['profit'] += doc_total.get('profit') or Decimal('0')
+        b['document_ids'].add(p['document_id'])
+
+    rows = []
+    for b in buckets.values():
+        b['documents_count'] = len(b.pop('document_ids'))
+        if not has_profit:
+            b.pop('profit', None)
+        rows.append(b)
+    rows.sort(key=lambda r: r['amount'], reverse=True)
+    return rows
+
+
+def _aggregate_universal_filter(qs, group_by, has_profit):
+    """
+    Единственная точка агрегации для universal_filter — параметризована
+    group_by/has_profit, а НЕ скопирована 6 раз под каждый вариант (см.
+    UNIVERSAL_FILTER_GROUP_FIELDS выше и план фичи). Фиксированные варианты
+    таблицы, которые видит пользователь, — чисто фронтенд-конфиг
+    (universalFilterColumns.ts::getColumnsFor), бэкенд всегда отдаёт одну и ту
+    же форму строки (group_id/group_label + quantity/amount/[profit]/documents_count),
+    либо построчный вид при group_by='none'.
+    """
+    net_expr, profit_expr = _universal_filter_expressions()
+
+    if group_by == 'employee':
+        return _aggregate_universal_filter_by_employee(qs, has_profit)
+
+    if group_by == 'none':
+        annotate_kwargs = {'net': net_expr}
+        if has_profit:
+            annotate_kwargs['profit'] = profit_expr
+        rows_qs = (
+            qs.annotate(**annotate_kwargs)
+              .select_related('document', 'document__counterparty', 'document__warehouse', 'document__warehouse_to', 'product')
+              .order_by('document__date', 'document_id', 'line_no')
+        )
+        rows = []
+        for item in rows_qs.iterator(chunk_size=500):
+            doc = item.document
+            row = {
+                'id': item.id,
+                'document_id': doc.id,
+                'document_number': doc.number,
+                'document_type': doc.document_type,
+                'date': doc.date,
+                'product_id': item.product_id,
+                'product_name': item.product.name,
+                'counterparty_id': doc.counterparty_id,
+                'counterparty_name': doc.counterparty.name if doc.counterparty_id else '',
+                'warehouse_id': doc.warehouse_id,
+                'warehouse_name': doc.warehouse.name if doc.warehouse_id else '',
+                'quantity': item.quantity,
+                'price': item.price,
+                'amount': item.net,
+            }
+            if has_profit:
+                row['profit'] = item.profit
+            rows.append(row)
+        return rows
+
+    field, label_field = UNIVERSAL_FILTER_GROUP_FIELDS[group_by]
+    values_kwargs = {'group_id': F(field)}
+    if label_field:
+        values_kwargs['group_label'] = F(label_field)
+
+    # ✅ 'total_quantity', не 'quantity' — см. комментарий в
+    # _aggregate_universal_filter_by_employee выше; переименовываем обратно в
+    # 'quantity' в rows ниже, чтобы форма ответа не отличалась от плоского режима.
+    aggregates = {
+        'total_quantity': Sum('quantity'),
+        'amount': Sum(net_expr),
+        'documents_count': Count('document_id', distinct=True),
+    }
+    if has_profit:
+        aggregates['profit'] = Sum(profit_expr)
+
+    rows = list(qs.values(**values_kwargs).annotate(**aggregates).order_by('-amount'))
+    for r in rows:
+        r['quantity'] = r.pop('total_quantity')
+
+    if group_by == 'document_type':
+        type_labels = dict(Document.Type.choices)
+        for r in rows:
+            r['group_label'] = type_labels.get(r['group_id'], r['group_id'])
+
+    return rows
+
+
+def _universal_filter_totals(qs, has_profit):
+    net_expr, profit_expr = _universal_filter_expressions()
+    # ✅ 'total_quantity', не 'quantity' — см. _aggregate_universal_filter_by_employee.
+    aggregates = {
+        'total_quantity': Sum('quantity'),
+        'amount': Sum(net_expr),
+        'documents_count': Count('document_id', distinct=True),
+    }
+    if has_profit:
+        aggregates['profit'] = Sum(profit_expr)
+    totals = qs.aggregate(**aggregates)
+    totals['quantity'] = totals.pop('total_quantity')
+    return {k: (v if v is not None else Decimal('0')) for k, v in totals.items()}
+
+
 def _main_image(product):
     # ✅ product.images должен быть уже prefetch_related() на вызывающей стороне —
     # иначе .all() тут даёт N+1 (один запрос картинок на каждый товар).
@@ -65,7 +272,27 @@ def _main_image(product):
     return thumbnail_url, image_url
 
 
-def _new_bucket(product):
+def _new_bucket(product, light=False):
+    """
+    ✅ light=True — для ProductsListPage.tsx (колонка "Оборот"): у неё УЖЕ есть
+    имя/sku/категория/бренд/фото товара из products-light/list_light_images
+    (см. ProductsListPage.tsx), эта же информация в каждой строке продукт-
+    оборота была чистым дублированием — раздувала ответ (по ~2999 товарам —
+    сотни КБ лишнего JSON) и заставляла _main_image() лезть в кэш превью на
+    КАЖДЫЙ товар с фото, хотя результат нигде не использовался. ProductTurnoverPage.tsx
+    (сам отчёт "Оборот товаров") эти поля реально показывает/использует для
+    пикера — там light не передаётся, ответ остаётся полным.
+    """
+    flows = {
+        'opening_qty': Decimal('0'), 'opening_value': Decimal('0'),
+        'in_qty': Decimal('0'), 'in_value': Decimal('0'),
+        'return_in_qty': Decimal('0'), 'return_in_value': Decimal('0'),
+        'out_qty': Decimal('0'), 'out_before_discount': Decimal('0'), 'out_discount': Decimal('0'), 'out_after_discount': Decimal('0'),
+        'return_out_qty': Decimal('0'), 'return_out_value': Decimal('0'),
+        'move_qty': Decimal('0'), 'move_value': Decimal('0'),
+    }
+    if light:
+        return {'id': product.id, 'cost_price': product.cost_price, **flows}
     thumbnail_url, image_url = _main_image(product)
     return {
         'id': product.id,
@@ -79,12 +306,7 @@ def _new_bucket(product):
         'cost_price': product.cost_price,
         'thumbnail_url': thumbnail_url,
         'image_url': image_url,
-        'opening_qty': Decimal('0'), 'opening_value': Decimal('0'),
-        'in_qty': Decimal('0'), 'in_value': Decimal('0'),
-        'return_in_qty': Decimal('0'), 'return_in_value': Decimal('0'),
-        'out_qty': Decimal('0'), 'out_before_discount': Decimal('0'), 'out_discount': Decimal('0'), 'out_after_discount': Decimal('0'),
-        'return_out_qty': Decimal('0'), 'return_out_value': Decimal('0'),
-        'move_qty': Decimal('0'), 'move_value': Decimal('0'),
+        **flows,
     }
 
 
@@ -106,6 +328,242 @@ def _closing(b):
     )
     closing_value = closing_qty * b['cost_price']
     return closing_qty, closing_value
+
+
+def _compute_product_card_rows(request, product, wh_set, date_from, date_to):
+    """
+    Общий движок "карточки товара" — движения (DocumentItem) ОДНОГО товара за
+    период с бегущим остатком (кол-во/сумма), вынесен из product_turnover_detail,
+    чтобы им же пользовался новый отдельный отчёт product_card (см. ProductCardPage.tsx)
+    с реальной постраничной выдачей и доп. фильтрами, без дублирования этой логики
+    (снапшот-оптимизация начального остатка, мульти-склад через wh_set и т.д.).
+    """
+    date_from_obj = datetime.date.fromisoformat(date_from)
+    thumbnail_url, image_url = _main_image(product)
+
+    # ✅ Как и в product_turnover — берём снапшот (см. WarehouseProductSnapshot,
+    # создаётся при закрытии дня) отдельно по каждому складу из wh_set вместо
+    # полного скана истории до date_from. Если для склада снапшота нет (ни разу
+    # не закрывали) — старое поведение, полный скан для этого склада.
+    opening_qty = Decimal('0')
+
+    for warehouse_id in wh_set:
+        snapshot_date = (
+            WarehouseProductSnapshot.objects
+            .filter(warehouse_id=warehouse_id, product_id=product.id, date__lt=date_from_obj)
+            .order_by('-date')
+            .values_list('date', flat=True)
+            .first()
+        )
+        if snapshot_date:
+            snap = WarehouseProductSnapshot.objects.filter(
+                warehouse_id=warehouse_id, product_id=product.id, date=snapshot_date
+            ).first()
+            if snap:
+                opening_qty += snap.quantity
+                # ✅ opening_value не берём из снапшота — см. ниже, "Начало"
+                # всегда пересчитывается как opening_qty × текущая себестоимость.
+            date_filter = Q(document__date__gt=snapshot_date, document__date__lt=date_from)
+        else:
+            date_filter = Q(document__date__lt=date_from)
+
+        items_qs = (
+            DocumentItem.objects
+            .filter(
+                product_id=product.id,
+                document__status='posted',
+                document__document_type__in=TURNOVER_TYPES,
+            )
+            .filter(date_filter)
+            .filter(Q(document__warehouse_id=warehouse_id) | Q(document__warehouse_to_id=warehouse_id))
+            .select_related('document')
+        )
+        for item in items_qs.iterator():
+            doc = item.document
+            qty = item.quantity
+            # ✅ По просьбе пользователя: "Начало"/"Конец" — ВСЕГДА
+            # qty × текущая себестоимость (см. ниже opening_value=...),
+            # поэтому здесь достаточно накопить только количество.
+            if doc.document_type == 'in' and doc.warehouse_id == warehouse_id:
+                opening_qty += qty
+            elif doc.document_type == 'return_in' and doc.warehouse_id == warehouse_id:
+                opening_qty += qty
+            elif doc.document_type == 'out' and doc.warehouse_id == warehouse_id:
+                opening_qty -= qty
+            elif doc.document_type == 'return_out' and doc.warehouse_id == warehouse_id:
+                opening_qty -= qty
+            elif doc.document_type == 'move':
+                if doc.warehouse_id == warehouse_id:
+                    opening_qty -= qty
+                if doc.warehouse_to_id == warehouse_id:
+                    opening_qty += qty
+
+    opening_value = opening_qty * product.cost_price
+
+    period_items = (
+        DocumentItem.objects
+        .filter(
+            product_id=product.id,
+            document__status='posted',
+            document__document_type__in=TURNOVER_TYPES,
+            document__date__gte=date_from,
+            document__date__lte=date_to,
+        )
+        .filter(Q(document__warehouse_id__in=wh_set) | Q(document__warehouse_to_id__in=wh_set))
+        .select_related('document', 'document__counterparty', 'document__counterparty__agent', 'document__warehouse', 'document__warehouse_to')
+        .order_by('document__date', 'document_id', 'line_no')
+    )
+
+    rows = []
+    balance_qty = opening_qty
+    turnover = {'in_qty': Decimal('0'), 'in_value': Decimal('0'), 'return_qty': Decimal('0'), 'return_value': Decimal('0'), 'out_qty': Decimal('0'), 'out_value': Decimal('0')}
+
+    # ✅ По просьбе пользователя: "Приход"/"Расход" ниже — РЕАЛЬНЫЕ суммы по
+    # факту документа (gross/net от item.price), не себестоимость. А вот
+    # "Остаток" (balance_sum на каждой строке, и итоговый end_value) —
+    # ВСЕГДА qty × текущая себестоимость (product.cost_price), пересчитывается
+    # заново на каждой строке, а не накапливается — поэтому эти два ряда
+    # цифр сознательно не обязаны биться "Начало+Приход-Расход=Остаток" по
+    # сумме (только по количеству), см. _closing() в product_turnover выше.
+    for item in period_items:
+        doc = item.document
+        qty = item.quantity
+        price = item.price
+        gross = qty * price
+        discount_amt = gross * item.discount_percent / Decimal('100')
+        net = gross - discount_amt
+
+        in_qty = out_qty = return_qty = Decimal('0')
+        value = Decimal('0')
+
+        if doc.document_type == 'in' and doc.warehouse_id in wh_set:
+            in_qty = qty
+            value = gross
+            balance_qty += qty
+            turnover['in_qty'] += qty
+            turnover['in_value'] += gross
+        elif doc.document_type == 'return_in' and doc.warehouse_id in wh_set:
+            return_qty = qty
+            value = gross
+            balance_qty += qty
+            turnover['return_qty'] += qty
+            turnover['return_value'] += gross
+        elif doc.document_type == 'out' and doc.warehouse_id in wh_set:
+            out_qty = qty
+            value = net
+            balance_qty -= qty
+            turnover['out_qty'] += qty
+            turnover['out_value'] += net
+        elif doc.document_type == 'return_out' and doc.warehouse_id in wh_set:
+            out_qty = qty
+            value = gross
+            balance_qty -= qty
+            turnover['out_qty'] += qty
+            turnover['out_value'] += gross
+        elif doc.document_type == 'move':
+            if doc.warehouse_id in wh_set:
+                out_qty = qty
+                value = gross
+                balance_qty -= qty
+            if doc.warehouse_to_id in wh_set:
+                in_qty = qty
+                value = gross
+                balance_qty += qty
+
+        balance_value = balance_qty * product.cost_price
+
+        rows.append({
+            'id': item.id,
+            'date': doc.date,
+            'document_id': doc.id,
+            'document_number': doc.number,
+            'document_type': doc.document_type,
+            'partner': doc.counterparty.name if doc.counterparty_id else '',
+            # ✅ Только для фильтров product_card (партнёр/агент) — старый
+            # product_turnover_detail на фронте эти два поля просто не читает.
+            'counterparty_id': doc.counterparty_id,
+            'agent_id': doc.counterparty.agent_id if doc.counterparty_id and doc.counterparty.agent_id else None,
+            'note': doc.note,
+            'price': price,
+            'discount_percent': item.discount_percent,
+            'discount_amount': discount_amt,
+            'in_qty': in_qty,
+            'in_sum': value if in_qty else Decimal('0'),
+            'return_qty': return_qty,
+            'return_sum': value if return_qty else Decimal('0'),
+            'out_qty': out_qty,
+            'out_sum': value if out_qty else Decimal('0'),
+            'balance_qty': balance_qty,
+            'balance_sum': balance_value,
+        })
+
+    end_qty = balance_qty
+    end_value = end_qty * product.cost_price
+
+    return {
+        'product_id': product.id,
+        'product_name': product.name,
+        'product_sku': product.sku,
+        'product_unit': product.unit.name if product.unit_id else '',
+        'product_cost_price': product.cost_price,
+        'product_thumbnail_url': thumbnail_url,
+        'product_image_url': image_url,
+        'start_quantity': opening_qty,
+        'start_value': opening_value,
+        'turnover': turnover,
+        'end': {'quantity': end_qty, 'value': end_value},
+        'rows': rows,
+    }
+
+
+def _filter_product_card_rows(rows, partner_id, agent_id, doc_type, search):
+    if partner_id:
+        rows = [r for r in rows if r['counterparty_id'] == int(partner_id)]
+    if agent_id:
+        rows = [r for r in rows if r['agent_id'] == int(agent_id)]
+    if doc_type:
+        rows = [r for r in rows if r['document_type'] == doc_type]
+    if search:
+        s = search.lower()
+        rows = [r for r in rows if s in (r['document_number'] or '').lower() or s in (r['note'] or '').lower()]
+    return rows
+
+
+def _product_card_all(request, wh_set, date_from, date_to, partner_id, agent_id, doc_type, search, show_zero):
+    """
+    Режим "без выбранного товара" — карточки СРАЗУ по всем товарам, у которых
+    есть движение (DocumentItem) за период на нужных складах (как
+    ProductTurnoverPage.tsx — один экран со всеми товарами сразу). ✅ Кандидаты
+    берутся ОДНИМ дешёвым запросом (distinct product_id за период) — тяжёлая
+    per-товар часть (_compute_product_card_rows, со снапшот-оптимизацией
+    начального остатка) прогоняется только по реально задействованным товарам,
+    а не по всему каталогу.
+    """
+    from accounting.models import Product
+
+    candidate_ids = list(
+        DocumentItem.objects
+        .filter(
+            document__status='posted',
+            document__document_type__in=TURNOVER_TYPES,
+            document__date__gte=date_from,
+            document__date__lte=date_to,
+        )
+        .filter(Q(document__warehouse_id__in=wh_set) | Q(document__warehouse_to_id__in=wh_set))
+        .values_list('product_id', flat=True)
+        .distinct()
+    )
+    products = Product.objects.filter(id__in=candidate_ids).select_related('unit').prefetch_related('images').order_by('name')
+
+    cards = []
+    for product in products:
+        result = _compute_product_card_rows(request, product, wh_set, date_from, date_to)
+        rows = _filter_product_card_rows(result.pop('rows'), partner_id, agent_id, doc_type, search)
+        if not rows and not show_zero:
+            continue
+        result['rows'] = rows
+        cards.append(result)
+    return cards
 
 
 class ReportViewSet(viewsets.ViewSet):
@@ -454,6 +912,9 @@ class ReportViewSet(viewsets.ViewSet):
         if not wh_set:
             return Response([])
 
+        # ✅ ProductsListPage.tsx передаёт light=1 — см. докстринг _new_bucket.
+        light = request.query_params.get('light') in ('1', 'true', 'True')
+
         category_param = request.query_params.get('category')
         category_ids = None
         if category_param:
@@ -481,13 +942,14 @@ class ReportViewSet(viewsets.ViewSet):
                 snap_qs = (
                     WarehouseProductSnapshot.objects
                     .filter(warehouse_id=warehouse_id, date=snapshot_date)
-                    .select_related('product', 'product__unit', 'product__category', 'product__brand')
-                    .prefetch_related('product__images')
+                    .select_related('product', *(() if light else ('product__unit', 'product__category', 'product__brand')))
                 )
+                if not light:
+                    snap_qs = snap_qs.prefetch_related('product__images')
                 if category_ids:
                     snap_qs = snap_qs.filter(product__category_id__in=category_ids)
                 for snap in snap_qs.iterator(chunk_size=500):
-                    b = balance.setdefault(snap.product.id, _new_bucket(snap.product))
+                    b = balance.setdefault(snap.product.id, _new_bucket(snap.product, light=light))
                     b['opening_qty'] += snap.quantity
                     # ✅ opening_value НЕ берём из снапшота — см. _closing() выше,
                     # оно всегда пересчитывается как opening_qty × текущая
@@ -504,16 +966,17 @@ class ReportViewSet(viewsets.ViewSet):
                 )
                 .filter(date_filter)
                 .filter(Q(document__warehouse_id=warehouse_id) | Q(document__warehouse_to_id=warehouse_id))
-                .select_related('document', 'product', 'product__unit', 'product__category', 'product__brand')
-                .prefetch_related('product__images')
+                .select_related('document', 'product', *(() if light else ('product__unit', 'product__category', 'product__brand')))
             )
+            if not light:
+                items_qs = items_qs.prefetch_related('product__images')
             if category_ids:
                 items_qs = items_qs.filter(product__category_id__in=category_ids)
 
             for item in items_qs.iterator(chunk_size=500):
                 doc = item.document
                 product = item.product
-                b = balance.setdefault(product.id, _new_bucket(product))
+                b = balance.setdefault(product.id, _new_bucket(product, light=light))
 
                 qty = item.quantity
                 gross = qty * item.price
@@ -581,19 +1044,67 @@ class ReportViewSet(viewsets.ViewSet):
 
         return Response(data)
 
-    @action(detail=False, methods=['get'], url_path='product-turnover-detail')
-    def product_turnover_detail(self, request):
+    def _load_product_for_card(self, request):
+        """Общая валидация product/date_from/date_to/склады — используется
+        и product_turnover_detail, и product_card."""
         product_id = request.query_params.get('product')
         date_from = request.query_params.get('date_from')
         date_to = request.query_params.get('date_to')
         if not product_id or not date_from or not date_to:
-            return Response({'detail': 'Укажите product, date_from и date_to'}, status=400)
+            return None, Response({'detail': 'Укажите product, date_from и date_to'}, status=400)
 
-        date_from_obj = datetime.date.fromisoformat(date_from)
+        wh_set = _resolve_warehouse_ids(request)
+        if not wh_set:
+            return None, Response({'detail': 'Нет доступных складов'}, status=400)
+
+        from accounting.models import Product
+        try:
+            product = Product.objects.select_related('unit').prefetch_related('images').get(pk=product_id)
+        except Product.DoesNotExist:
+            return None, Response({'detail': 'Товар не найден'}, status=404)
+
+        return (product, wh_set, date_from, date_to), None
+
+    @action(detail=False, methods=['get'], url_path='product-turnover-detail')
+    def product_turnover_detail(self, request):
+        ctx, error = self._load_product_for_card(request)
+        if error:
+            return error
+        product, wh_set, date_from, date_to = ctx
+        return Response(_compute_product_card_rows(request, product, wh_set, date_from, date_to))
+
+    @action(detail=False, methods=['get'], url_path='product-card')
+    def product_card(self, request):
+        """
+        Карточка товара (отдельный отчёт "Карточка товара", см. ProductCardPage.tsx) —
+        те же движения/бегущий остаток, что и product-turnover-detail (общий движок —
+        _compute_product_card_rows). ✅ Товар (product) НЕОБЯЗАТЕЛЕН — как и
+        ProductTurnoverPage.tsx, по умолчанию показывает карточки СРАЗУ по всем
+        товарам с движением за период (без пагинации, один экран); ?product=<id>
+        сужает до одного товара. Доп. фильтры (контрагент, агент контрагента, тип
+        документа, поиск по номеру/примечанию) сужают только СПИСОК показанных
+        строк — бегущий остаток всё равно посчитан по ПОЛНОЙ истории движений,
+        это реальный остаток на складе, а не "остаток среди отфильтрованных строк".
+        """
+        date_from = request.query_params.get('date_from')
+        date_to   = request.query_params.get('date_to')
+        if not date_from or not date_to:
+            return Response({'detail': 'Укажите date_from и date_to'}, status=400)
 
         wh_set = _resolve_warehouse_ids(request)
         if not wh_set:
             return Response({'detail': 'Нет доступных складов'}, status=400)
+
+        partner_id = request.query_params.get('partner')
+        agent_id   = request.query_params.get('agent')
+        doc_type   = request.query_params.get('document_type')
+        search     = request.query_params.get('search')
+        product_id = request.query_params.get('product')
+
+        if not product_id:
+            show_zero = request.query_params.get('show_zero', 'false') == 'true'
+            cards = _product_card_all(request, wh_set, date_from, date_to, partner_id, agent_id, doc_type, search, show_zero)
+            return Response({'cards': cards})
 
         from accounting.models import Product
         try:
@@ -601,173 +1112,111 @@ class ReportViewSet(viewsets.ViewSet):
         except Product.DoesNotExist:
             return Response({'detail': 'Товар не найден'}, status=404)
 
-        thumbnail_url, image_url = _main_image(product)
+        result = _compute_product_card_rows(request, product, wh_set, date_from, date_to)
+        result['rows'] = _filter_product_card_rows(result.pop('rows'), partner_id, agent_id, doc_type, search)
+        return Response({'cards': [result]})
 
-        # ✅ Как и в product_turnover — берём снапшот (см. WarehouseProductSnapshot,
-        # создаётся при закрытии дня) отдельно по каждому складу из wh_set вместо
-        # полного скана истории до date_from. Если для склада снапшота нет (ни разу
-        # не закрывали) — старое поведение, полный скан для этого склада.
-        opening_qty = Decimal('0')
+    @action(detail=False, methods=['get'], url_path='universal-filter')
+    def universal_filter(self, request):
+        """
+        Универсальный фильтр по документам (UniversalFilterPage.tsx) — гибкий
+        отчёт-конструктор: тип документа, склад(-ы)/филиал (через
+        _resolve_warehouse_ids — та же scope-семантика, что у всех остальных
+        отчётов), контрагент, сотрудник-участник, товар, категория, текстовый
+        поиск, с фиксированным набором вариантов группировки (group_by).
 
-        for warehouse_id in wh_set:
-            snapshot_date = (
-                WarehouseProductSnapshot.objects
-                .filter(warehouse_id=warehouse_id, product_id=product_id, date__lt=date_from_obj)
-                .order_by('-date')
-                .values_list('date', flat=True)
-                .first()
-            )
-            if snapshot_date:
-                snap = WarehouseProductSnapshot.objects.filter(
-                    warehouse_id=warehouse_id, product_id=product_id, date=snapshot_date
-                ).first()
-                if snap:
-                    opening_qty += snap.quantity
-                    # ✅ opening_value не берём из снапшота — см. ниже, "Начало"
-                    # всегда пересчитывается как opening_qty × текущая себестоимость.
-                date_filter = Q(document__date__gt=snapshot_date, document__date__lt=date_from)
-            else:
-                date_filter = Q(document__date__lt=date_from)
+        ✅ Один параметризованный движок агрегации (_aggregate_universal_filter),
+        а не отдельная копия python-кода на каждый вариант таблицы — фиксированные
+        варианты вывода живут на фронте (universalFilterColumns.ts), бэкенд
+        всегда отдаёт одну и ту же форму ответа.
 
-            items_qs = (
-                DocumentItem.objects
-                .filter(
-                    product_id=product_id,
-                    document__status='posted',
-                    document__document_type__in=TURNOVER_TYPES,
-                )
-                .filter(date_filter)
-                .filter(Q(document__warehouse_id=warehouse_id) | Q(document__warehouse_to_id=warehouse_id))
-                .select_related('document')
-            )
-            for item in items_qs.iterator():
-                doc = item.document
-                qty = item.quantity
-                # ✅ По просьбе пользователя: "Начало"/"Конец" — ВСЕГДА
-                # qty × текущая себестоимость (см. ниже opening_value=...),
-                # поэтому здесь достаточно накопить только количество.
-                if doc.document_type == 'in' and doc.warehouse_id == warehouse_id:
-                    opening_qty += qty
-                elif doc.document_type == 'return_in' and doc.warehouse_id == warehouse_id:
-                    opening_qty += qty
-                elif doc.document_type == 'out' and doc.warehouse_id == warehouse_id:
-                    opening_qty -= qty
-                elif doc.document_type == 'return_out' and doc.warehouse_id == warehouse_id:
-                    opening_qty -= qty
-                elif doc.document_type == 'move':
-                    if doc.warehouse_id == warehouse_id:
-                        opening_qty -= qty
-                    if doc.warehouse_to_id == warehouse_id:
-                        opening_qty += qty
+        ✅ domain зарезервирован под будущие домены отчёта (проводки/справочники) —
+        пока принимает только 'documents'.
+        """
+        domain = request.query_params.get('domain', 'documents')
+        if domain != 'documents':
+            return Response({'detail': f"Домен '{domain}' пока не поддерживается"}, status=400)
 
-        opening_value = opening_qty * product.cost_price
+        date_from = request.query_params.get('date_from')
+        date_to = request.query_params.get('date_to')
+        if not date_from or not date_to:
+            return Response({'detail': 'Укажите date_from и date_to'}, status=400)
 
-        period_items = (
-            DocumentItem.objects
-            .filter(
-                product_id=product_id,
-                document__status='posted',
-                document__document_type__in=TURNOVER_TYPES,
-                document__date__gte=date_from,
-                document__date__lte=date_to,
-            )
-            .filter(Q(document__warehouse_id__in=wh_set) | Q(document__warehouse_to_id__in=wh_set))
-            .select_related('document', 'document__counterparty', 'document__warehouse', 'document__warehouse_to')
-            .order_by('document__date', 'document_id', 'line_no')
+        group_by = request.query_params.get('group_by', 'none')
+        if group_by not in ('none', 'product', 'counterparty', 'employee', 'warehouse', 'document_type'):
+            return Response({'detail': f"Недопустимое group_by: {group_by}"}, status=400)
+
+        status_param = request.query_params.get('status', 'posted')
+        if status_param not in ('posted', 'draft', 'all'):
+            return Response({'detail': f"Недопустимый status: {status_param}"}, status=400)
+
+        effective_types = _parse_document_types(request.query_params.get('document_type'))
+
+        wh_set = _resolve_warehouse_ids(request)
+        if not wh_set:
+            return Response({'domain': 'documents', 'group_by': group_by, 'has_profit': False, 'rows': [], 'totals': {}})
+
+        qs = DocumentItem.objects.filter(
+            document__document_type__in=effective_types,
+            document__date__gte=date_from,
+            document__date__lte=date_to,
         )
+        if status_param != 'all':
+            qs = qs.filter(document__status=status_param)
 
-        rows = []
-        balance_qty = opening_qty
-        turnover = {'in_qty': Decimal('0'), 'in_value': Decimal('0'), 'return_qty': Decimal('0'), 'return_value': Decimal('0'), 'out_qty': Decimal('0'), 'out_value': Decimal('0')}
+        # ✅ Видимость по складу — источник ИЛИ склад-получатель (для "Перемещения"),
+        # тот же паттерн, что в product_turnover/product_card выше.
+        qs = qs.filter(Q(document__warehouse_id__in=wh_set) | Q(document__warehouse_to_id__in=wh_set))
 
-        # ✅ По просьбе пользователя: "Приход"/"Расход" ниже — РЕАЛЬНЫЕ суммы по
-        # факту документа (gross/net от item.price), не себестоимость. А вот
-        # "Остаток" (balance_sum на каждой строке, и итоговый end_value) —
-        # ВСЕГДА qty × текущая себестоимость (product.cost_price), пересчитывается
-        # заново на каждой строке, а не накапливается — поэтому эти два ряда
-        # цифр сознательно не обязаны биться "Начало+Приход-Расход=Остаток" по
-        # сумме (только по количеству), см. _closing() в product_turnover выше.
-        for item in period_items:
-            doc = item.document
-            qty = item.quantity
-            price = item.price
-            gross = qty * price
-            discount_amt = gross * item.discount_percent / Decimal('100')
-            net = gross - discount_amt
+        warehouse_to_ids = _parse_ids(request.query_params.get('warehouse_to'))
+        if warehouse_to_ids:
+            # ✅ Доп. сужение внутри уже видимого по scope набора — НЕ повторное
+            # пересечение со scope (тот уже применён строкой выше через wh_set).
+            qs = qs.filter(document__warehouse_to_id__in=warehouse_to_ids)
 
-            in_qty = out_qty = return_qty = Decimal('0')
-            value = Decimal('0')
+        counterparty_ids = _parse_ids(request.query_params.get('counterparty'))
+        if counterparty_ids:
+            qs = qs.filter(document__counterparty_id__in=counterparty_ids)
 
-            if doc.document_type == 'in' and doc.warehouse_id in wh_set:
-                in_qty = qty
-                value = gross
-                balance_qty += qty
-                turnover['in_qty'] += qty
-                turnover['in_value'] += gross
-            elif doc.document_type == 'return_in' and doc.warehouse_id in wh_set:
-                return_qty = qty
-                value = gross
-                balance_qty += qty
-                turnover['return_qty'] += qty
-                turnover['return_value'] += gross
-            elif doc.document_type == 'out' and doc.warehouse_id in wh_set:
-                out_qty = qty
-                value = net
-                balance_qty -= qty
-                turnover['out_qty'] += qty
-                turnover['out_value'] += net
-            elif doc.document_type == 'return_out' and doc.warehouse_id in wh_set:
-                out_qty = qty
-                value = gross
-                balance_qty -= qty
-                turnover['out_qty'] += qty
-                turnover['out_value'] += gross
-            elif doc.document_type == 'move':
-                if doc.warehouse_id in wh_set:
-                    out_qty = qty
-                    value = gross
-                    balance_qty -= qty
-                if doc.warehouse_to_id in wh_set:
-                    in_qty = qty
-                    value = gross
-                    balance_qty += qty
+        product_ids = _parse_ids(request.query_params.get('product'))
+        if product_ids:
+            qs = qs.filter(product_id__in=product_ids)
 
-            balance_value = balance_qty * product.cost_price
+        category_ids = _parse_ids(request.query_params.get('category'))
+        if category_ids:
+            qs = qs.filter(product__category_id__in=category_ids)
 
-            rows.append({
-                'date': doc.date,
-                'document_id': doc.id,
-                'document_number': doc.number,
-                'document_type': doc.document_type,
-                'partner': doc.counterparty.name if doc.counterparty_id else '',
-                'note': doc.note,
-                'price': price,
-                'discount_percent': item.discount_percent,
-                'discount_amount': discount_amt,
-                'in_qty': in_qty,
-                'in_sum': value if in_qty else Decimal('0'),
-                'return_qty': return_qty,
-                'return_sum': value if return_qty else Decimal('0'),
-                'out_qty': out_qty,
-                'out_sum': value if out_qty else Decimal('0'),
-                'balance_qty': balance_qty,
-                'balance_sum': balance_value,
-            })
+        search = request.query_params.get('search')
+        if search:
+            qs = qs.filter(Q(document__number__icontains=search) | Q(document__note__icontains=search))
 
-        end_qty = balance_qty
-        end_value = end_qty * product.cost_price
+        employee_ids = _parse_ids(request.query_params.get('employee'))
+        if employee_ids:
+            # ✅ Резолвим id документов ЗАРАНЕЕ вместо join document__participants__
+            # employee_id__in — см. _aggregate_universal_filter_by_employee выше,
+            # прямой join размножил бы строки DocumentItem по числу совпавших
+            # участников документа.
+            doc_ids_by_employee = DocumentParticipant.objects.filter(
+                employee_id__in=employee_ids
+            ).values_list('document_id', flat=True)
+            qs = qs.filter(document_id__in=doc_ids_by_employee)
+
+        # ✅ Agent Scoping — роль "Агент" видит только свои накладные (та же
+        # дыра, что DocumentViewSet.get_queryset уже закрывает для обычного
+        # списка документов, см. document_views.py) — здесь counterparty/
+        # employee стали полноценными измерениями фильтра/группировки, риск
+        # утечки чужих данных тот же.
+        qs = apply_agent_scope(qs, request.user, agent_field='document__counterparty__agent__employee__user')
+
+        has_profit = bool(effective_types) and set(effective_types).issubset(SALES_PROFIT_TYPES)
+
+        rows = _aggregate_universal_filter(qs, group_by, has_profit)
+        totals = _universal_filter_totals(qs, has_profit)
 
         return Response({
-            'product_id': product.id,
-            'product_name': product.name,
-            'product_sku': product.sku,
-            'product_unit': product.unit.name if product.unit_id else '',
-            'product_cost_price': product.cost_price,
-            'product_thumbnail_url': thumbnail_url,
-            'product_image_url': image_url,
-            'start_quantity': opening_qty,
-            'start_value': opening_value,
-            'turnover': turnover,
-            'end': {'quantity': end_qty, 'value': end_value},
+            'domain': 'documents',
+            'group_by': group_by,
+            'has_profit': has_profit,
             'rows': rows,
+            'totals': totals,
         })

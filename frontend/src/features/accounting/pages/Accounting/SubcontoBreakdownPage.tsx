@@ -296,7 +296,7 @@ const SubcontoBreakdownPage = () => {
           setSelectedCell({ rowIdx, colIdx: prev });
           scrollToCell(rowIdx, prev);
         }
-      } else if (e.key === "Enter" || e.key === "F2") {
+      } else if (e.key === "Enter") {
         e.preventDefault();
         const row = flatRows[rowIdx];
         if (row) openCard(row);
@@ -470,7 +470,7 @@ const SubcontoBreakdownPage = () => {
             <p>
               <b>{t("AccountCard")}</b> — детализация счёта по субконто: по каждому значению (например, по каждому
               контрагенту) — начальное сальдо, обороты за период и конечное сальдо. Двойной клик по строке (или
-              Enter/F2 на выделенной) открывает полную карточку — список всех проводок именно по этому значению с
+              Enter на выделенной) открывает полную карточку — список всех проводок именно по этому значению с
               бегущим остатком.
             </p>
             <ul>

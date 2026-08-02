@@ -1,4 +1,6 @@
-import React from "react";
+import React, { useEffect, useRef } from "react";
+import { Clock } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { LanguageSwitcher } from "../ui/LanguageSwitcher";
 import { ThemeToggle } from "../ui/ThemeToggle";
 import { playAside2Sound } from "../../core/utils/sound";
@@ -6,6 +8,38 @@ import { useCompany } from "../../core/context/CompanyContext";
 import { UserProfileBlock } from "../ui/UserProfileBlock";
 import { ExchangeRateWidget } from "../ui/ExchangeRateWidget";
 import { AlertBell } from "../ui/AlertBell";
+import { useClockStore } from "../../core/store/clockStore";
+
+// ✅ Плавающие часы (FloatingClock.tsx, живут в AppLayout.tsx поверх всего
+// приложения) — эта кнопка только переключает видимость (useClockStore) и,
+// при ВКЛЮЧЕНИИ, передаёт свои координаты, чтобы часы появились ровно под
+// кнопкой (см. clockStore.ts::toggle), а не там, где их в прошлый раз бросили.
+const ClockToggleButton = () => {
+  const { t } = useTranslation();
+  const { visible, toggle } = useClockStore();
+  const btnRef = useRef<HTMLButtonElement>(null);
+
+  const handleClick = () => {
+    playAside2Sound();
+    const rect = btnRef.current?.getBoundingClientRect();
+    const CLOCK_SIZE = 132;
+    const anchor = rect
+      ? { x: Math.max(Math.min(rect.left, window.innerWidth - CLOCK_SIZE - 8), 8), y: rect.bottom + 8 }
+      : undefined;
+    toggle(anchor);
+  };
+
+  return (
+    <button
+      ref={btnRef}
+      onClick={handleClick}
+      className={`p-2 transition-colors rounded hover:bg-slate-700 ${visible ? "text-indigo-400" : "text-gray-400 hover:text-white"}`}
+      title={t("FloatingClockToggle")}
+    >
+      <Clock className="w-5 h-5" />
+    </button>
+  );
+};
 
 import { useChat } from "../../features/chat/context/ChatContext";
 import { motion, AnimatePresence } from "framer-motion";
@@ -88,6 +122,17 @@ const Header: React.FC<HeaderProps> = ({ onToggleSidebar, onToggleSidebarRight }
   const displayLogo = activeBranch?.logo ?? currentCompany?.logo ?? currentCompany?.logo2;
   const displayName = activeBranch?.name ?? currentCompany?.name;
 
+  // Иконка вкладки браузера: лого выбранного филиала, иначе лого профиля компании
+  useEffect(() => {
+    let link = document.querySelector<HTMLLinkElement>('link[rel="icon"]');
+    if (!link) {
+      link = document.createElement("link");
+      link.rel = "icon";
+      document.head.appendChild(link);
+    }
+    link.href = displayLogo || "/favicon.svg";
+  }, [displayLogo]);
+
   return (
     <header className="relative h-16 border-b border-slate-500 bg-slate-800 dark:bg-slate-900 px-3 md:px-6 flex items-center justify-between print:hidden">
       {/* Левая часть: гамбургер + лого */}
@@ -137,6 +182,7 @@ const Header: React.FC<HeaderProps> = ({ onToggleSidebar, onToggleSidebarRight }
         {/* ✅ Колокольчик системных алертов (снапшот/остатки — см. accounting/tasks.py) */}
         <AlertBell />
         <ExchangeRateWidget />
+        <ClockToggleButton />
         <LanguageSwitcher />
         <ThemeToggle />
         <div className="w-[1px] h-6 bg-gray-700" />

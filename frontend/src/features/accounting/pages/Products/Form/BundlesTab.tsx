@@ -205,14 +205,14 @@ const BundlesTab = ({ productId }: BundlesTabProps) => {
                           type="number"
                           value={editPrice}
                           min="0"
-                          step="0.01"
+                          step="0.001"
                           onChange={(e) => setEditPrice(e.target.value)}
                           onKeyDown={(e) => e.key === "Enter" && handleUpdate()}
                           className="w-full text-right px-2 py-1 text-sm border border-indigo-400 rounded bg-white dark:bg-slate-700 outline-none focus:ring-2 focus:ring-indigo-500"
                         />
                       ) : (
                         <span className={`font-mono ${Number(b.default_price) === 0 ? "text-green-500" : ""}`}>
-                          {Number(b.default_price) === 0 ? "бесплатно" : Number(b.default_price).toLocaleString("ru-RU", { minimumFractionDigits: 2 })}
+                          {Number(b.default_price) === 0 ? "бесплатно" : Number(b.default_price).toLocaleString("ru-RU", { minimumFractionDigits: 3 })}
                         </span>
                       )}
                     </td>

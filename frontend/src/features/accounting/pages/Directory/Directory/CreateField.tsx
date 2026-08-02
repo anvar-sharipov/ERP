@@ -248,7 +248,7 @@ const CreateField = () => {
             }}
           />
           <Button
-            title={`F2 - ${t("Edit")}`}
+            title={`Enter - ${t("Edit")}`}
             disabled={!canPut}
             variant="1c"
             icon={<span>✏️</span>}

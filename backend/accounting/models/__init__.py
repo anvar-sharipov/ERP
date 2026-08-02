@@ -43,6 +43,9 @@ from .alert import SystemAlert
 from .document import DocumentParticipant, Document, DocumentItem
 from .company import UserScope
 from .currency import Currency, ExchangeRate
+from .revaluation import ProductRevaluation
+from .price_change_history import PriceChangeHistory
+from .trip import Trip
 
 
 # ПРОКСИ-ФУНКЦИИ ДЛЯ СОВМЕСТИМОСТИ С МИГРАЦИЯМИ
@@ -103,5 +106,8 @@ __all__ = [
     'DocumentParticipant', 'Document', 'DocumentItem',
     'UserScope',
     'ProductBundle', 'ProductBundle', 'VolumeDiscount', 'QuantityPromotion',
-    'Currency', 'ExchangeRate'
+    'Currency', 'ExchangeRate',
+    'ProductRevaluation',
+    'PriceChangeHistory',
+    'Trip',
 ]

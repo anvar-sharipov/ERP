@@ -9,6 +9,7 @@ import { usePageAccess } from "../../../../core/hooks/usePageAccess";
 import { useSidebar } from "../../../../core/context/SidebarRightContext";
 import { Table, type Column } from "../../../../components/ui/Table/Table";
 import { Button } from "../../../../components/ui/Button";
+import { Loader } from "../../../../components/ui/Loader";
 import { ConfirmModal } from "../../../../components/ui/Modal/ConfirmModal";
 import { RBACGuard } from "../../../../components/ui/RBACGuard";
 import { StatusBadge } from "../../../../components/ui/StatusBadge";
@@ -52,6 +53,7 @@ const ProductsListPage = () => {
   const [brandFilter, setBrandFilter] = useState<number | null>(null);
   const [activeFilter, setActiveFilter] = useState<"all" | "active" | "inactive">("all");
   const [lowStockOnly, setLowStockOnly] = useState(false);
+  const [reservedOnly, setReservedOnly] = useState(false);
   const { workBranch, workWarehouse, periodFrom, periodTo } = useDateStore();
 
   const goToTurnover = (item: any) => {
@@ -65,7 +67,7 @@ const ProductsListPage = () => {
       from: "products",
       ...(workWarehouse?.id ? { warehouse: String(workWarehouse.id) } : workBranch?.id ? { branch: String(workBranch.id) } : {}),
     });
-    navigate(`${ROUTES.APP.ACCOUNTING_PRODUCT_TURNOVER_DETAIL.replace(":id", String(item.id))}?${params.toString()}`);
+    navigate(`${ROUTES.APP.REPORTS_PRODUCT_TURNOVER_DETAIL.replace(":id", String(item.id))}?${params.toString()}`);
   };
 
   // ── запросы ─────────────────────────────────────────────────────────────────
@@ -80,15 +82,28 @@ const ProductsListPage = () => {
   // товар, иначе было бы N+1. Реагирует на branch/warehouse/период из WorkDateWidget,
   // как и любой другой отчёт (см. CLAUDE.md).
   const turnoverEnabled = !!periodFrom && !!periodTo;
-  const { data: turnoverRows = [] } = useQuery({
+  const { data: turnoverRows = [], isLoading: isLoadingTurnover } = useQuery({
     queryKey: ["products-turnover-map", periodFrom, periodTo, workWarehouse?.id, workBranch?.id],
     queryFn: () =>
       accountApi.getProductTurnover({
         date_from: periodFrom!,
         date_to: periodTo!,
+        light: true,
         ...(workWarehouse?.id ? { warehouse: String(workWarehouse.id) } : workBranch?.id ? { branch: String(workBranch.id) } : {}),
       }),
     enabled: turnoverEnabled,
+  });
+
+  // ✅ Фото отдельным запросом от текстового products-light (см. productApi.ts::
+  // getListLightImages/ProductViewSet.list_light_images) — не входит в isLoading/
+  // loadingSteps ниже НАРОЧНО: таблица должна отрисоваться с текстом сразу, пока
+  // фото ещё генерируются (django-imagekit thumbnail — синхронная генерация на
+  // первый показ), а не ждать их за общим Loader'ом страницы. Пока не готово —
+  // колонка "Фото" показывает спиннер в ячейке (см. render колонки ниже).
+  const { data: imagesMap = {}, isLoading: isLoadingImages } = useQuery({
+    queryKey: ["products-images-map", workWarehouse?.id, workBranch?.id],
+    queryFn: () => productApi.getListLightImages(workWarehouse?.id ? { warehouse: workWarehouse.id } : workBranch?.id ? { branch: workBranch.id } : {}),
+    enabled: canView,
   });
 
   const turnoverMap = useMemo(() => {
@@ -219,22 +234,26 @@ const ProductsListPage = () => {
             />
           </div>
         )}
-        <div className="pt-4 border-t border-indigo-900/30">
+        <div className="pt-4 border-t border-indigo-900/30 space-y-2">
           <label className="flex items-center gap-2 text-sm text-indigo-200 cursor-pointer select-none">
             <input type="checkbox" className="accent-red-500 w-4 h-4" checked={lowStockOnly} onChange={(e) => setLowStockOnly(e.target.checked)} />
             {t("LowStockOnlyFilter")}
           </label>
+          <label className="flex items-center gap-2 text-sm text-indigo-200 cursor-pointer select-none">
+            <input type="checkbox" className="accent-orange-500 w-4 h-4" checked={reservedOnly} onChange={(e) => setReservedOnly(e.target.checked)} />
+            {t("ReservedOnlyFilter")}
+          </label>
         </div>
       </div>,
     );
-  }, [setSidebarContent, canPost, activeFilter, categoryFilter, categories, brandFilter, brands, lowStockOnly, t]);
+  }, [setSidebarContent, canPost, activeFilter, categoryFilter, categories, brandFilter, brands, lowStockOnly, reservedOnly, t]);
 
   // ── фильтрация ───────────────────────────────────────────────────────────────
 
   const filtered = useTableFilter(products as any[], {
     search: searchQuery,
     searchFields: ["name", "sku", "barcode"],
-    filterKey: `${activeFilter}:${categoryFilter}:${brandFilter}:${lowStockOnly}`,
+    filterKey: `${activeFilter}:${categoryFilter}:${brandFilter}:${lowStockOnly}:${reservedOnly}`,
     filters: [
       (p) => {
         if (activeFilter === "active") return p.is_active;
@@ -244,6 +263,7 @@ const ProductsListPage = () => {
       (p) => categoryFilter === null || p.category === categoryFilter,
       (p) => brandFilter === null || p.brand === brandFilter,
       (p) => !lowStockOnly || !!stockBalance[p.id]?.is_low,
+      (p) => !reservedOnly || Number(stockBalance[p.id]?.reserved ?? 0) > 0,
     ],
   });
 
@@ -261,21 +281,26 @@ const ProductsListPage = () => {
     {
       header: t("Photo"),
       excelWidth: 14,
-      excelImageUrl: (item) => item.main_image?.thumbnail_url || null,
+      excelImageUrl: (item) => imagesMap[item.id]?.main_image?.thumbnail_url || null,
       render: (item) => {
         const stock = stockBalance[item.id];
+        const imgData = imagesMap[item.id];
         return (
           <div className="flex justify-center">
             <div className="relative">
-              {item.main_image?.thumbnail_url ? (
+              {isLoadingImages ? (
+                <div className="w-20 h-20 rounded bg-gray-100 dark:bg-slate-800 flex items-center justify-center">
+                  <Loader size={22} dotSize={6} />
+                </div>
+              ) : imgData?.main_image?.thumbnail_url ? (
                 <img
-                  src={item.main_image.thumbnail_url}
+                  src={imgData.main_image.thumbnail_url}
                   alt={item.name}
                   className={`w-20 h-20 rounded object-cover cursor-zoom-in ${!item.is_active ? "grayscale opacity-50" : ""}`}
                   onClick={(e) => {
                     e.stopPropagation();
-                    const gallery = [...(item.images ?? [])].sort((a: any, b: any) => a.sort_order - b.sort_order);
-                    const idx = Math.max(0, gallery.findIndex((img: any) => img.id === item.main_image?.id));
+                    const gallery = [...(imgData.images ?? [])].sort((a: any, b: any) => a.sort_order - b.sort_order);
+                    const idx = Math.max(0, gallery.findIndex((img: any) => img.id === imgData.main_image?.id));
                     setPreviewGallery(gallery.map((img: any) => img.image_url ?? img.thumbnail_url));
                     setPreviewIndex(idx);
                   }}
@@ -331,40 +356,56 @@ const ProductsListPage = () => {
           .filter((p) => p.price !== undefined);
         return (
           <div className="flex flex-col gap-1.5 py-1">
+            {/* ✅ Имя — единственное, что реально приходит в products-light (см.
+                RBACGuard isLoading={isLoading} ниже — таблица ждёт ТОЛЬКО его),
+                поэтому рендерится сразу. Остаток/Доступно/цены — отдельные bulk-
+                запросы (stockBalance/pricesMap), которые могут ещё грузиться —
+                пока не готовы, показываем спиннер вместо чипа, а не 0/пусто
+                (иначе выглядело бы как настоящий нулевой остаток). */}
             <span className="font-semibold text-base md:text-lg">{item.name}</span>
-            <div className="flex flex-wrap gap-1.5">
+            <div className="flex flex-wrap items-center gap-1.5">
               {item.category_detail && (
                 <span className="px-2 py-1 rounded text-xs md:text-sm font-medium bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300">
                   {item.category_detail.name}
                 </span>
               )}
               <span className="px-2 py-1 rounded text-xs md:text-sm font-medium bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-300">
-                {t("Incoming")}: {Number(item.cost_price).toLocaleString("ru-RU")}
+                {t("Incoming")}: {Number(item.cost_price).toLocaleString("ru-RU", { minimumFractionDigits: 3 })}
               </span>
-              {priceChips.map((p) => (
-                <span key={p.name} className="px-2 py-1 rounded text-xs md:text-sm font-medium bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">
-                  {p.name}: {Number(p.price).toLocaleString("ru-RU")}
-                </span>
-              ))}
-            </div>
-            <div className="flex flex-row flex-wrap gap-1.5">
-              <span className="px-2 py-1 rounded text-xs md:text-sm font-medium bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">
-                {t("Stock")}: {qty.toLocaleString("ru-RU")} {unit}
-              </span>
-              {reserved > 0 && (
-                <span className="px-2 py-1 rounded text-xs md:text-sm font-medium bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300">
-                  {t("Reserved")}: {reserved.toLocaleString("ru-RU")} {unit}
-                </span>
+              {pricesMapEnabled && isLoadingPricesMap ? (
+                <Loader size={16} dotSize={4} />
+              ) : (
+                priceChips.map((p) => (
+                  <span key={p.name} className="px-2 py-1 rounded text-xs md:text-sm font-medium bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">
+                    {p.name}: {Number(p.price).toLocaleString("ru-RU", { minimumFractionDigits: 3 })}
+                  </span>
+                ))
               )}
-              <span
-                className={`px-2 py-1 rounded text-xs md:text-sm font-medium ${
-                  available <= 0
-                    ? "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300"
-                    : "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300"
-                }`}
-              >
-                {t("Available")}: {available.toLocaleString("ru-RU")} {unit}
-              </span>
+            </div>
+            <div className="flex flex-row flex-wrap items-center gap-1.5">
+              {isLoadingStock ? (
+                <Loader size={16} dotSize={4} />
+              ) : (
+                <>
+                  <span className="px-2 py-1 rounded text-xs md:text-sm font-medium bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">
+                    {t("Stock")}: {qty.toLocaleString("ru-RU")} {unit}
+                  </span>
+                  {reserved > 0 && (
+                    <span className="px-2 py-1 rounded text-xs md:text-sm font-medium bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300">
+                      {t("Reserved")}: {reserved.toLocaleString("ru-RU")} {unit}
+                    </span>
+                  )}
+                  <span
+                    className={`px-2 py-1 rounded text-xs md:text-sm font-medium ${
+                      available <= 0
+                        ? "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300"
+                        : "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300"
+                    }`}
+                  >
+                    {t("Available")}: {available.toLocaleString("ru-RU")} {unit}
+                  </span>
+                </>
+              )}
             </div>
           </div>
         );
@@ -378,11 +419,11 @@ const ProductsListPage = () => {
         const priceParts = (priceTypes as any[])
           .map((pt) => ({ name: pt.name, price: pricesMap[item.id]?.[pt.id] }))
           .filter((p) => p.price !== undefined)
-          .map((p) => `${p.name}: ${Number(p.price).toLocaleString("ru-RU")}`);
+          .map((p) => `${p.name}: ${Number(p.price).toLocaleString("ru-RU", { minimumFractionDigits: 3 })}`);
         const lines = [
           item.name,
           item.category_detail?.name ? `${t("Category")}: ${item.category_detail.name}` : null,
-          `${t("Incoming")}: ${Number(item.cost_price).toLocaleString("ru-RU")}`,
+          `${t("Incoming")}: ${Number(item.cost_price).toLocaleString("ru-RU", { minimumFractionDigits: 3 })}`,
           ...priceParts,
           `${t("Stock")}: ${qty.toLocaleString("ru-RU")} ${unit}`,
           reserved > 0 ? `${t("Reserved")}: ${reserved.toLocaleString("ru-RU")} ${unit}` : null,
@@ -398,6 +439,13 @@ const ProductsListPage = () => {
       render: (item) => {
         if (!turnoverEnabled) {
           return <span className="text-xs md:text-sm text-gray-400">{t("SpecifyPeriod")}</span>;
+        }
+        if (isLoadingTurnover) {
+          return (
+            <div className="flex justify-center py-2">
+              <Loader size={22} dotSize={6} />
+            </div>
+          );
         }
         const row = turnoverMap[item.id];
         const openQty = Number(row?.opening_qty ?? 0);

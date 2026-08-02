@@ -1,6 +1,6 @@
 // // src/features/accounting/pages/Journal/JournalPage.tsx
 // src/features/accounting/pages/Journal/JournalPage.tsx
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { useSearchParams } from "react-router-dom";
@@ -10,7 +10,6 @@ import { Table, type Column } from "../../../../components/ui/Table/Table";
 import { Button } from "../../../../components/ui/Button";
 import { Modal } from "../../../../components/ui/Modal/Modal";
 import { ConfirmModal } from "../../../../components/ui/Modal/ConfirmModal";
-import { StatusBadge } from "../../../../components/ui/StatusBadge";
 import { usePageAccess } from "../../../../core/hooks/usePageAccess";
 import { useSidebar } from "../../../../core/context/SidebarRightContext";
 import { useDateStore } from "../../../../core/store/dateStore";
@@ -19,7 +18,7 @@ import { useNotify } from "../../../../core/context/NotificationContext";
 import JournalEntryForm from "./JournalEntryForm";
 import { Plus } from "lucide-react";
 import { usePageHotkeys } from "../../../../core/hooks/usePageHotkeys";
-import { useTableFilter } from "../../../../core/hooks/useTableFilter";
+import { useDebouncedValue } from "../../../../core/hooks/useDebouncedValue";
 
 
 export default function JournalPage() {
@@ -61,46 +60,64 @@ export default function JournalPage() {
   const [confirmUnpost, setConfirmUnpost] = useState<JournalEntry | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<JournalEntry | null>(null);
 
-  // // Фильтры — дата из стора, статус и поиск локальные
-  // const filters: Record<string, string> = {
-  //   ...(statusFilter && { status: statusFilter }),
-  //   ...(periodFrom && { date_from: periodFrom }),
-  //   ...(periodTo && { date_to: periodTo }),
-  //   // ...(search && { search }),
-  // };
+  // ✅ Server-side пагинация (см. CLAUDE.md — JournalEntry прямо назван как пример
+  // таблицы, обязанной быть на server-пагинации: раньше бэкенд отдавал ВСЕ проводки
+  // одним запросом, pagination_class=None, чем дольше период/шире выборка — тем
+  // дольше грузилась страница). Тот же принцип, что в InvoicesPage.tsx.
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(() => {
+    try {
+      const saved = localStorage.getItem("table:journal_entries:pageSize");
+      return saved ? Number(saved) : 25;
+    } catch {
+      return 25;
+    }
+  });
+  const [sortBy, setSortBy] = useState<string | null>(null);
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
 
-  // const { data: entries = [], isLoading } = useQuery({
-  //   queryKey: ["journal-entries", filters],
-  //   queryFn: () => journalApi.list(filters).then((r) => r.data),
-  //   enabled: canView,
-  // });
+  // ✅ Поиск теперь уходит на бэкенд (см. transaction_views.py::get_queryset) —
+  // при server-пагинации data содержит только текущую страницу, локальный
+  // useTableFilter искал бы только по ней, а не по всем проводкам за период.
+  const debouncedSearch = useDebouncedValue(search, 350);
 
-  // Убираем search из filters
+  // Сбрасываем страницу на 1 при смене любого фильтра/сортировки/поиска.
+  const didMountRef = useRef(false);
+  useEffect(() => {
+    if (!didMountRef.current) {
+      didMountRef.current = true;
+      return;
+    }
+    setPage(1);
+  }, [statusFilter, entryTypeFilter, workBranch?.id, workWarehouse?.id, periodFrom, periodTo, accountFilter, sortBy, sortDir, debouncedSearch]);
+
   // ✅ Склад в приоритете над филиалом (тот же принцип, что и в OSV/Product Turnover —
   // см. CLAUDE.md: "все отчёты должны смотреть на branch, warehouse, date_range"):
   // выбран конкретный склад — фильтруем только по нему; выбран только филиал (без
   // склада) — по всем складам этого филиала (см. get_queryset на бэкенде); не выбрано
   // ничего — не сужаем сверх RBAC-scope пользователя.
   const filters: Record<string, string> = {
+    page: String(page),
+    page_size: String(pageSize),
     ...(statusFilter && { status: statusFilter }),
     ...(periodFrom && { date_from: periodFrom }),
     ...(periodTo && { date_to: periodTo }),
     ...(workWarehouse?.id ? { warehouse: String(workWarehouse.id) } : workBranch?.id ? { branch: String(workBranch.id) } : {}),
     ...(accountFilter && { account: accountFilter }),
     ...(entryTypeFilter !== "all" && { entry_type: entryTypeFilter }),
+    ...(debouncedSearch && { search: debouncedSearch }),
+    ...(sortBy && { ordering: sortDir === "desc" ? `-${sortBy}` : sortBy }),
   };
 
-  const { data: rawEntries = [], isLoading } = useQuery({
-    queryKey: ["journal-entries", filters, workBranch?.id, workWarehouse?.id, accountFilter, entryTypeFilter],
+  const { data, isLoading } = useQuery({
+    queryKey: ["journal-entries", filters],
     queryFn: () => journalApi.list(filters).then((r) => r.data),
     enabled: canView,
+    placeholderData: (prev) => prev,
   });
 
-  // Локальная фильтрация по поиску
-  const entries = useTableFilter(rawEntries, {
-    search,
-    searchFields: ["number", "description", "debit_accounts", "credit_accounts"],
-  });
+  const entries = Array.isArray(data) ? data : (data?.results ?? []);
+  const totalCount = Array.isArray(data) ? data.length : (data?.count ?? 0);
 
   // ✅ Раньше здесь не было onError вообще — ошибка (например "период закрыт",
   // см. utils.py::check_period_open) молча проглатывалась, кнопка "Провести"
@@ -142,6 +159,21 @@ export default function JournalPage() {
       setConfirmDelete(null);
     },
   });
+
+  // ✅ Массовое удаление через чекбоксы в Table.tsx — один запрос на бэкенд
+  // (accounting/mixins.py::BulkDestroyMixin), те же ограничения, что и у обычного
+  // удаления (document-проводки нельзя удалить — см. JournalEntryViewSet.perform_destroy).
+  // Заодно даёт "скачать одну проводку в том же виде, что и весь журнал" — отметить
+  // чекбокс одной строки и нажать "Excel (выбранное)".
+  const handleBulkDelete = async (ids: (string | number)[]) => {
+    const res = await journalApi.bulkDelete(ids);
+    qc.invalidateQueries({ queryKey: ["journal-entries"] });
+    if (res.errors.length > 0) {
+      notify("error", t("BulkDeletePartialError", { deleted: res.deleted_ids.length, failed: res.errors.length }));
+    } else {
+      notify("success", t("SuccessDeleted"));
+    }
+  };
 
   const handleEdit = async (entry: JournalEntry) => {
     const { data } = await journalApi.retrieve(entry.id);
@@ -216,7 +248,28 @@ export default function JournalPage() {
 
   console.log("entries", entries);
 
+  // ✅ "Дт субк"/"Кт субк" — объединяем subconto1/2/3 в одну колонку (см. запрос
+  // пользователя на конкретный набор колонок в журнале проводок), пропуская пустые.
+  const joinSubconto = (item: JournalEntry, side: "debit" | "credit") =>
+    (side === "debit"
+      ? [item.debit_subconto1, item.debit_subconto2, item.debit_subconto3]
+      : [item.credit_subconto1, item.credit_subconto2, item.credit_subconto3]
+    )
+      .filter(Boolean)
+      .join(", ") || "—";
+
   const columns: Column<JournalEntry>[] = [
+    {
+      header: t("InvoiceNumber"),
+      accessor: "number",
+      width: "90px",
+      sortable: true,
+      render: (item) => (
+        <span className="text-blue-600 dark:text-blue-400 cursor-pointer hover:underline" onClick={() => handleEdit(item)}>
+          {item.number}
+        </span>
+      ),
+    },
     {
       header: t("Date"),
       accessor: "date",
@@ -232,132 +285,40 @@ export default function JournalPage() {
         }),
     },
     {
-      header: t("Number"),
-      accessor: "number",
-      width: "80px",
-      sortable: true,
-      render: (item) => (
-        <span className="text-blue-600 dark:text-blue-400 cursor-pointer hover:underline" onClick={() => handleEdit(item)}>
-          {item.number}
-        </span>
-      ),
+      // ✅ debit_accounts — SerializerMethodField (собирает счета со всех строк
+      // проводки), нет одного ORM-пути для сортировки на бэкенде — не sortable,
+      // как и driver_name в InvoicesPage.tsx (тот же случай).
+      header: t("DebitAccount"),
+      accessor: "debit_accounts",
+      render: (item) => <span className="font-mono text-blue-600 dark:text-blue-400">{item.debit_accounts || "—"}</span>,
     },
     {
-      header: t("Description"),
+      header: t("DebitSubconto"),
+      render: (item) => <span className="text-xs md:text-sm">{joinSubconto(item, "debit")}</span>,
+      excelValue: (item) => joinSubconto(item, "debit"),
+    },
+    {
+      header: t("CreditAccount"),
+      accessor: "credit_accounts",
+      render: (item) => <span className="font-mono text-red-500 dark:text-red-400">{item.credit_accounts || "—"}</span>,
+    },
+    {
+      header: t("CreditSubconto"),
+      render: (item) => <span className="text-xs md:text-sm">{joinSubconto(item, "credit")}</span>,
+      excelValue: (item) => joinSubconto(item, "credit"),
+    },
+    {
+      header: t("Comment"),
       accessor: "description",
       sortable: true,
       render: (item) => <span className="text-sm">{item.description || "—"}</span>,
     },
     {
-      header: t("Dt"),
-      accessor: "debit_accounts",
-      sortable: true,
-      render: (item) => <span className="font-mono text-blue-600 dark:text-blue-400">{item.debit_accounts || "—"}</span>,
-    },
-    {
-      header: t("DebitSubconto1"),
-      accessor: "debit_subconto1",
-      render: (item) => item.debit_subconto1 || "—",
-    },
-    {
-      header: t("DebitSubconto2"),
-      accessor: "debit_subconto2",
-      render: (item) => item.debit_subconto2 || "—",
-    },
-    {
-      header: t("DebitSubconto3"),
-      accessor: "debit_subconto3",
-      render: (item) => item.debit_subconto3 || "—",
-    },
-    {
-      header: t("Kt"),
-      accessor: "credit_accounts",
-      sortable: true,
-      render: (item) => <span className="font-mono text-red-500 dark:text-red-400">{item.credit_accounts || "—"}</span>,
-    },
-    {
-      header: t("CreditSubconto1"),
-      accessor: "credit_subconto1",
-      render: (item) => item.credit_subconto1 || "—",
-    },
-    {
-      header: t("CreditSubconto2"),
-      accessor: "credit_subconto2",
-      render: (item) => item.credit_subconto2 || "—",
-    },
-    {
-      header: t("CreditSubconto3"),
-      accessor: "credit_subconto3",
-      render: (item) => item.credit_subconto3 || "—",
-    },
-    // {
-    //   header: t("Dt"),
-    //   accessor: "debit_accounts",
-    //   sortable: true,
-    //   render: (item) => (
-    //     <div className="flex flex-col gap-0.5">
-    //       <span className="font-mono text-blue-600 dark:text-blue-400 text-xs font-medium">{item.debit_accounts}</span>
-    //       {item.debit_subcontos && <span className="text-xs text-gray-500 dark:text-gray-400 truncate max-w-[150px]">{item.debit_subcontos}</span>}
-    //     </div>
-    //   ),
-    // },
-    // {
-    //   header: t("Kt"),
-    //   accessor: "credit_accounts",
-    //   sortable: true,
-    //   render: (item) => (
-    //     <div className="flex flex-col gap-0.5">
-    //       <span className="font-mono text-red-500 dark:text-red-400 text-xs font-medium">{item.credit_accounts}</span>
-    //       {item.credit_subcontos && <span className="text-xs text-gray-500 dark:text-gray-400 truncate max-w-[150px]">{item.credit_subcontos}</span>}
-    //     </div>
-    //   ),
-    // },
-    {
-      header: t("Amount"),
+      header: t("Price"),
       accessor: "debit_total",
-      // width: "130px",
       sortable: true,
       excelWidth: 15,
       render: (item) => <span className="font-mono text-sm">{item.debit_total ? Number(item.debit_total).toLocaleString("ru-RU", { minimumFractionDigits: 2 }) : "—"}</span>,
-    },
-    {
-      header: t("Status"),
-      accessor: "status",
-      // width: "120px",
-      excelWidth: 12,
-      sortable: true,
-      render: (item) => <StatusBadge isActive={item.status === "posted"} activeLabel={t("Posted")} inactiveLabel={t("Draft")} />,
-      excelValue: (item) => (item.status === "posted" ? t("Posted") : t("Draft")),
-    },
-    {
-      header: t("Author"),
-      accessor: "created_by_name",
-      // width: "150px",
-      sortable: true,
-      render: (item) => <span className="text-sm text-gray-500">{item.created_by_name || "—"}</span>,
-    },
-    {
-      header: t("CreatedAt"),
-      accessor: "created_at",
-      width: "80px",
-      excelWidth: 12,
-      sortable: true,
-      render: (item) =>
-        new Date(item.created_at).toLocaleString("ru-RU", {
-          day: "2-digit",
-          month: "2-digit",
-          year: "numeric",
-          hour: "2-digit",
-          minute: "2-digit",
-        }),
-      excelValue: (item) =>
-        new Date(item.created_at).toLocaleString("ru-RU", {
-          day: "2-digit",
-          month: "2-digit",
-          year: "numeric",
-          hour: "2-digit",
-          minute: "2-digit",
-        }),
     },
     {
       header: t("Actions"),
@@ -369,12 +330,17 @@ export default function JournalPage() {
               проводить/распроводить/редактировать/удалять из журнала напрямую —
               см. обсуждение: это делается только через сам документ. Бэкенд это
               уже блокирует (JournalEntryViewSet._reject_if_document_entry), но кнопки
-              скрываем и здесь, чтобы не предлагать действие, которое всё равно упадёт. */}
+              скрываем и здесь, чтобы не предлагать действие, которое всё равно упадёт.
+              ✅ item.is_period_closed — день ЭТОЙ проводки (её собственные date/branch/
+              warehouse, см. JournalEntryListSerializer.get_is_period_closed), а не
+              текущий workDate/workWarehouse из сайдбара — кнопки не скрываем, а
+              дизейблим, чтобы было видно, что действие есть, но день закрыт. */}
           {canPost && item.status === "draft" && item.is_manual && (
             <Button
               variant="1c"
-              title={t("Post")}
+              title={item.is_period_closed ? t("DayClosed") : t("Post")}
               text="✓"
+              disabled={item.is_period_closed}
               className="md:h-6 md:!px-2 text-green-700 dark:text-green-400"
               onClick={(e) => {
                 e.stopPropagation();
@@ -385,8 +351,9 @@ export default function JournalPage() {
           {canPost && item.status === "posted" && item.is_manual && (
             <Button
               variant="1c"
-              title={t("Unpost")}
+              title={item.is_period_closed ? t("DayClosed") : t("Unpost")}
               text="↩"
+              disabled={item.is_period_closed}
               className="md:h-6 md:!px-2 text-yellow-700 dark:text-yellow-400"
               onClick={(e) => {
                 e.stopPropagation();
@@ -397,8 +364,9 @@ export default function JournalPage() {
           {canPut && item.status === "draft" && item.is_manual && (
             <Button
               variant="1c"
-              title={`F2 - ${t("Edit")}`}
+              title={item.is_period_closed ? t("DayClosed") : `Enter - ${t("Edit")}`}
               icon={<span>✏️</span>}
+              disabled={item.is_period_closed}
               className="md:h-6 md:w-8 md:!p-0"
               onClick={(e) => {
                 e.stopPropagation();
@@ -409,8 +377,9 @@ export default function JournalPage() {
           {canDelete && item.status === "draft" && item.is_manual && (
             <Button
               variant="1c"
-              title={`DELETE - ${t("Delete")}`}
+              title={item.is_period_closed ? t("DayClosed") : `DELETE - ${t("Delete")}`}
               icon={<span>🗑️</span>}
+              disabled={item.is_period_closed}
               className="md:h-6 md:w-8 md:!p-0"
               onClick={(e) => {
                 e.stopPropagation();
@@ -444,6 +413,32 @@ export default function JournalPage() {
         onSearchChange={setSearch}
         isLoading={isLoading}
         onRowDoubleClick={(item) => canPut && item.status === "draft" && handleEdit(item)}
+        selectable
+        onBulkDelete={canDelete ? handleBulkDelete : undefined}
+        pagination={{
+          mode: "server",
+          page,
+          pageSize,
+          total: totalCount,
+          onPageChange: setPage,
+          onPageSizeChange: (size) => {
+            setPageSize(size);
+            setPage(1);
+            try {
+              localStorage.setItem("table:journal_entries:pageSize", String(size));
+            } catch {}
+          },
+          sortBy,
+          sortDir,
+          onSortChange: (key, direction) => {
+            setSortBy(key);
+            setSortDir(direction);
+          },
+        }}
+        onFetchAllData={async () => {
+          const res = await journalApi.list({ ...filters, page: "1", page_size: "10000" }).then((r) => r.data);
+          return Array.isArray(res) ? res : (res.results ?? []);
+        }}
       />
 
       <Modal isOpen={formOpen} onClose={() => setFormOpen(false)} title={editEntry ? `${t("Entry")} №${editEntry.number}` : t("AddEntry")} closeOnOutsideClick={false} size="xl">

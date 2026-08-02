@@ -54,11 +54,19 @@ def _rbac(action: str, resource: str):
         'osv':            'GET',
         'subconto_breakdown': 'GET',
         'subconto_card':      'GET',
+        'account_card':       'GET',
         'counterparty_card':  'GET',
         'saldo':              'GET',
         'bulk_saldo':         'GET',
         'product_turnover':        'GET',
         'product_turnover_detail': 'GET',
+        'product_card':            'GET',
+        'sales_dynamics':          'GET',
+        'abc_analysis':            'GET',
+        'xyz_analysis':            'GET',
+        'margin_analysis':         'GET',
+        'category_analysis':       'GET',
+        'plan_fact_analysis':      'GET',
         # ✅ Раньше отсутствовал здесь — неизвестный экшен по умолчанию требует
         # POST (см. ниже action_map.get(action, 'POST')), из-за чего read-only
         # отчёт об остатках требовал право "создавать" вместо "смотреть".
@@ -67,6 +75,7 @@ def _rbac(action: str, resource: str):
         'top_products':            'GET',
         'top_counterparties':      'GET',
         'today_documents':         'GET',
+        'universal_filter':        'GET',
         'filter_users':   'GET',
         # ✅ Массовое удаление (см. accounting/mixins.py::BulkDestroyMixin) — метод
         # DELETE, а не POST по умолчанию, иначе право "создавать" ошибочно давало
@@ -79,6 +88,18 @@ def _rbac(action: str, resource: str):
         # ✅ Облегчённый список товаров для ProductsListPage.tsx (ProductViewSet.
         # list_light) — тоже просто чтение, без явной записи ушло бы в POST.
         'list_light':       'GET',
+        # ✅ Фото товаров отдельным bulk-запросом (ProductViewSet.list_light_images,
+        # см. ProductListSerializer) — тоже просто чтение, без явной записи ушло
+        # бы в POST.
+        'list_light_images': 'GET',
+        # ✅ Облегчённый список товаров для DocumentFormPage.tsx (ProductViewSet.
+        # list_for_document) — тоже просто чтение, без явной записи ушло бы в POST.
+        'list_for_document': 'GET',
+        # ✅ Бейдж "Остаток/В резерве/Доступно" в SearchableSelect формы документа
+        # (ProductViewSet.stocks_map) — тоже просто чтение, без явной записи ушло
+        # бы в POST (раньше так и было — пользователь без права "создавать товар"
+        # не смог бы даже открыть форму накладной, т.к. запрос падал в 403).
+        'stocks_map': 'GET',
     }
     method = action_map.get(action, 'POST')  # неизвестные экшены → POST
     return [IsAuthenticated(), HasPermission(resource, method)()]

@@ -139,7 +139,7 @@ export const OSVTable: React.FC<OSVTableProps> = ({ rows, onRowDoubleClick }) =>
           setSelectedCell({ rowIdx, colIdx: prev });
         }
       }
-      if (e.key === "Enter" || e.key === "F2") {
+      if (e.key === "Enter") {
         e.preventDefault();
         if (onRowDoubleClick && !rows[rowIdx].is_group) onRowDoubleClick(rows[rowIdx]);
       }

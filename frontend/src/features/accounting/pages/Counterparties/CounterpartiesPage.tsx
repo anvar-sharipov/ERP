@@ -1,6 +1,6 @@
 // // frontend/src/features/accounting/pages/Counterparties/CounterpartiesPage.tsx
 // frontend/src/features/accounting/pages/Counterparties/CounterpartiesPage.tsx
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { counterpartyApi } from "../../services/productApi";
 import { agentApi } from "../../services/employeeApi";
@@ -16,6 +16,7 @@ import SearchableSelect, { type SelectOption } from "../../../../components/ui/S
 import { Modal } from "../../../../components/ui/Modal/Modal";
 import { ConfirmModal } from "../../../../components/ui/Modal/ConfirmModal";
 import { RBACGuard } from "../../../../components/ui/RBACGuard";
+import { HelpButton } from "../../../../components/ui/HelpButton";
 import { StatusBadge } from "../../../../components/ui/StatusBadge";
 import { Avatar } from "../../../../components/ui/Avatar";
 import { ImagePreview } from "../../../../components/ui/ImagePreview";
@@ -41,6 +42,7 @@ interface CounterpartyForm {
   is_active: boolean;
   agent: number | null;
   district: string;
+  delivery_percent: string;
 }
 
 const EMPTY: CounterpartyForm = {
@@ -53,6 +55,7 @@ const EMPTY: CounterpartyForm = {
   is_active: true,
   agent: null,
   district: "",
+  delivery_percent: "0",
 };
 
 const CounterpartiesPage = () => {
@@ -126,6 +129,7 @@ const CounterpartiesPage = () => {
         is_active: editing.is_active,
         agent: editing.agent ?? null,
         district: editing.district ?? "",
+        delivery_percent: String(editing.delivery_percent ?? "0"),
       });
       setExistingPhotoUrl(editing.photo ?? null);
     } else {
@@ -218,10 +222,13 @@ const CounterpartiesPage = () => {
     return result;
   }, [counterparties, typeFilter, searchQuery]);
 
-  const getTypeLabel = (type: string) => {
-    const types = COUNTERPARTY_TYPES(t);
-    return types.find((t) => t.value === type)?.label ?? type;
-  };
+  const getTypeLabel = useCallback(
+    (type: string) => {
+      const types = COUNTERPARTY_TYPES(t);
+      return types.find((ct) => ct.value === type)?.label ?? type;
+    },
+    [t],
+  );
 
   usePageHotkeys({
     canPost,
@@ -232,7 +239,15 @@ const CounterpartiesPage = () => {
     },
   });
 
-  const columns: Column<any>[] = [
+  // ✅ useMemo — без него columns пересоздавался бы (новая ссылка на массив +
+  // новые замыкания render/excelValue) на КАЖДЫЙ рендер страницы, в том числе
+  // на каждое нажатие клавиши в полях модалки формы (form живёт в этом же
+  // компоненте). Table теперь обёрнута в React.memo (см. Table.tsx) — она
+  // пропускает реконсиляцию, только если columns/data/onRowDoubleClick остаются
+  // теми же ссылками; нестабильный columns эту оптимизацию полностью сводил на
+  // нет, и на реальных объёмах (сотни контрагентов + вложенная таблица сальдо
+  // в каждой строке) печатание в форме давало реальные фризы UI.
+  const columns: Column<any>[] = useMemo(() => [
     { header: t("ID"), accessor: "id", sortable: true, excelWidth: 5 },
     {
       header: t("Photo"),
@@ -273,6 +288,14 @@ const CounterpartiesPage = () => {
       excelValue: (item) => item.agent_detail?.display_name ?? "",
     },
     { header: t("District"), accessor: "district", sortable: true, excelWidth: 15 },
+    {
+      header: t("DeliveryPercent"),
+      accessor: "delivery_percent",
+      sortable: true,
+      excelWidth: 10,
+      render: (item) => (Number(item.delivery_percent) > 0 ? `${item.delivery_percent}%` : "—"),
+      excelValue: (item) => (Number(item.delivery_percent) > 0 ? `${item.delivery_percent}%` : ""),
+    },
     {
       header: t("CounterpartyBalance"),
       hideInPrint: true,
@@ -371,7 +394,11 @@ const CounterpartiesPage = () => {
         </div>
       ),
     },
-  ];
+  ], [t, getTypeLabel, saldoEnabled, bulkSaldo, canPut, canDelete]);
+
+  const handleRowDoubleClick = useCallback((item: any) => {
+    setSaldoCounterparty({ id: item.id, name: item.name });
+  }, []);
 
   const toDelete = (counterparties as any[]).find((c) => c.id === deleteId);
 
@@ -384,7 +411,7 @@ const CounterpartiesPage = () => {
         tableId="counterparties_list"
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
-        onRowDoubleClick={(item) => setSaldoCounterparty({ id: item.id, name: item.name })}
+        onRowDoubleClick={handleRowDoubleClick}
       />
 
       <Modal isOpen={formOpen} onClose={() => setFormOpen(false)} title={editing ? t("Edit") : t("Add")} closeOnOutsideClick={false}>
@@ -453,6 +480,24 @@ const CounterpartiesPage = () => {
             />
           </div>
           <Input label={t("District")} value={form.district} onChange={(e) => setForm((p) => ({ ...p, district: e.target.value }))} />
+
+          <div>
+            <label className="flex items-center gap-1.5 text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              {t("DeliveryPercent")}
+              <HelpButton title={t("DeliveryPercent")}>
+                <p>{t("DeliveryPercentHelp")}</p>
+              </HelpButton>
+            </label>
+            <input
+              type="number"
+              min={0}
+              max={100}
+              step="0.01"
+              value={form.delivery_percent}
+              onChange={(e) => setForm((p) => ({ ...p, delivery_percent: e.target.value }))}
+              className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            />
+          </div>
 
           <label className="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300 cursor-pointer">
             <input

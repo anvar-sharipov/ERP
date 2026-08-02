@@ -21,6 +21,10 @@ import {
   ChatBubbleLeftRightIcon,
   // ChatBubbleLeftIcon,
   Cog6ToothIcon,
+  ChartBarIcon,
+  BellAlertIcon,
+  PresentationChartLineIcon,
+  TruckIcon,
 } from "@heroicons/react/24/outline";
 
 // Добавляем эффект свечения и чуть более светлые тона для темных тем
@@ -53,4 +57,8 @@ export const DOC_RETURN_IN_ICON = <ArrowUturnLeftIcon className={`${iconClassNam
 export const DOC_RETURN_OUT_ICON = <ArrowUturnRightIcon className={`${iconClassName} text-orange-400`} />;
 
 export const CHAT_ICON = <ChatBubbleLeftRightIcon className={`${iconClassName} text-sky-400`} />;
+export const REPORTS_ICON = <ChartBarIcon className={`${iconClassName} text-lime-400`} />;
+export const ANALYTICS_ICON = <PresentationChartLineIcon className={`${iconClassName} text-fuchsia-400`} />;
+export const ALERTS_ICON = <BellAlertIcon className={`${iconClassName} text-red-400`} />;
+export const TRIPS_ICON = <TruckIcon className={`${iconClassName} text-cyan-500`} />;
 // export const CHAT_ICON = <ChatBubbleLeftIcon className={`${iconClassName} text-sky-400`} />;

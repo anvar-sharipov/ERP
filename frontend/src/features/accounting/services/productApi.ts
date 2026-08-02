@@ -43,8 +43,22 @@ export const productApi = {
   // список реально показывает (фото/категория/бренд/ед.изм./себестоимость/
   // статус), без prices/bundle_items/volume_discounts/quantity_promotions/tags
   // и т.д. (см. ProductViewSet.list_light). НЕ использовать там, где нужен
-  // prod.prices (например DocumentFormPage.tsx) — там нужен обычный getAll.
+  // prod.prices (например DocumentFormPage.tsx) — там нужен getAllForDocument.
   getAllLight: async (params?: { warehouse?: number; branch?: number }) => (await api.get("/accounting/products/list-light/", { params })).data,
+  // ✅ Фото отдельно от getAllLight (см. ProductViewSet.list_light_images) —
+  // {product_id: {main_image, images}}. Позволяет ProductsListPage.tsx
+  // отрисовать текст сразу, не дожидаясь синхронной генерации превью на
+  // большом каталоге, фото дорисовывается по готовности со спиннером.
+  getListLightImages: async (params?: { warehouse?: number; branch?: number }) =>
+    (await api.get("/accounting/products/list-light-images/", { params })).data,
+  // ✅ Облегчённый список специально для DocumentFormPage.tsx/ProductRow.tsx —
+  // ровно поля из Invoice/Interface.ts::Product (prices/bundle_items/
+  // volume_discounts/quantity_promotions есть, tags/category/description/
+  // полной галереи images нет). См. ProductViewSet.list_for_document —
+  // раньше эта форма гоняла обычный getAll() (полный ProductSerializer на
+  // каждый товар), что на большом каталоге и было причиной долгой загрузки
+  // SearchableSelect выбора товара.
+  getAllForDocument: async (params?: { warehouse?: number; branch?: number }) => (await api.get("/accounting/products/list-for-document/", { params })).data,
   getOne: async (id: number) => (await api.get(`/accounting/products/${id}/`)).data,
   save: (id: number | null, data: any) =>
     id ? api.put(`/accounting/products/${id}/`, data) : api.post("/accounting/products/", data),

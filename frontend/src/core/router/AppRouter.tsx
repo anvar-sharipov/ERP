@@ -17,6 +17,7 @@ import Roles from "../../features/users/components/pages/admin/Roles/Roles";
 import CompanyAdmin from "../../features/users/components/pages/admin/Roles/Company/Company";
 import Branchs from "../../features/users/components/pages/admin/Roles/Branchs/Branchs";
 import DocumentSettingsPage from "../../features/users/components/pages/admin/Roles/DocumentSettings/DocumentSettingsPage";
+import AlertsPage from "../../features/users/components/pages/admin/Alerts/AlertsPage";
 import AccountPage from "../../features/accounting/pages/Accounting/AccountPage";
 import Directory from "../../features/accounting/pages/Directory/Directory";
 
@@ -34,6 +35,8 @@ import Warehouses from "../../features/accounting/pages/Warehouses/Warehouses";
 import WarehousesListPage from "../../features/accounting/pages/Warehouses/WarehousesListPage";
 import WarehouseStocksPage from "../../features/accounting/pages/Warehouses/WarehouseStocksPage";
 import CounterpartiesPage from "../../features/accounting/pages/Counterparties/CounterpartiesPage";
+import TripsListPage from "../../features/accounting/pages/Trips/TripsListPage";
+import TripDetailPage from "../../features/accounting/pages/Trips/TripDetailPage";
 import ProductFormPage from "../../features/accounting/pages/Products/Form/ProductFormPage";
 import PriceTypesPage from "../../features/accounting/pages/Products/PriceTypesPage";
 import JournalPage from "../../features/accounting/pages/Journal/JournalPage";
@@ -42,6 +45,8 @@ import StockMovementsPage from "../../features/accounting/pages/Journal/StockMov
 import RoleFormPage from "../../features/users/components/pages/admin/Roles/RoleFormPage";
 import SubcontoTypesPage from "../../features/accounting/pages/Accounting/SubcontoTypesPage";
 import OSVPage from "../../features/accounting/pages/Accounting/OSVPage";
+import AccountCardPage from "../../features/accounting/pages/Accounting/AccountCardPage";
+import ProductCardPage from "../../features/accounting/pages/Accounting/ProductCardPage";
 import ProductTurnoverPage from "../../features/accounting/pages/Accounting/ProductTurnoverPage";
 import ProductTurnoverDetailPage from "../../features/accounting/pages/Accounting/ProductTurnoverDetailPage";
 import SubcontoBreakdownPage from "../../features/accounting/pages/Accounting/SubcontoBreakdownPage";
@@ -62,6 +67,18 @@ import { PlatformContactPage } from "../../features/admin/components/PlatformCon
 import ExchangeRates from "../../features/accounting/pages/ExchangeRates/ExchangeRates";
 import RatesPage from "../../features/accounting/pages/ExchangeRates/RatesPage";
 import CurrenciesPage from "../../features/accounting/pages/ExchangeRates/CurrenciesPage";
+import Reports from "../../features/accounting/pages/Reports/Reports";
+import Analytics from "../../features/accounting/pages/Analytics/Analytics";
+import ComingSoonAnalysis from "../../features/accounting/pages/Analytics/ComingSoonAnalysis";
+import SalesDynamicsPage from "../../features/accounting/pages/Analytics/SalesDynamicsPage";
+import ABCAnalysisPage from "../../features/accounting/pages/Analytics/ABCAnalysisPage";
+import XYZAnalysisPage from "../../features/accounting/pages/Analytics/XYZAnalysisPage";
+import MarginAnalysisPage from "../../features/accounting/pages/Analytics/MarginAnalysisPage";
+import CategoryAnalysisPage from "../../features/accounting/pages/Analytics/CategoryAnalysisPage";
+import ProductRevaluationPage from "../../features/accounting/pages/Reports/ProductRevaluationPage";
+import PriceChangeHistoryPage from "../../features/accounting/pages/Reports/PriceChangeHistoryPage";
+import PriceChanges from "../../features/accounting/pages/Reports/PriceChanges";
+import UniversalFilterPage from "../../features/accounting/pages/Reports/UniversalFilterPage";
 
 const AppRouter: React.FC = () => {
   return (
@@ -97,6 +114,7 @@ const AppRouter: React.FC = () => {
             <Route path={ROUTES.COMPANY_ADMIN.COMPANIES} element={<CompanyAdmin />} />
             <Route path={ROUTES.COMPANY_ADMIN.BRANCHS} element={<Branchs />} />
             <Route path={ROUTES.COMPANY_ADMIN.DOCUMENT_SETTINGS} element={<DocumentSettingsPage />} />
+            <Route path={ROUTES.COMPANY_ADMIN.ALERTS} element={<AlertsPage />} />
           </Route>
           {/* ОБЫЧНЫЕ РОУТЫ (доступны всем) */}
           <Route path={ROUTES.APP.DASHBOARD} element={<Dashboard />} />
@@ -117,13 +135,51 @@ const AppRouter: React.FC = () => {
             <Route index element={<Navigate to="accounts" replace />} />
             <Route path="accounts" element={<AccountPage />} />
             <Route path="subconto-types" element={<SubcontoTypesPage />} />
-            <Route path="osv" element={<OSVPage />} />
-            <Route path="product-turnover" element={<ProductTurnoverPage />} />
             <Route path="audit-log" element={<AuditLogPage />} />
           </Route>
-          <Route path={ROUTES.APP.ACCOUNTING_PRODUCT_TURNOVER_DETAIL} element={<ProductTurnoverDetailPage />} />
           <Route path={ROUTES.APP.ACCOUNTING_SUBCONTO_BREAKDOWN} element={<SubcontoBreakdownPage />} />
           <Route path={ROUTES.APP.ACCOUNTING_SUBCONTO_CARD} element={<SubcontoCardPage />} />
+
+          {/* Отчёты — отдельная вкладка в сайдбаре, сюда по одному будут добавляться
+              новые отчёты (см. Reports.tsx). Каждый новый отчёт: своя строка в tabs
+              там + свой <Route path="..."> здесь, тем же паттерном, что и ACCOUNTING.
+              ОСВ перенесена сюда из "Бухгалтерия" (была первым тестовым переносом),
+              следом — Товарооборот; index редиректит на ОСВ. */}
+          <Route path={ROUTES.APP.REPORTS} element={<Reports />}>
+            <Route index element={<Navigate to="osv" replace />} />
+            <Route path="osv" element={<OSVPage />} />
+            <Route path="account-card" element={<AccountCardPage />} />
+            <Route path="product-card" element={<ProductCardPage />} />
+            <Route path="product-turnover" element={<ProductTurnoverPage />} />
+            <Route path="price-changes" element={<PriceChanges />}>
+              <Route index element={<Navigate to="revaluation" replace />} />
+              <Route path="revaluation" element={<ProductRevaluationPage />} />
+              <Route path="history" element={<PriceChangeHistoryPage />} />
+            </Route>
+            <Route path="universal-filter" element={<UniversalFilterPage />} />
+          </Route>
+          <Route path={ROUTES.APP.REPORTS_PRODUCT_TURNOVER_DETAIL} element={<ProductTurnoverDetailPage />} />
+
+          {/* Аналитика — отдельная вкладка в сайдбаре (см. Analytics.tsx), 15
+              под-вкладок реализуются по одной; пока не реализована — ComingSoonAnalysis. */}
+          <Route path={ROUTES.APP.ANALYTICS} element={<Analytics />}>
+            <Route index element={<Navigate to="sales-dynamics" replace />} />
+            <Route path="sales-dynamics" element={<SalesDynamicsPage />} />
+            <Route path="abc" element={<ABCAnalysisPage />} />
+            <Route path="xyz" element={<XYZAnalysisPage />} />
+            <Route path="margin" element={<MarginAnalysisPage />} />
+            <Route path="category" element={<CategoryAnalysisPage />} />
+            <Route path="channels" element={<ComingSoonAnalysis titleKey="SalesChannelAnalysis" />} />
+            <Route path="geography" element={<ComingSoonAnalysis titleKey="GeographyAnalysis" />} />
+            <Route path="rfm" element={<ComingSoonAnalysis titleKey="RFMAnalysis" />} />
+            <Route path="ltv" element={<ComingSoonAnalysis titleKey="LTVAnalysis" />} />
+            <Route path="churn" element={<ComingSoonAnalysis titleKey="ChurnAnalysis" />} />
+            <Route path="cohort" element={<ComingSoonAnalysis titleKey="CohortAnalysis" />} />
+            <Route path="plan-fact" element={<ComingSoonAnalysis titleKey="PlanFactAnalysis" />} />
+            <Route path="variance" element={<ComingSoonAnalysis titleKey="VarianceAnalysis" />} />
+            <Route path="factor" element={<ComingSoonAnalysis titleKey="FactorAnalysis" />} />
+            <Route path="funnel" element={<ComingSoonAnalysis titleKey="FunnelAnalysis" />} />
+          </Route>
 
           {/* Справочники — тот же принцип: свой resource на каждой вложенной странице */}
           <Route path={ROUTES.APP.DIRECTORY} element={<Directory />}>
@@ -146,6 +202,9 @@ const AppRouter: React.FC = () => {
           <Route path={ROUTES.APP.PRODUCTS_EDIT} element={<ProductFormPage />} />
 
           <Route path={ROUTES.APP.COUNTERPARTIES} element={<CounterpartiesPage />} />
+
+          <Route path={ROUTES.APP.TRIPS} element={<TripsListPage />} />
+          <Route path={ROUTES.APP.TRIPS_VIEW} element={<TripDetailPage />} />
 
           <Route path={ROUTES.APP.WAREHOUSES} element={<Warehouses />}>
             <Route index element={<Navigate to="list" replace />} />

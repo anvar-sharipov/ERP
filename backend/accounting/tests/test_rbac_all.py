@@ -109,10 +109,24 @@ class TestProductRBAC(BaseRBACTest):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertGreaterEqual(len(response.data), 1)
         item = response.data[0]
-        for field in ("id", "name", "sku", "category_detail", "brand_detail", "unit_detail", "cost_price", "is_active", "images", "main_image"):
+        for field in ("id", "name", "sku", "category_detail", "brand_detail", "unit_detail", "cost_price", "is_active"):
             self.assertIn(field, item, f"'{field}' должен быть в облегчённом ответе list-light")
-        for field in ("prices", "bundle_items", "volume_discounts", "quantity_promotions", "tags_detail", "allowed_warehouses_detail", "description", "extra_data"):
+        # ✅ Фото сознательно НЕ в list-light (см. ProductListSerializer докстринг) —
+        # синхронная генерация thumbnail на большом каталоге не должна блокировать
+        # текстовые поля; фото отдаёт отдельный list-light-images (см. тест ниже).
+        for field in ("prices", "bundle_items", "volume_discounts", "quantity_promotions", "tags_detail", "allowed_warehouses_detail", "description", "extra_data", "images", "main_image"):
             self.assertNotIn(field, item, f"'{field}' не должен попадать в облегчённый ответ list-light")
+
+    # ✅ ProductViewSet.list_light_images — фото отдельно от list_light (см. выше),
+    # тот же resource "product"/GET, поэтому те же RBAC-права.
+    def test_list_light_images_without_permission_returns_403(self):
+        response = self._client(self.user_simple).get("/api/accounting/products/list-light-images/")
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_list_light_images_returns_map_keyed_by_product_id(self):
+        response = self._client(self.user_manager).get("/api/accounting/products/list-light-images/")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIsInstance(response.data, dict)
 
 
 class TestWarehouseRBAC(BaseRBACTest):

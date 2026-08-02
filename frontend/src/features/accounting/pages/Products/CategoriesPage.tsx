@@ -53,7 +53,7 @@ const CategoriesPage = () => {
   const [parentFilter, setParentFilter] = useState<number | "all">("all");
 
   const {
-    data: categories = [],
+    data: categoriesData,
     isLoading,
     error,
   } = useQuery({
@@ -62,6 +62,10 @@ const CategoriesPage = () => {
     enabled: canView,
     retry: false,
   });
+  // ✅ useMemo — "categories" стоит в deps эффекта setSidebarContent ниже; "?? []"/
+  // деструктуризация с дефолтом создаёт новую ссылку на каждый рендер, пока
+  // запрос грузится → "Maximum update depth exceeded".
+  const categories = useMemo(() => categoriesData ?? [], [categoriesData]);
 
   const treeItems = useMemo(() => {
     return filterTreeItems(categories, searchQuery);
@@ -250,7 +254,7 @@ const CategoriesPage = () => {
       render: (item) => (
         <div className="flex gap-2">
           <Button
-            title={`F2 - ${t("Edit")}`}
+            title={`Enter - ${t("Edit")}`}
             disabled={!canPut}
             variant="1c"
             icon={<span>✏️</span>}

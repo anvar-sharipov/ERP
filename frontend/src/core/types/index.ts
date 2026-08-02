@@ -285,6 +285,55 @@ export interface AuditLog {
 }
 
 
+export interface ProductRevaluation {
+  id: number
+  product: number
+  product_name: string
+  product_sku: string | null
+  warehouse: number
+  warehouse_name: string
+  branch: number
+  branch_name: string
+  document: number | null
+  document_number: string | null
+  date: string
+  quantity: string
+  old_cost_price: string
+  new_cost_price: string
+  diff_amount: string
+  created_by: number | null
+  created_by_display: string
+  created_at: string
+}
+
+
+export interface PriceChangeHistory {
+  id: number
+  product: number
+  product_name: string
+  product_sku: string | null
+  product_unit: string
+  price_type: number | null
+  price_type_name: string
+  warehouse: number | null
+  warehouse_name: string | null
+  branch: number | null
+  branch_name: string | null
+  document: number | null
+  document_number: string | null
+  date: string
+  old_price: string
+  new_price: string
+  quantity_at_change: string
+  old_sum: string
+  new_sum: string
+  diff_amount: string
+  created_by: number | null
+  created_by_display: string
+  created_at: string
+}
+
+
 
  
 export interface DocumentShort {
@@ -314,6 +363,7 @@ export interface DocumentList {
   created_by_name?: string | null;
   posted_by: number | null;
   posted_by_name?: string | null;
+  driver_name?: string | null;
   note?: string;
 }
  

@@ -113,7 +113,7 @@ const Roles = () => {
       render: (role) => (
         <div className="flex gap-2">
           <Button
-            title={`F2 - ${t("Edit")}`}
+            title={`Enter - ${t("Edit")}`}
             disabled={!canPut}
             variant="1c"
             icon={<span>✏️</span>}

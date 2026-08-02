@@ -6,6 +6,7 @@ import { closedPeriodApi, userScopeApi } from "../../features/accounting/service
 import { useNotify } from "../../core/context/NotificationContext";
 import { useDateStore } from "../../core/store/dateStore";
 import { useClosedPeriod, useBranchWarehousesClosed } from "../../core/hooks/useClosedPeriod";
+import { useDebouncedValue } from "../../core/hooks/useDebouncedValue";
 import { usePageAccess } from "../../core/hooks/usePageAccess";
 import { RBACGuard } from "./RBACGuard";
 import { ConfirmModal } from "./Modal/ConfirmModal";
@@ -42,6 +43,23 @@ export default function WorkDateWidget() {
       })),
     );
 
+  // ✅ Дебаунс периода отчётов — periodFrom/periodTo читают ДЕСЯТКИ страниц
+  // (см. CLAUDE.md: "каждая страница с бизнес-данными должна реагировать на
+  // period из WorkDateWidget") прямо в queryKey своих запросов. Раньше onChange
+  // писал в стор (useDateStore) СРАЗУ на каждое изменение поля <input type=date>
+  // (в т.ч. промежуточные — правка дня/месяца/года по отдельности при ручном
+  // наборе даты) — каждое такое изменение мгновенно триггерило полный набор
+  // тяжёлых отчётных запросов (оборот/остатки/цены и т.д.) на КАЖДОЙ странице,
+  // где эти отчёты сейчас открыты, а не только на финальную выбранную дату.
+  // Локальный стейт для инпутов — отображается сразу (поле "живое"), а в стор
+  // (и, соответственно, в queryKey всех потребителей) уходит только финальное
+  // значение через 500мс тишины, тем же паттерном, что и debounce поиска
+  // (см. useDebouncedValue.ts — InvoicesPage.tsx/AuditLogPage.tsx/ProductCardPage.tsx).
+  const [localPeriodFrom, setLocalPeriodFrom] = useState(useDateStore.getState().periodFrom);
+  const [localPeriodTo, setLocalPeriodTo] = useState(useDateStore.getState().periodTo);
+  const debouncedPeriodFrom = useDebouncedValue(localPeriodFrom, 500);
+  const debouncedPeriodTo = useDebouncedValue(localPeriodTo, 500);
+
   const { data: scope } = useQuery({
     queryKey: ["my-scope"],
     queryFn: () => userScopeApi.getMyScope().then((r) => r.data),
@@ -77,6 +95,22 @@ export default function WorkDateWidget() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workBranch?.id, scope]);
+
+  // ✅ Стор → локальный инпут: пресеты "Сегодня"/"Месяц"/"Год" (см. кнопки ниже)
+  // пишут в стор МИНУЯ дебаунс (осознанный клик — незачем ждать 500мс) — синхронизируем
+  // локальное отображаемое значение сразу же, чтобы поля не отставали от пресета.
+  useEffect(() => setLocalPeriodFrom(periodFrom), [periodFrom]);
+  useEffect(() => setLocalPeriodTo(periodTo), [periodTo]);
+
+  // ✅ Локальный инпут → стор, с задержкой (см. комментарий у useDebouncedValue выше).
+  useEffect(() => {
+    if (debouncedPeriodFrom && debouncedPeriodFrom !== periodFrom) setPeriodFrom(debouncedPeriodFrom);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [debouncedPeriodFrom]);
+  useEffect(() => {
+    if (debouncedPeriodTo && debouncedPeriodTo !== periodTo) setPeriodTo(debouncedPeriodTo);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [debouncedPeriodTo]);
 
   const hasBranches = (scope?.branches?.length ?? 0) > 0;
   const hasWarehouses = (scope?.warehouses?.length ?? 0) > 0;
@@ -237,11 +271,11 @@ export default function WorkDateWidget() {
           <div className="grid grid-cols-2 gap-2">
             <div>
               <label className="text-indigo-400/70 ml-1 text-xs">{t("From")}</label>
-              <input tabIndex={0} type="date" value={periodFrom} onChange={(e) => setPeriodFrom(e.target.value)} className={`${inputCls} !px-1.5 text-sm`} />
+              <input tabIndex={0} type="date" value={localPeriodFrom} onChange={(e) => setLocalPeriodFrom(e.target.value)} className={`${inputCls} !px-1.5 text-sm`} />
             </div>
             <div>
               <label className="text-indigo-400/70 ml-1 text-xs">{t("To")}</label>
-              <input tabIndex={0} type="date" value={periodTo} onChange={(e) => setPeriodTo(e.target.value)} className={`${inputCls} !px-1.5 text-sm`} />
+              <input tabIndex={0} type="date" value={localPeriodTo} onChange={(e) => setLocalPeriodTo(e.target.value)} className={`${inputCls} !px-1.5 text-sm`} />
             </div>
           </div>
           <div className="flex flex-wrap gap-1 pt-1">

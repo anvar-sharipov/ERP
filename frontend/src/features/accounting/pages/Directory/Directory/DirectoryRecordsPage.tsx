@@ -140,11 +140,15 @@ const DirectoryRecordsPage = () => {
   });
 
   // поля справочника — из них строим колонки и форму
-  const { data: fields = [] } = useQuery<DirectoryField[]>({
+  const { data: fieldsData } = useQuery<DirectoryField[]>({
     queryKey: ["directory-fields", directoryId],
     queryFn: () => directoryFieldApi.getFields(directoryId),
     enabled: !!directoryId,
   });
+  // ✅ useMemo — "fields" стоит в deps эффекта setSidebarContent ниже; "?? []"/
+  // деструктуризация с дефолтом создаёт новую ссылку на каждый рендер, пока
+  // запрос грузится → "Maximum update depth exceeded".
+  const fields = useMemo(() => fieldsData ?? [], [fieldsData]);
 
   // записи
   const {
@@ -324,7 +328,7 @@ const DirectoryRecordsPage = () => {
       render: (item) => (
         <div className="flex gap-2">
           <Button
-            title={`F2 - ${t("Edit")}`}
+            title={`Enter - ${t("Edit")}`}
             disabled={!canPut}
             variant="1c"
             icon={<span>✏️</span>}

@@ -135,8 +135,31 @@ const Dashboard = () => {
     enabled: compareEnabled && !!periodFrom && !!periodTo && canView,
   });
 
-  const byWarehouse = data?.by_warehouse ?? [];
-  const daily = data?.daily ?? [];
+  // ✅ useMemo, а не просто "?? []" — иначе во время загрузки (data===undefined)
+  // на каждый рендер создаётся НОВАЯ ссылка на массив, которая стоит в deps
+  // эффекта ниже (setSidebarContent) → эффект перезапускается → снова меняет
+  // context state → новый рендер → бесконечный цикл ("Maximum update depth
+  // exceeded", проявляется прерывисто — зависит от того, сколько рендеров
+  // успевает произойти, пока data ещё не пришли).
+  const byWarehouse = useMemo(() => data?.by_warehouse ?? [], [data]);
+  const daily = useMemo(() => data?.daily ?? [], [data]);
+
+  // ✅ Самовосстановление от устаревшего фильтра складов: WAREHOUSE_FILTER_KEY
+  // хранится в сыром localStorage (не в zustand, не в react-query) и НЕ чистится
+  // ни логином, ни логаутом — он про UI-предпочтение конкретного браузера, а не
+  // про пользователя/сессию. Баг: если раньше в этом браузере был выбран склад,
+  // недоступный текущему пользователю/периоду (например, другой филиал), фильтр
+  // молча обнулял ВСЕ виджеты дашборда до пустоты, хотя сырые данные с бэкенда
+  // были полностью корректны — выглядело как "график не работает". Если после
+  // загрузки реальных складов сохранённый набор ни с одним из них не пересекается —
+  // считаем его устаревшим и сбрасываем к "фильтр выключен", а не оставляем висеть.
+  useEffect(() => {
+    if (selectedWarehouseIds.size === 0 || byWarehouse.length === 0) return;
+    const realIds = new Set(byWarehouse.map((w) => w.warehouse_id));
+    const stillValid = [...selectedWarehouseIds].some((id) => realIds.has(id));
+    if (!stillValid) persistSelected(new Set());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [byWarehouse]);
 
   // ✅ Фильтр складов (сайдбар) применяется одинаково к плиткам, обоим графикам
   // и таблице — единая точка фильтрации, экран не расходится сам с собой.

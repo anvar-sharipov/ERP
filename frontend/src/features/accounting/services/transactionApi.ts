@@ -48,6 +48,10 @@ export interface JournalEntry {
   // document-проводки напрямую из журнала (это делается через сам документ).
   is_manual?: boolean
   source_document_id?: number | null
+  // ✅ Закрыт ли день ЭТОЙ проводки (её собственные date/branch/warehouse) — см.
+  // JournalEntryListSerializer.get_is_period_closed. Используется в JournalPage.tsx
+  // для disabled-состояния кнопок Провести/Отменить/Изменить/Удалить.
+  is_period_closed?: boolean
 }
 
 export interface JournalEntryPayload {
@@ -132,14 +136,25 @@ const J = '/accounting/journal-entries/'
 const M = '/accounting/stock-movements/'
 const C = '/accounting/closed-periods/'
 
+// ✅ Server-side пагинация (см. JournalPage.tsx) — DRF теперь отдаёт {results, count},
+// а не голый массив (JournalEntryViewSet больше не отключает pagination_class).
+export interface PaginatedResponse<T> {
+  results: T[]
+  count: number
+}
+
 export const journalApi = {
-  list:     (params?: Record<string, string>) => api.get<JournalEntry[]>(J, { params }),
+  list:     (params?: Record<string, string>) => api.get<JournalEntry[] | PaginatedResponse<JournalEntry>>(J, { params }),
   retrieve: (id: number)                       => api.get<JournalEntry>(`${J}${id}/`),
   create:   (data: JournalEntryPayload)         => api.post<JournalEntry>(J, data),
   update:   (id: number, data: JournalEntryPayload) => api.put<JournalEntry>(`${J}${id}/`, data),
   post:     (id: number)                        => api.post(`${J}${id}/post/`),
   unpost:   (id: number)                        => api.post(`${J}${id}/unpost/`),
   delete:   (id: number)                        => api.delete(`${J}${id}/`),
+  bulkDelete: (ids: (number | string)[]) =>
+    api
+      .delete<{ deleted_ids: number[]; errors: { id: number; detail: string }[]; missing_ids: number[] }>(`${J}bulk-destroy/`, { data: { ids } })
+      .then((r) => r.data),
 }
 
 export const movementApi = {

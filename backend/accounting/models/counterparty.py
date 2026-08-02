@@ -1,6 +1,8 @@
 # accounting/models/counterparty.py
 import uuid
+from decimal import Decimal
 from django.contrib.postgres.indexes import GinIndex
+from django.core.validators import MinValueValidator, MaxValueValidator
 from django.db import connection, models
 from imagekit.models import ImageSpecField
 from imagekit.processors import ResizeToFill
@@ -62,6 +64,18 @@ class Counterparty(models.Model):
     # ✅ Дублирует Agent.district для быстрого фильтра/отображения без join —
     # заполняется тем же значением, что и agent.district на момент назначения.
     district = models.CharField(max_length=100, blank=True, verbose_name="Район")
+    # ✅ % от суммы накладной, который получает водитель за доставку этому
+    # контрагенту (см. Trip/Document.delivery_percent) — заменяет расчёт по
+    # реальным км/геоданным: чем дальше/сложнее доставка клиенту, тем выше
+    # процент, настраивается вручную администратором один раз на контрагента,
+    # а не пересчитывается на каждый рейс. Document._snapshot-ит это значение
+    # в Document.delivery_percent при проведении "Расхода" — см. CLAUDE.md про
+    # "хранить то, что реально было" вместо ссылки на текущее (изменяемое) поле.
+    delivery_percent = models.DecimalField(
+        max_digits=5, decimal_places=2, default=Decimal('0.00'),
+        validators=[MinValueValidator(0), MaxValueValidator(100)],
+        verbose_name="Процент водителю за доставку (%)",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     extra_data = models.JSONField(default=dict, blank=True)
 

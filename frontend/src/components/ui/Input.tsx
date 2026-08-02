@@ -7,10 +7,16 @@ interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
   leftIcon?: React.ReactNode;
   rightIcon?: React.ReactNode;
   onClear?: () => void;
+  // ✅ className уходит на внешний wrapper (для label/gap/ширины) — фокус-стили
+  // самого <input> заданы внутри фиксированной строкой ниже и им не переопределить
+  // через className. inputClassName — точечный способ усилить/поменять именно
+  // фокус конкретного использования (см. Table.tsx — поиск в таблице), не трогая
+  // дефолтный фокус-стиль всех остальных Input в приложении.
+  inputClassName?: string;
 }
 
 // 1. Используем forwardRef для проброса рефа
-export const Input = forwardRef<HTMLInputElement, InputProps>(({ label, error, leftIcon, rightIcon, onClear, className = "", value, onChange, type = "text", ...props }, ref) => {
+export const Input = forwardRef<HTMLInputElement, InputProps>(({ label, error, leftIcon, rightIcon, onClear, className = "", inputClassName = "", value, onChange, type = "text", ...props }, ref) => {
   const [showPassword, setShowPassword] = useState(false);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -45,6 +51,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(({ label, error, l
                   ? "border-red-300 dark:border-red-900/60 focus:border-red-500 dark:focus:border-red-700"
                   : "border-gray-300 dark:border-indigo-900/50 focus:border-indigo-500 dark:focus:border-indigo-500/50 focus:ring-1 focus:ring-indigo-500/20"
               }
+              ${inputClassName}
             `}
           {...props}
         />

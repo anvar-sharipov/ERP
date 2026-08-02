@@ -22,6 +22,22 @@ def get_last_closed_date(warehouse_id):
     return last.date if last else None
 
 
+def is_period_closed(date, branch_id=None, warehouse_id=None) -> bool:
+    """
+    Булева обёртка над check_period_open — для мест, которым нужно просто узнать
+    "закрыт ли период" (например disabled-состояние кнопок Изменить/Удалить в
+    JournalPage.tsx), а не среагировать на исключение. Намеренно переиспользует
+    ту же проверку целиком (включая последовательное правило "последний закрытый
+    день склада + 1" ниже), а не только явные записи ClosedPeriod — иначе эти два
+    места могли бы разойтись в том, что считается "закрытым днём".
+    """
+    try:
+        check_period_open(date, branch_id=branch_id, warehouse_id=warehouse_id)
+    except ValidationError:
+        return True
+    return False
+
+
 def check_period_open(date, branch_id=None, warehouse_id=None):
     """
     Проверяет что период открыт для данной даты.
@@ -148,5 +164,79 @@ def resolve_product_price(product_id, warehouse_id, price_type_id):
     # 3. глобальная цена
     price = qs.filter(warehouse__isnull=True, branch__isnull=True).first()
     return price
-    
-    
+
+
+def resolve_price_scope_quantity(product_id, warehouse_id=None, branch_id=None):
+    """
+    Остаток товара в охвате цены — используется отчётом "История изменения цен"
+    (PriceChangeHistory): указан склад — остаток по нему; указан только филиал —
+    сумма по складам филиала; ничего не указано (глобальная цена/себестоимость) —
+    сумма по всем складам компании. Возвращает (quantity, resolved_branch_id) —
+    resolved_branch_id пробрасывается на склад, если он был передан, иначе как есть.
+    """
+    from decimal import Decimal
+    from django.db.models import Sum
+    from .models import WarehouseStock, Warehouse
+
+    if warehouse_id:
+        qty = (
+            WarehouseStock.objects
+            .filter(warehouse_id=warehouse_id, product_id=product_id)
+            .aggregate(total=Sum('quantity'))['total']
+        ) or Decimal('0')
+        wh = Warehouse.objects.filter(pk=warehouse_id).only('branch_id').first()
+        return qty, wh.branch_id if wh else None
+
+    if branch_id:
+        qty = (
+            WarehouseStock.objects
+            .filter(warehouse__branch_id=branch_id, product_id=product_id)
+            .aggregate(total=Sum('quantity'))['total']
+        ) or Decimal('0')
+        return qty, branch_id
+
+    qty = (
+        WarehouseStock.objects
+        .filter(product_id=product_id)
+        .aggregate(total=Sum('quantity'))['total']
+    ) or Decimal('0')
+    return qty, None
+
+
+def record_price_change(
+    *, product_id, old_price, new_price, quantity,
+    price_type_id=None, product_price=None, warehouse_id=None, branch_id=None,
+    document=None, user=None, date=None,
+):
+    """
+    Пишет одну строку в PriceChangeHistory (отчёт "История изменения цен") —
+    единая точка для ЛЮБОГО типа цены: ProductPrice (см. ProductPriceViewSet.
+    perform_update) и себестоимости (см. Document._update_product_cost_prices).
+    Ничего не делает, если цена фактически не изменилась.
+    """
+    from decimal import Decimal
+    from django.utils import timezone
+    from .models import PriceChangeHistory
+
+    if old_price == new_price:
+        return None
+
+    old_sum = (quantity * old_price).quantize(Decimal('0.01'))
+    new_sum = (quantity * new_price).quantize(Decimal('0.01'))
+
+    return PriceChangeHistory.objects.create(
+        product_id=product_id,
+        price_type_id=price_type_id,
+        product_price=product_price,
+        warehouse_id=warehouse_id,
+        branch_id=branch_id,
+        document=document,
+        date=date or timezone.now().date(),
+        old_price=old_price,
+        new_price=new_price,
+        quantity_at_change=quantity,
+        old_sum=old_sum,
+        new_sum=new_sum,
+        diff_amount=new_sum - old_sum,
+        created_by=user if user and getattr(user, 'is_authenticated', False) else None,
+    )

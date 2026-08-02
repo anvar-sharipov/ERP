@@ -3,7 +3,7 @@
 from rest_framework import serializers
 from django.db import transaction
 from django.contrib.contenttypes.models import ContentType
-from accounting.utils import check_period_open, generate_journal_number
+from accounting.utils import check_period_open, is_period_closed, generate_journal_number
 from rest_framework import serializers as drf_serializers
 from users.scoping import get_user_scope
 
@@ -219,12 +219,13 @@ class JournalEntrySerializer(serializers.ModelSerializer):
     def validate_date(self, value):
         # При создании и редактировании проверяем дату — включая жёсткое
         # последовательное правило по складу (см. check_period_open), поэтому
-        # warehouse нужно взять из сырых входных данных (validate_<field>
+        # warehouse/branch нужно взять из сырых входных данных (validate_<field>
         # вызывается раньше object-level validate(), self.instance/warehouse
         # ещё не гарантированно установлены).
         warehouse_id = self.initial_data.get('warehouse') or (self.instance.warehouse_id if self.instance else None)
+        branch_id = self.initial_data.get('branch') or (self.instance.branch_id if self.instance else None)
         try:
-            check_period_open(value, warehouse_id=warehouse_id)
+            check_period_open(value, branch_id=branch_id, warehouse_id=warehouse_id)
         except Exception as e:
             raise serializers.ValidationError(str(e))
         return value
@@ -288,6 +289,15 @@ class JournalEntryListSerializer(serializers.ModelSerializer):
     def get_is_manual(self, obj):
         return obj.source_document_id is None
 
+    # ✅ Закрыт ли день этой конкретной проводки (её собственные date/branch/warehouse,
+    # а не текущий workDate/workWarehouse из сайдбара) — фронт (JournalPage.tsx)
+    # использует это, чтобы дизейблить Изменить/Удалить/Провести/Отменить прямо
+    # в колонке "Действия", не дожидаясь ошибки от бэкенда после клика.
+    is_period_closed = serializers.SerializerMethodField()
+
+    def get_is_period_closed(self, obj):
+        return is_period_closed(obj.date, branch_id=obj.branch_id, warehouse_id=obj.warehouse_id)
+
     class Meta:
         model  = JournalEntry
 
@@ -323,6 +333,7 @@ class JournalEntryListSerializer(serializers.ModelSerializer):
             'created_by_name',
             'created_at',
             'is_manual',
+            'is_period_closed',
         ]
 
     def get_debit_total(self, obj):

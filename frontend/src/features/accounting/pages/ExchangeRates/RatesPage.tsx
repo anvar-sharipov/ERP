@@ -9,7 +9,7 @@ import { Button } from "../../../../components/ui/Button";
 import { Modal } from "../../../../components/ui/Modal/Modal";
 import { RBACGuard } from "../../../../components/ui/RBACGuard";
 import { Plus } from "lucide-react";
-import { useTableFilter } from "../../../../core/hooks/useTableFilter";
+import { useDebouncedValue } from "../../../../core/hooks/useDebouncedValue";
 import { usePageHotkeys } from "../../../../core/hooks/usePageHotkeys";
 import { useNotify } from "../../../../core/context/NotificationContext";
 import { useClosedPeriod } from "../../../../core/hooks/useClosedPeriod";
@@ -69,8 +69,14 @@ export default function RatesPage() {
     staleTime: 1000 * 60 * 10,
   });
 
+  // ✅ Дебаунс поиска — раньше поиск фильтровал только уже загруженную с бэкенда
+  // страницу (useTableFilter), из-за чего курс мог реально существовать, но не
+  // находиться, если попадал на другую страницу. Теперь уходит в бэкенд как
+  // query-параметр (см. currency_views.py), поэтому нужен дебаунс.
+  const debouncedSearch = useDebouncedValue(searchQuery, 350);
+
   const { data, isLoading, error } = useQuery({
-    queryKey: ["exchange-rates", page, pageSize, periodFrom, periodTo, sortBy, sortDir],
+    queryKey: ["exchange-rates", page, pageSize, periodFrom, periodTo, sortBy, sortDir, debouncedSearch],
     queryFn: () =>
       accountApi.getExchangeRates({
         page,
@@ -78,6 +84,7 @@ export default function RatesPage() {
         ...(periodFrom && { date_from: periodFrom }),
         ...(periodTo && { date_to: periodTo }),
         ...(sortBy && { ordering: sortDir === "desc" ? `-${sortBy}` : sortBy }),
+        ...(debouncedSearch && { search: debouncedSearch }),
       }),
     enabled: canView,
     placeholderData: (prev) => prev,
@@ -87,7 +94,7 @@ export default function RatesPage() {
   // сбрасывай страницу при смене периода
   useEffect(() => {
     setPage(1);
-  }, [periodFrom, periodTo, sortBy, sortDir]);
+  }, [periodFrom, periodTo, sortBy, sortDir, debouncedSearch]);
 
   const mutation = useMutation({
     mutationFn: () =>
@@ -175,18 +182,13 @@ export default function RatesPage() {
     },
   ];
 
-  const filtered = useTableFilter(rates, {
-    search: searchQuery,
-    searchFields: ["currency_code", "date", "created_by_username"],
-  });
-
   const inputCls = "px-3 py-2 rounded-lg border text-sm bg-slate-900 text-slate-100 border-slate-700 focus:border-indigo-500 focus:outline-none w-full";
 
   return (
     <RBACGuard isLoading={isLoading} error={error} canView={canView} forbiddenText={t("ForbiddenText")}>
       <Table
         columns={columns}
-        data={filtered}
+        data={rates}
         tableId="exchange_rates"
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}

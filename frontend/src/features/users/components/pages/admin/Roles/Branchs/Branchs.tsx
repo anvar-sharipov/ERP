@@ -46,6 +46,17 @@ const Branches = () => {
 
   const companyId = company?.[0]?.id;
 
+  // ✅ Company.allow_branch_creation (см. global-admin панель) — независимо
+  // от обычных RBAC-прав скрывает кнопку "Добавить филиал" для ВСЕХ
+  // пользователей tenant'а, если владелец платформы это отключил. По
+  // умолчанию true — ничего не меняется, пока это не настроено явно.
+  const { data: tenantSettings } = useQuery({
+    queryKey: ["tenant-settings"],
+    queryFn: companyApi.getTenantSettings,
+    staleTime: 1000 * 60 * 5,
+  });
+  const canAddBranch = tenantSettings?.allow_branch_creation ?? false;
+
   const emptyForm = {
     name: "",
     code: "",
@@ -157,20 +168,22 @@ const Branches = () => {
   useEffect(() => {
     setSidebarContent(
       <div className="space-y-4">
-        <div>
-          <h4 className="font-bold text-indigo-300 mb-2">{t("Actions")}</h4>
-          <Button
-            text={t("AddBranch")}
-            disabled={!canPost}
-            onClick={() => {
-              setEditingBranch(null);
-              setModalOpen(true);
-            }}
-            className="w-full"
-            icon={<Plus className="w-4 h-4" />}
-            dark={true}
-          />
-        </div>
+        {canAddBranch && (
+          <div>
+            <h4 className="font-bold text-indigo-300 mb-2">{t("Actions")}</h4>
+            <Button
+              text={t("AddBranch")}
+              disabled={!canPost}
+              onClick={() => {
+                setEditingBranch(null);
+                setModalOpen(true);
+              }}
+              className="w-full"
+              icon={<Plus className="w-4 h-4" />}
+              dark={true}
+            />
+          </div>
+        )}
 
         <div className="pt-4 border-t border-indigo-900/30">
           <h4 className="font-bold text-indigo-300 mb-2">{t("StatusFilter")}</h4>
@@ -191,7 +204,7 @@ const Branches = () => {
         </div>
       </div>,
     );
-  }, [setSidebarContent, activeFilter, canPost, t]);
+  }, [setSidebarContent, activeFilter, canPost, canAddBranch, t]);
 
   const filtered = useTableFilter(branches || [], {
     search: searchQuery,
@@ -207,7 +220,7 @@ const Branches = () => {
   });
 
   usePageHotkeys({
-    canPost,
+    canPost: canPost && canAddBranch,
     onInsert: () => {
       setEditingBranch(null);
       setModalOpen(true);
@@ -263,7 +276,7 @@ const Branches = () => {
       render: (b) => (
         <div className="flex gap-2">
           <Button
-            title={`F2 - ${t("Edit")}`}
+            title={`Enter - ${t("Edit")}`}
             disabled={!canPut}
             variant="1c"
             icon={<span>✏️</span>}

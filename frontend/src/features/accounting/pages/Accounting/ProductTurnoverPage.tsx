@@ -10,6 +10,7 @@ import { usePageAccess } from "../../../../core/hooks/usePageAccess";
 import { RBACGuard } from "../../../../components/ui/RBACGuard";
 import { Loader } from "../../../../components/ui/Loader";
 import { useSidebar } from "../../../../core/context/SidebarRightContext";
+import { useRestoreScroll } from "../../../../core/hooks/useRestoreScroll";
 import { useCompany } from "../../../../core/context/CompanyContext";
 import { useUser } from "../../../../core/context/UserContext";
 import { HelpButton } from "../../../../components/ui/HelpButton";
@@ -26,7 +27,32 @@ import { groupByCategory, groupByBrand } from "./productTurnoverGrouping";
 
 const STORAGE_KEY = "product_turnover_separate_return_out";
 const GROUP_BY_STORAGE_KEY = "product_turnover_group_by";
+const SHOW_ZERO_STORAGE_KEY = "product_turnover_show_zero";
+const SEARCH_STORAGE_KEY = "product_turnover_search_query";
+const CATEGORY_FILTER_STORAGE_KEY = "product_turnover_category_filter";
+const BRAND_FILTER_STORAGE_KEY = "product_turnover_brand_filter";
+const PRODUCT_FILTER_STORAGE_KEY = "product_turnover_product_filter";
 type GroupBy = "category" | "brand";
+
+// ✅ Поиск/фильтры по категории/бренду/товару — держим в sessionStorage (а не только
+// в useState), чтобы они не терялись при переходе на детализацию (двойной клик по
+// строке) и возврате назад: страница размонтируется/монтируется заново, обычный
+// useState начал бы с пустого состояния. sessionStorage (а не localStorage, как
+// у переключателей ниже) — чтобы фильтры жили в рамках текущей вкладки/сессии
+// просмотра отчёта, а не переживали закрытие браузера как настройка.
+const readSessionValue = (key: string): string | null => {
+  try {
+    return sessionStorage.getItem(key);
+  } catch {
+    return null;
+  }
+};
+const writeSessionValue = (key: string, value: string | null) => {
+  try {
+    if (value == null || value === "") sessionStorage.removeItem(key);
+    else sessionStorage.setItem(key, value);
+  } catch {}
+};
 
 const ProductTurnoverPage = () => {
   const { t } = useTranslation();
@@ -37,9 +63,44 @@ const ProductTurnoverPage = () => {
   const { company } = useCompany();
   const { user } = useUser();
   const [previewImage, setPreviewImage] = useState<string | null>(null);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [categoryFilter, setCategoryFilter] = useState<number | null>(null);
-  const [brandFilter, setBrandFilter] = useState<number | null>(null);
+  const [searchQuery, setSearchQueryState] = useState(() => readSessionValue(SEARCH_STORAGE_KEY) ?? "");
+  const setSearchQuery = (value: string) => {
+    setSearchQueryState(value);
+    writeSessionValue(SEARCH_STORAGE_KEY, value);
+  };
+
+  const [categoryFilter, setCategoryFilterState] = useState<number | null>(() => {
+    const v = readSessionValue(CATEGORY_FILTER_STORAGE_KEY);
+    return v ? Number(v) : null;
+  });
+  const setCategoryFilter = (value: number | null) => {
+    setCategoryFilterState(value);
+    writeSessionValue(CATEGORY_FILTER_STORAGE_KEY, value == null ? null : String(value));
+  };
+
+  const [brandFilter, setBrandFilterState] = useState<number | null>(() => {
+    const v = readSessionValue(BRAND_FILTER_STORAGE_KEY);
+    return v ? Number(v) : null;
+  });
+  const setBrandFilter = (value: number | null) => {
+    setBrandFilterState(value);
+    writeSessionValue(BRAND_FILTER_STORAGE_KEY, value == null ? null : String(value));
+  };
+
+  const [productFilter, setProductFilterState] = useState<number | null>(() => {
+    const v = readSessionValue(PRODUCT_FILTER_STORAGE_KEY);
+    return v ? Number(v) : null;
+  });
+  const setProductFilter = (value: number | null) => {
+    setProductFilterState(value);
+    writeSessionValue(PRODUCT_FILTER_STORAGE_KEY, value == null ? null : String(value));
+  };
+
+  // ✅ При возврате с детализации (ProductTurnoverDetailPage.tsx::BackButton, ключ
+  // "selectedTurnoverDetailProductId") — подсвечиваем/скроллим к тому же товару,
+  // с которого туда ушли, вместо того чтобы всегда выделять первую строку.
+  const [selectedProductId, setSelectedProductId] = useState<number | null>(null);
+  useRestoreScroll("selectedTurnoverDetailProductId", setSelectedProductId);
 
   const [separateReturnOut, setSeparateReturnOut] = useState(() => {
     try {
@@ -53,6 +114,21 @@ const ProductTurnoverPage = () => {
     setSeparateReturnOut(value);
     try {
       localStorage.setItem(STORAGE_KEY, String(value));
+    } catch {}
+  };
+
+  const [showZeroTurnover, setShowZeroTurnoverState] = useState(() => {
+    try {
+      return localStorage.getItem(SHOW_ZERO_STORAGE_KEY) === "true";
+    } catch {
+      return false;
+    }
+  });
+
+  const setShowZeroTurnover = (value: boolean) => {
+    setShowZeroTurnoverState(value);
+    try {
+      localStorage.setItem(SHOW_ZERO_STORAGE_KEY, String(value));
     } catch {}
   };
 
@@ -81,11 +157,16 @@ const ProductTurnoverPage = () => {
     ...(workWarehouse?.id ? { warehouse: String(workWarehouse.id) } : workBranch?.id ? { branch: String(workBranch.id) } : {}),
   };
 
-  const { data: rows = [], isLoading } = useQuery<ProductTurnoverRow[]>({
+  const { data: rowsData, isLoading } = useQuery<ProductTurnoverRow[]>({
     queryKey: ["product-turnover", periodFrom, periodTo, workBranch?.id, workWarehouse?.id],
     queryFn: () => accountApi.getProductTurnover(queryParams),
     enabled: !!periodFrom && !!periodTo && canView,
   });
+  // ✅ useMemo — "rows" фидит categoryOptions/brandOptions/grouped (все useMemo
+  // ниже), которые в свою очередь стоят в deps эффекта setSidebarContent; "?? []"
+  // создавал бы новую ссылку на каждый рендер, пока запрос грузится, каскадом
+  // дестабилизируя всю цепочку → "Maximum update depth exceeded".
+  const rows = useMemo(() => rowsData ?? [], [rowsData]);
 
   // ✅ Списки категорий/брендов — из уже загруженных данных за период/склад (не отдельный
   // запрос), чтобы фильтр всегда показывал только реально присутствующие варианты.
@@ -109,17 +190,41 @@ const ProductTurnoverPage = () => {
       .map(([id, label]) => ({ id, label }));
   }, [rows]);
 
-  // ✅ Поиск (имя/артикул) + фильтры по категории/бренду — единая точка, от которой
-  // считается и то, что видно на экране, и то, что уходит в Excel-экспорт (см. ниже).
+  const productOptions = useMemo(
+    () =>
+      [...rows]
+        .sort((a, b) => a.name.localeCompare(b.name))
+        .map((r) => ({ id: r.id, label: r.sku ? `${r.name} (${r.sku})` : r.name, thumbnail: r.thumbnail_url ?? undefined })),
+    [rows],
+  );
+
+  // ✅ "Пустой оборот" — товар, у которого и начальный, и конечный остаток, и все
+  // движения за период равны нулю (см. CLAUDE.md: экран/фильтр/Excel не должны
+  // расходиться — фильтр применяется до группировки, поэтому одинаково влияет на
+  // то, что видно на экране, и на то, что уходит в Excel-экспорт).
+  const isZeroTurnoverRow = (r: ProductTurnoverRow) =>
+    Number(r.opening_qty) === 0 &&
+    Number(r.in_qty) === 0 &&
+    Number(r.return_in_qty) === 0 &&
+    Number(r.out_qty) === 0 &&
+    Number(r.return_out_qty) === 0 &&
+    Number(r.move_qty) === 0 &&
+    Number(r.closing_qty) === 0;
+
+  // ✅ Поиск (имя/артикул) + фильтры по категории/бренду/товару/нулевым оборотам —
+  // единая точка, от которой считается и то, что видно на экране, и то, что уходит
+  // в Excel-экспорт (см. ниже).
   const filteredRows = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
     return rows.filter((r) => {
       if (categoryFilter != null && r.category_id !== categoryFilter) return false;
       if (brandFilter != null && r.brand_id !== brandFilter) return false;
+      if (productFilter != null && r.id !== productFilter) return false;
+      if (!showZeroTurnover && isZeroTurnoverRow(r)) return false;
       if (q && !r.name.toLowerCase().includes(q) && !(r.sku ?? "").toLowerCase().includes(q)) return false;
       return true;
     });
-  }, [rows, searchQuery, categoryFilter, brandFilter]);
+  }, [rows, searchQuery, categoryFilter, brandFilter, productFilter, showZeroTurnover]);
 
   const grouped = useMemo(
     () => (groupBy === "brand" ? groupByBrand(filteredRows) : groupByCategory(filteredRows)),
@@ -196,6 +301,17 @@ const ProductTurnoverPage = () => {
         </div>
 
         <div className="pt-4 border-t border-indigo-900/30">
+          <h4 className="font-bold text-indigo-300 mb-2 uppercase tracking-wider">{t("Product")}</h4>
+          <SearchableSelect
+            theme="sidebar"
+            options={productOptions}
+            value={productFilter}
+            onChange={setProductFilter}
+            placeholder={t("All")}
+          />
+        </div>
+
+        <div className="pt-4 border-t border-indigo-900/30">
           <h4 className="font-bold text-indigo-300 mb-2 uppercase tracking-wider">{t("Settings")}</h4>
           <label className="flex items-center gap-2 text-indigo-200 cursor-pointer">
             <input
@@ -206,6 +322,15 @@ const ProductTurnoverPage = () => {
             />
             {t("SeparateReturnToSupplier")}
           </label>
+          <label className="flex items-center gap-2 text-indigo-200 cursor-pointer mt-2">
+            <input
+              type="checkbox"
+              checked={showZeroTurnover}
+              onChange={(e) => setShowZeroTurnover(e.target.checked)}
+              className="w-4 h-4 rounded border-gray-300 text-indigo-600"
+            />
+            {t("ShowZeroTurnover")}
+          </label>
         </div>
 
         <div className="pt-2 border-t border-indigo-900/30 text-indigo-400/60 space-y-1">
@@ -215,7 +340,7 @@ const ProductTurnoverPage = () => {
       </div>,
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [setSidebarContent, separateReturnOut, groupBy, categoryFilter, brandFilter, categoryOptions, brandOptions, grouped, t]);
+  }, [setSidebarContent, separateReturnOut, showZeroTurnover, groupBy, categoryFilter, brandFilter, productFilter, categoryOptions, brandOptions, productOptions, grouped, t]);
 
   return (
     <RBACGuard isLoading={false} error={null} canView={canView} forbiddenText={t("ForbiddenText")}>
@@ -238,8 +363,8 @@ const ProductTurnoverPage = () => {
                   <b>Учитываются только проведённые документы.</b>
                 </li>
                 <li>
-                  <b>Поиск</b> (над таблицей) — по названию и артикулу товара; <b>«Категория»/«Бренд»</b> (правый
-                  сайдбар) — сужают список до одной категории/бренда.
+                  <b>Поиск</b> (над таблицей) — по названию и артикулу товара; <b>«Категория»/«Бренд»/«Товар»</b>
+                  (правый сайдбар) — сужают список до одной категории/бренда/конкретного товара.
                 </li>
                 <li>
                   <b>«Группировка»</b> (правый сайдбар) — переключает список между группировкой по категориям и по
@@ -251,7 +376,13 @@ const ProductTurnoverPage = () => {
                   сохраняется в браузере и применяется одинаково к экрану, печати (Ctrl+P) и Excel-экспорту.
                 </li>
                 <li>
-                  <b>Двойной клик по товару</b> (или Enter/F2 на выделенной ячейке) открывает детализацию — список
+                  <b>«Показывать нулевые обороты»</b> (правый сайдбар) — по умолчанию скрыты товары, у которых и
+                  начальный, и конечный остаток, и все движения за период равны нулю; включив переключатель, они
+                  тоже отображаются. Настройка сохраняется в браузере и одинаково влияет на экран, печать и
+                  Excel-экспорт.
+                </li>
+                <li>
+                  <b>Двойной клик по товару</b> (или Enter на выделенной ячейке) открывает детализацию — список
                   конкретных документов, из которых сложился оборот, с бегущим остатком.
                 </li>
                 <li>
@@ -293,13 +424,14 @@ const ProductTurnoverPage = () => {
             rows={grouped}
             separateReturnOut={separateReturnOut}
             groupMode={groupBy}
+            initialSelectedProductId={selectedProductId}
             onRowDoubleClick={(row) => {
               const params = new URLSearchParams({
                 date_from: periodFrom!,
                 date_to: periodTo!,
                 ...(workWarehouse?.id ? { warehouse: String(workWarehouse.id) } : workBranch?.id ? { branch: String(workBranch.id) } : {}),
               });
-              navigate(`${ROUTES.APP.ACCOUNTING_PRODUCT_TURNOVER_DETAIL.replace(":id", String(row.id))}?${params.toString()}`);
+              navigate(`${ROUTES.APP.REPORTS_PRODUCT_TURNOVER_DETAIL.replace(":id", String(row.id))}?${params.toString()}`);
             }}
             onPreviewImage={setPreviewImage}
           />

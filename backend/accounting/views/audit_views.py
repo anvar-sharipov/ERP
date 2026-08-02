@@ -1,6 +1,8 @@
 from rest_framework import mixins, viewsets
 from rest_framework.permissions import IsAuthenticated
 from django_filters.rest_framework import DjangoFilterBackend
+from django.db.models import Q, CharField
+from django.db.models.functions import Cast
 
 from accounting.models.audit import AuditLog
 from accounting.serializers.audit_serializers import AuditLogSerializer
@@ -62,6 +64,24 @@ class AuditLogViewSet(
             .select_related("user", "content_type")
             .all()
         )
+
+        # ✅ Поиск (AuditLogPage.tsx) — раньше искался только по уже загруженной
+        # странице на клиенте (useTableFilter). Те же поля, что были в frontend
+        # searchFields (object_repr, model_name, user_display, ip_address) —
+        # кроме action_display, это переведённая метка, не сырое поле для поиска.
+        # ip_address хранится как native Postgres "inet" — icontains напрямую на
+        # нём падает ("operator does not exist: inet ~~* unknown"), поэтому
+        # приводим к тексту явным Cast перед сравнением.
+        search = self.request.query_params.get("search")
+        if search:
+            qs = qs.annotate(ip_text=Cast("ip_address", CharField())).filter(
+                Q(object_repr__icontains=search)
+                | Q(content_type__model__icontains=search)
+                | Q(user__username__icontains=search)
+                | Q(user__first_name__icontains=search)
+                | Q(user__last_name__icontains=search)
+                | Q(ip_text__icontains=search)
+            )
 
         ordering_param = self.request.query_params.get("ordering")
         if ordering_param:

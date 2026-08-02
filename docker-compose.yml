@@ -58,6 +58,12 @@ services:
     volumes:
       - django_static:/app/static
       - django_media:/app/media
+      # ✅ Второй идентификатор привязки к ПК (см. Company.allowed_hardware_id,
+      # companies/middleware.py) — hardware_id.txt пишется на хосте вручную
+      # (контейнер не видит настоящее железо), read-only, вне git. Пустой
+      # файл (по умолчанию) не мешает — проверяется, только если у tenant'а
+      # заполнено allowed_hardware_id.
+      - ./hardware_id.txt:/app/hardware_id.txt:ro
 
     environment:
       - DJANGO_SECRET_KEY=${DJANGO_SECRET_KEY}
@@ -67,6 +73,10 @@ services:
       - DB_NAME=${DB_NAME}
       - DB_USER=${DB_USER}
       - DB_PASSWORD=${DB_PASSWORD}
+      # ✅ Привязка к ПК (см. companies/middleware.py) — Docker Compose сам
+      # подставляет ${COMPUTERNAME} из окружения хоста (Windows всегда её
+      # задаёт), никакого отдельного файла/скрипта на хосте не нужно.
+      - HOST_COMPUTERNAME=${COMPUTERNAME}
       # Прокидываем креды админа tenant внутрь контейнера:
       - DJANGO_SUPERUSER_USERNAME=${DJANGO_SUPERUSER_USERNAME}
       - DJANGO_SUPERUSER_EMAIL=${DJANGO_SUPERUSER_EMAIL}

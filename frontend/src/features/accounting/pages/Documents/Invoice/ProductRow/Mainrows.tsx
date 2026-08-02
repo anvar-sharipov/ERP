@@ -170,17 +170,17 @@ const CellContent = ({
 
     case "cost_price":
       return isPosted ? (
-        <span className={`block text-right font-mono ${printSize(viewMode, "print:text-xl")}`}>{fmt(parseFloat(row.cost_price) || 0)}</span>
+        <span className={`block text-right font-mono ${printSize(viewMode, "print:text-xl")}`}>{fmt3(row.cost_price)}</span>
       ) : (
         <>
-          <input type="number" value={row.cost_price} min="0" step="0.01" onChange={(e) => updateItem(row._key, "cost_price", e.target.value)} className={`${inputCell} print:hidden`} />
-          <span className="hidden print:block text-right font-mono print:text-xl">{fmt(parseFloat(row.cost_price) || 0)}</span>
+          <input type="number" value={row.cost_price} min="0" step="0.001" onChange={(e) => updateItem(row._key, "cost_price", e.target.value)} className={`${inputCell} print:hidden`} />
+          <span className="hidden print:block text-right font-mono print:text-xl">{fmt3(row.cost_price)}</span>
         </>
       );
 
     case "price":
       return isPosted ? (
-        <span className={`block text-right font-mono font-semibold ${viewMode ? "text-xl" : "text-base print:text-xl"}`}>{fmt(parseFloat(row.price) || 0)}</span>
+        <span className={`block text-right font-mono font-semibold ${viewMode ? "text-xl" : "text-base print:text-xl"}`}>{fmt3(row.price)}</span>
       ) : (
         <>
           <input
@@ -188,12 +188,12 @@ const CellContent = ({
             type="number"
             value={row.price}
             min="0"
-            step="0.01"
+            step="0.001"
             onChange={(e) => updateItem(row._key, "price", e.target.value)}
             onKeyDown={onPriceKeyDown}
             className={`${inputCell} !text-base font-semibold print:hidden`}
           />
-          <span className="hidden print:block text-right font-mono print:text-xl">{fmt(parseFloat(row.price) || 0)}</span>
+          <span className="hidden print:block text-right font-mono print:text-xl">{fmt3(row.price)}</span>
         </>
       );
 

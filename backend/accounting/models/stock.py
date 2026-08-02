@@ -86,6 +86,34 @@ class Warehouse(models.Model):
         related_name='warehouses_profit_supplier', verbose_name="Счёт прибыли для поставщика (альт. схема)",
     )
 
+    # ✅ Валюта, в которой ведутся цены/суммы документов этого склада — раньше
+    # нигде в схеме не была формализована (валютность склада выражалась только
+    # неявно, через то, в какую группу счетов из *_account выше он проводится —
+    # см. help-тексты в WarehousesListPage.tsx). Здесь — первое место в системе,
+    # где валюта реально влияет на автоматическую конвертацию (см. Trip.deliver:
+    # для USD-складов сумма ЗП водителя переводится в манаты по курсу ExchangeRate
+    # на сегодня перед проводкой). Остальной учёт (Document.total и т.д.) эта
+    # валюта не переопределяет и не трогает — только расчёт ЗП водителя.
+    class Currency(models.TextChoices):
+        TMT = 'TMT', 'Манаты (TMT)'
+        USD = 'USD', 'Доллары (USD)'
+
+    currency = models.CharField(
+        max_length=3, choices=Currency.choices, default=Currency.TMT,
+        verbose_name="Валюта склада",
+    )
+
+    # ✅ Проводка начисления ЗП водителю за рейс с этого склада (см. Trip.deliver) —
+    # тот же принцип "заполняются вручную", что и у остальных *_account полей.
+    delivery_expense_account = models.ForeignKey(
+        'Account', on_delete=models.PROTECT, null=True, blank=True,
+        related_name='warehouses_delivery_expense', verbose_name="Счёт расхода на доставку (ЗП водителя)",
+    )
+    driver_payable_account = models.ForeignKey(
+        'Account', on_delete=models.PROTECT, null=True, blank=True,
+        related_name='warehouses_driver_payable', verbose_name="Счёт начислено водителю",
+    )
+
     class Meta:
         verbose_name = "Склад"
 
@@ -166,7 +194,7 @@ class StockMovement(models.Model):
         max_digits=15, decimal_places=3,
         validators=[MinValueValidator(Decimal('0.001'))]
     )
-    cost_price = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    cost_price = models.DecimalField(max_digits=15, decimal_places=3, default=0)
     journal_entry = models.ForeignKey(
         'JournalEntry', on_delete=models.SET_NULL,
         null=True, blank=True, related_name='stock_movements'

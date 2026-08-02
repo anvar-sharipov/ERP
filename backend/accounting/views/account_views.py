@@ -114,7 +114,7 @@ class AccountViewSet(AuditMixin, viewsets.ModelViewSet):
 
 
 
-ALLOWED_FILTER_KEYS = {'type', 'type__in', 'category', 'category__in'}
+ALLOWED_FILTER_KEYS = {'type', 'type__in', 'category', 'category__in', 'position', 'position__in'}
 # Новый ViewSet для SubcontoType
 class SubcontoTypeViewSet(AuditMixin, viewsets.ModelViewSet):
     pagination_class = None

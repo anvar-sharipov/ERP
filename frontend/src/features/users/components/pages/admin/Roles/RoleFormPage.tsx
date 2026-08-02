@@ -89,7 +89,8 @@ const PermissionsTab = ({ matrix, matrixLoading, selectedPerms, onToggle, onBulk
                   return (
                     <th key={action} className="px-2 py-1.5 text-center font-semibold text-slate-600 dark:text-slate-300 border-l border-slate-200 dark:border-slate-700">
                       <div className="flex flex-col items-center gap-1">
-                        <span className="text-[10px] md:text-xs tracking-wide">{action}</span>
+                        <span className="text-[10px] md:text-xs tracking-wide">{t(action)}</span>
+                        <span className="text-[9px] text-slate-400 dark:text-slate-500 font-mono">({action})</span>
                         <input
                           type="checkbox"
                           checked={allChecked}

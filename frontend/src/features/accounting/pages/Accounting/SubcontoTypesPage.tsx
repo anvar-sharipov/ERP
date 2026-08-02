@@ -5,10 +5,12 @@ import { useTranslation } from "react-i18next";
 import { useNotify } from "../../../../core/context/NotificationContext";
 import { usePageAccess } from "../../../../core/hooks/usePageAccess";
 import { accountApi } from "../../services/accountingApi";
+import { positionApi } from "../../services/employeeApi";
 import { Table, type Column } from "../../../../components/ui/Table/Table";
 import { Modal } from "../../../../components/ui/Modal/Modal";
 import { Button } from "../../../../components/ui/Button";
 import { Input } from "../../../../components/ui/Input";
+import MultiSearchableSelect from "../../../../components/ui/MultiSearchableSelect";
 import { RBACGuard } from "../../../../components/ui/RBACGuard";
 import { useSidebar } from "../../../../core/context/SidebarRightContext";
 import { Plus } from "lucide-react";
@@ -80,6 +82,12 @@ const SubcontoTypesPage = () => {
   const { data: directories = [] } = useQuery({
     queryKey: ["directories"],
     queryFn: accountApi.getDirectories,
+    enabled: canView,
+  });
+
+  const { data: positions = [] } = useQuery({
+    queryKey: ["positions"],
+    queryFn: positionApi.getAll,
     enabled: canView,
   });
 
@@ -272,25 +280,22 @@ const SubcontoTypesPage = () => {
                 </select>
               </div>
             )}
-            {/* {(contentTypes as any[]).find((ct) => ct.id === form.content_type)?.model === "counterparty" && (
+            {(contentTypes as any[]).find((ct) => ct.id === form.content_type)?.model === "employee" && (
               <div>
-                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">{t("CounterpartyRoleFilter")}</label>
-                <select
-                  value={form.content_type_filter?.type ?? ""}
-                  onChange={(e) =>
+                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">{t("EmployeePositionFilter")}</label>
+                <MultiSearchableSelect
+                  options={(positions as any[]).map((p) => ({ id: p.id, label: p.name }))}
+                  value={form.content_type_filter?.position__in ?? []}
+                  onChange={(ids) =>
                     setForm((p) => ({
                       ...p,
-                      content_type_filter: e.target.value ? { type: e.target.value } : {},
+                      content_type_filter: ids.length ? { position__in: ids } : {},
                     }))
                   }
-                  className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                >
-                  <option value="">{t("AllCounterparties")}</option>
-                  <option value="client">{t("ClientsOnly")}</option>
-                  <option value="supplier">{t("SuppliersOnly")}</option>
-                </select>
+                  placeholder={t("AllEmployees")}
+                />
               </div>
-            )} */}
+            )}
 
             <div className="flex items-center gap-2 text-xs text-gray-400">
               <div className="flex-1 h-px bg-gray-200 dark:bg-slate-600" />

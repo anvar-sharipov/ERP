@@ -1,6 +1,7 @@
 // frontend/src/components/ui/Table/ProductTurnoverTable.tsx
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useTranslation } from "react-i18next";
+import { useVirtualizer, type VirtualItem } from "@tanstack/react-virtual";
 import { ImageOff } from "lucide-react";
 import { playClickSound } from "../../../core/utils/sound";
 import { focusManager } from "../../../core/utils/focusManager";
@@ -70,6 +71,10 @@ interface Props {
   groupMode?: "category" | "brand";
   onRowDoubleClick?: (row: ProductTurnoverRow) => void;
   onPreviewImage?: (url: string | null) => void;
+  // ✅ Товар, к которому нужно вернуться/подсветить при возврате с детализации
+  // (см. ProductTurnoverPage.tsx::useRestoreScroll) — используется один раз при
+  // первом появлении данных, дальше выделение работает как обычно (первая строка).
+  initialSelectedProductId?: number | null;
 }
 
 const fmt = (v: number | string) => Number(v).toLocaleString("ru-RU", { minimumFractionDigits: 2 });
@@ -103,15 +108,61 @@ type NumKey =
   | "out_qty" | "out_before_discount" | "out_discount" | "out_after_discount"
   | "return_out_qty" | "return_out_value" | "move_qty" | "move_value" | "closing_qty" | "closing_value";
 
-export const ProductTurnoverTable = ({ rows, separateReturnOut, groupMode = "category", onRowDoubleClick, onPreviewImage }: Props) => {
+export const ProductTurnoverTable = ({ rows, separateReturnOut, groupMode = "category", onRowDoubleClick, onPreviewImage, initialSelectedProductId }: Props) => {
   const { t } = useTranslation();
   const groupLabel = groupMode === "brand" ? t("Brand") : t("Category");
   const totalLabel = groupMode === "brand" ? t("BrandTotal") : t("CategoryTotal");
   const containerRef = useRef<HTMLDivElement>(null);
   const [selectedCell, setSelectedCell] = useState<{ rowIdx: number; colIdx: number } | null>(null);
 
+  // ✅ Строка "Итого" закреплена снизу контейнера (sticky bottom-0), чтобы быть видна
+  // постоянно при скролле, как и шапка сверху. У sticky-элемента такой отступ снизу
+  // не резервируется автоматически — без него последняя строка товара при скролле до
+  // конца оказывается ПОД закреплённой строкой итога, а не над ней. Меряем реальную
+  // высоту строки итога (по <tr>, а не по <tfoot> — у внутренних table-элементов вроде
+  // table-footer-group ResizeObserver в части браузеров отдаёт нулевой contentRect) и
+  // резервируем под неё такой же отступ в конце тела таблицы. Стартовое значение — не 0,
+  // а разумный дефолт на случай, если ResizeObserver ещё не успел сработать к первому
+  // скроллу до конца.
+  const footerRowRef = useRef<HTMLTableRowElement>(null);
+  const [footerRowHeight, setFooterRowHeight] = useState(40);
+  useEffect(() => {
+    const el = footerRowRef.current;
+    if (!el) return;
+    const observer = new ResizeObserver((entries) => {
+      const h = entries[0].contentRect.height;
+      if (h > 0) setFooterRowHeight(h);
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [rows]);
+
   const bodyRows = rows.filter((r) => r.type !== "grand_total");
   const grandTotalRow = rows.find((r) => r.type === "grand_total") as Extract<GroupedRow, { type: "grand_total" }> | undefined;
+
+  // ✅ Тысячи строк отчёта рендерятся окном (виртуализация) — в DOM попадают только
+  // видимые строки + overscan, а не весь список сразу, иначе браузер тормозит на
+  // больших периодах/складах. При Ctrl+P рендерим весь список как обычно — иначе
+  // распечатается только то, что попало в окно скролла на момент печати (см. CLAUDE.md
+  // про то, что экран/печать/Excel не должны расходиться).
+  const [isPrinting, setIsPrinting] = useState(false);
+  useEffect(() => {
+    const onBeforePrint = () => setIsPrinting(true);
+    const onAfterPrint = () => setIsPrinting(false);
+    window.addEventListener("beforeprint", onBeforePrint);
+    window.addEventListener("afterprint", onAfterPrint);
+    return () => {
+      window.removeEventListener("beforeprint", onBeforePrint);
+      window.removeEventListener("afterprint", onAfterPrint);
+    };
+  }, []);
+
+  const rowVirtualizer = useVirtualizer({
+    count: bodyRows.length,
+    getScrollElement: () => containerRef.current,
+    estimateSize: (index: number) => (bodyRows[index]?.type === "product" ? 34 : 30),
+    overscan: 12,
+  });
 
   const numKeys: NumKey[] = [
     "opening_qty", "opening_value", "in_qty", "in_value", "return_in_qty", "return_in_value",
@@ -122,22 +173,56 @@ export const ProductTurnoverTable = ({ rows, separateReturnOut, groupMode = "cat
   const totalCols = 3 + numKeys.length; // №, Наименование, Ед. + числовые
   const colSpanRest = 1 + numKeys.length; // Ед. + числовые, для строк-разделителей
 
-  // При появлении данных — выделяем первую строку-товар
+  // ✅ react-query делает фоновый refetch при каждом монтировании — это меняет
+  // ссылку на `rows` ещё раз уже ПОСЛЕ восстановления выделения из sessionStorage,
+  // и без этого флага восстанавливающий эффект срабатывал бы повторно и сбрасывал
+  // выделение обратно на первую строку при каждом изменении фильтров (см. тот же
+  // приём в ProductTurnoverDetailPage.tsx). Помечаем "восстановлено" только когда
+  // реально нашли и применили id — НЕ безусловно на первый же прогон, иначе гонка
+  // эффектов ломает восстановление: React коммитит эффекты снизу вверх (дочерние
+  // раньше родительских), и если данные отчёта уже в кэше react-query, эта таблица
+  // монтируется в том же коммите, что и родительская ProductTurnoverPage — то есть
+  // ЭТОТ эффект успевает отработать раньше, чем родительский useRestoreScroll вообще
+  // прочитает sessionStorage и передаст initialSelectedProductId (он ещё null).
+  // Если бы флаг ставился безусловно здесь, второй проход (когда проп уже пришёл)
+  // просто не запустился бы повторно. Эффект теперь явно зависит от
+  // initialSelectedProductId, чтобы перезапуститься, когда родитель его обновит.
+  const restoredRef = useRef(false);
+
+  // При первом появлении данных — восстанавливаем товар, с которого ушли на
+  // детализацию (если есть), иначе выделяем первую строку-товар.
   useEffect(() => {
+    if (!bodyRows.length) return;
+    if (!restoredRef.current && initialSelectedProductId != null) {
+      const idx = bodyRows.findIndex((r) => r.type === "product" && r.id === initialSelectedProductId);
+      if (idx !== -1) {
+        restoredRef.current = true;
+        setSelectedCell({ rowIdx: idx, colIdx: 1 });
+        focusManager.setRegion("table");
+        rowVirtualizer.scrollToIndex(idx, { align: "center" });
+        return;
+      }
+    }
     const firstProductIdx = bodyRows.findIndex((r) => r.type === "product");
     if (firstProductIdx !== -1) {
       setSelectedCell({ rowIdx: firstProductIdx, colIdx: 1 });
       focusManager.setRegion("table");
+      rowVirtualizer.scrollToIndex(firstProductIdx);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rows.length]);
+  }, [rows.length, initialSelectedProductId]);
 
+  // ✅ Целевая строка может быть за пределами текущего окна виртуализации и ещё не
+  // существовать в DOM — сначала просим виртуализатор смонтировать/проскроллить к
+  // её индексу, и только затем (когда она уже в DOM) уточняем позицию/горизонтальный
+  // скролл через сам DOM-узел ячейки.
   const scrollToCell = useCallback((rowIdx: number, colIdx: number) => {
+    rowVirtualizer.scrollToIndex(rowIdx, { align: "auto" });
     requestAnimationFrame(() => {
       const cell = containerRef.current?.querySelector(`[data-row-idx="${rowIdx}"][data-col-idx="${colIdx}"]`);
       cell?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "nearest" });
     });
-  }, []);
+  }, [rowVirtualizer]);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -168,7 +253,7 @@ export const ProductTurnoverTable = ({ rows, separateReturnOut, groupMode = "cat
         const prev = Math.max(colIdx - 1, 0);
         if (prev !== colIdx) { playClickSound(); setSelectedCell({ rowIdx, colIdx: prev }); scrollToCell(rowIdx, prev); }
       }
-      if (e.key === "Enter" || e.key === "F2") {
+      if (e.key === "Enter") {
         e.preventDefault();
         const row = bodyRows[rowIdx];
         if (row?.type === "product" && onRowDoubleClick) onRowDoubleClick(row);
@@ -222,6 +307,129 @@ export const ProductTurnoverTable = ({ rows, separateReturnOut, groupMode = "cat
     "font-semibold", "font-semibold", // closing
   ];
 
+  // ✅ Тело одной строки вынесено в функцию — используется и виртуализированным
+  // рендером на экране, и полным списком при печати (см. isPrinting выше). `ref`
+  // на data-index нужен виртуализатору, чтобы измерить реальную высоту строки
+  // (категория/подытог короче строки товара) и скорректировать позиции окна.
+  const renderRow = (row: Exclude<GroupedRow, { type: "grand_total" }>, rowIdx: number) => {
+    const measureProps = { "data-index": rowIdx, ref: rowVirtualizer.measureElement };
+
+    if (row.type === "category") {
+      return (
+        <tr key={row.id} {...measureProps} className="font-semibold">
+          <td className="border border-black dark:border-gray-700 sticky left-0 z-10 bg-indigo-50 dark:bg-indigo-900/30" />
+          <td
+            className={`${td} sticky z-10 bg-indigo-50 dark:bg-indigo-900/30 text-left`}
+            style={{ left: COL1_W }}
+          >
+            {groupLabel}: {row.name}
+          </td>
+          <td colSpan={colSpanRest} className={`${td} bg-indigo-50 dark:bg-indigo-900/30`} />
+        </tr>
+      );
+    }
+
+    if (row.type === "subtotal") {
+      const outQty = row.totals.out_qty + (!separateReturnOut ? row.totals.return_out_qty : 0);
+      const outBefore = row.totals.out_before_discount + (!separateReturnOut ? row.totals.return_out_value : 0);
+      const outAfter = row.totals.out_after_discount + (!separateReturnOut ? row.totals.return_out_value : 0);
+      const values = [
+        row.totals.opening_qty, row.totals.opening_value,
+        row.totals.in_qty, row.totals.in_value,
+        row.totals.return_in_qty, row.totals.return_in_value,
+        outQty, outBefore, row.totals.out_discount, outAfter,
+        ...(separateReturnOut ? [row.totals.return_out_qty, row.totals.return_out_value] : []),
+        row.totals.move_qty, row.totals.move_value,
+        row.totals.closing_qty, row.totals.closing_value,
+      ];
+      return (
+        <tr key={row.id} {...measureProps} className="font-semibold bg-gray-200 dark:bg-gray-700">
+          <td className="border border-black dark:border-gray-700 sticky left-0 z-10 bg-gray-200 dark:bg-gray-700" />
+          <td className={`${td} sticky z-10 bg-gray-200 dark:bg-gray-700 text-right`} style={{ left: COL1_W }}>
+            {totalLabel}:
+          </td>
+          <td className={td} />
+          {renderNumericCells(rowIdx, values, values.map(() => undefined))}
+        </tr>
+      );
+    }
+
+    const r = row;
+    const outQty = Number(r.out_qty) + (!separateReturnOut ? Number(r.return_out_qty) : 0);
+    const outBefore = Number(r.out_before_discount) + (!separateReturnOut ? Number(r.return_out_value) : 0);
+    const outAfter = Number(r.out_after_discount) + (!separateReturnOut ? Number(r.return_out_value) : 0);
+    const values = [
+      Number(r.opening_qty), Number(r.opening_value),
+      Number(r.in_qty), Number(r.in_value),
+      Number(r.return_in_qty), Number(r.return_in_value),
+      outQty, outBefore, Number(r.out_discount), outAfter,
+      ...(separateReturnOut ? [Number(r.return_out_qty), Number(r.return_out_value)] : []),
+      Number(r.move_qty), Number(r.move_value),
+      Number(r.closing_qty), Number(r.closing_value),
+    ];
+    const rowBg = "odd:bg-white even:bg-gray-50 dark:odd:bg-gray-900 dark:even:bg-gray-800";
+
+    return (
+      <tr
+        key={r.id}
+        {...measureProps}
+        className={`${rowBg} hover:bg-indigo-50 dark:hover:bg-indigo-900/20 cursor-pointer ${rowRing(rowIdx)}`}
+        onDoubleClick={() => onRowDoubleClick?.(r)}
+      >
+        <td
+          data-row-idx={rowIdx}
+          data-col-idx={0}
+          onClick={() => selectCell(rowIdx, 0)}
+          className={`${td} sticky left-0 z-10 bg-inherit text-center ${ring(rowIdx, 0)}`}
+        >
+          {r.displayNumber}
+        </td>
+        <td
+          data-row-idx={rowIdx}
+          data-col-idx={1}
+          onClick={() => selectCell(rowIdx, 1)}
+          className={`${td} sticky z-10 bg-inherit ${ring(rowIdx, 1)}`}
+          style={{ left: COL1_W }}
+        >
+          <div className="flex items-center gap-2">
+            {r.thumbnail_url ? (
+              <img
+                src={r.thumbnail_url}
+                alt={r.name}
+                className="w-7 h-7 rounded object-cover shrink-0 cursor-zoom-in print:hidden"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onPreviewImage?.(r.image_url || r.thumbnail_url);
+                }}
+              />
+            ) : (
+              <div className="w-7 h-7 rounded bg-gray-200 dark:bg-slate-700 shrink-0 flex items-center justify-center print:hidden">
+                <ImageOff className="w-3.5 h-3.5 text-gray-400" />
+              </div>
+            )}
+            <span className="truncate">{r.name}</span>
+          </div>
+        </td>
+        <td
+          data-row-idx={rowIdx}
+          data-col-idx={2}
+          onClick={() => selectCell(rowIdx, 2)}
+          className={`${td} text-center cursor-pointer ${ring(rowIdx, 2)}`}
+        >
+          {r.unit}
+        </td>
+        {renderNumericCells(rowIdx, values, buildColorClasses())}
+      </tr>
+    );
+  };
+
+  const virtualItems: VirtualItem[] = isPrinting ? [] : rowVirtualizer.getVirtualItems();
+  const renderedRows = isPrinting
+    ? bodyRows.map((row, rowIdx) => ({ row, rowIdx }))
+    : virtualItems.map((vr) => ({ row: bodyRows[vr.index], rowIdx: vr.index }));
+  const paddingTop = virtualItems.length > 0 ? virtualItems[0].start : 0;
+  const paddingBottom = virtualItems.length > 0 ? rowVirtualizer.getTotalSize() - virtualItems[virtualItems.length - 1].end : 0;
+
   return (
     <div
       ref={containerRef}
@@ -262,115 +470,22 @@ export const ProductTurnoverTable = ({ rows, separateReturnOut, groupMode = "cat
           </tr>
         </thead>
         <tbody>
-          {bodyRows.map((row, rowIdx) => {
-            if (row.type === "category") {
-              return (
-                <tr key={row.id} className="font-semibold">
-                  <td className="border border-black dark:border-gray-700 sticky left-0 z-10 bg-indigo-50 dark:bg-indigo-900/30" />
-                  <td
-                    className={`${td} sticky z-10 bg-indigo-50 dark:bg-indigo-900/30 text-left`}
-                    style={{ left: COL1_W }}
-                  >
-                    {groupLabel}: {row.name}
-                  </td>
-                  <td colSpan={colSpanRest} className={`${td} bg-indigo-50 dark:bg-indigo-900/30`} />
-                </tr>
-              );
-            }
-
-            if (row.type === "subtotal") {
-              const outQty = row.totals.out_qty + (!separateReturnOut ? row.totals.return_out_qty : 0);
-              const outBefore = row.totals.out_before_discount + (!separateReturnOut ? row.totals.return_out_value : 0);
-              const outAfter = row.totals.out_after_discount + (!separateReturnOut ? row.totals.return_out_value : 0);
-              const values = [
-                row.totals.opening_qty, row.totals.opening_value,
-                row.totals.in_qty, row.totals.in_value,
-                row.totals.return_in_qty, row.totals.return_in_value,
-                outQty, outBefore, row.totals.out_discount, outAfter,
-                ...(separateReturnOut ? [row.totals.return_out_qty, row.totals.return_out_value] : []),
-                row.totals.move_qty, row.totals.move_value,
-                row.totals.closing_qty, row.totals.closing_value,
-              ];
-              return (
-                <tr key={row.id} className="font-semibold bg-gray-200 dark:bg-gray-700">
-                  <td className="border border-black dark:border-gray-700 sticky left-0 z-10 bg-gray-200 dark:bg-gray-700" />
-                  <td className={`${td} sticky z-10 bg-gray-200 dark:bg-gray-700 text-right`} style={{ left: COL1_W }}>
-                    {totalLabel}:
-                  </td>
-                  <td className={td} />
-                  {renderNumericCells(rowIdx, values, values.map(() => undefined))}
-                </tr>
-              );
-            }
-
-            const r = row;
-            const outQty = Number(r.out_qty) + (!separateReturnOut ? Number(r.return_out_qty) : 0);
-            const outBefore = Number(r.out_before_discount) + (!separateReturnOut ? Number(r.return_out_value) : 0);
-            const outAfter = Number(r.out_after_discount) + (!separateReturnOut ? Number(r.return_out_value) : 0);
-            const values = [
-              Number(r.opening_qty), Number(r.opening_value),
-              Number(r.in_qty), Number(r.in_value),
-              Number(r.return_in_qty), Number(r.return_in_value),
-              outQty, outBefore, Number(r.out_discount), outAfter,
-              ...(separateReturnOut ? [Number(r.return_out_qty), Number(r.return_out_value)] : []),
-              Number(r.move_qty), Number(r.move_value),
-              Number(r.closing_qty), Number(r.closing_value),
-            ];
-            const rowBg = "odd:bg-white even:bg-gray-50 dark:odd:bg-gray-900 dark:even:bg-gray-800";
-
-            return (
-              <tr
-                key={r.id}
-                className={`${rowBg} hover:bg-indigo-50 dark:hover:bg-indigo-900/20 cursor-pointer ${rowRing(rowIdx)}`}
-                onDoubleClick={() => onRowDoubleClick?.(r)}
-              >
-                <td
-                  data-row-idx={rowIdx}
-                  data-col-idx={0}
-                  onClick={() => selectCell(rowIdx, 0)}
-                  className={`${td} sticky left-0 z-10 bg-inherit text-center ${ring(rowIdx, 0)}`}
-                 
-                >
-                  {r.displayNumber}
-                </td>
-                <td
-                  data-row-idx={rowIdx}
-                  data-col-idx={1}
-                  onClick={() => selectCell(rowIdx, 1)}
-                  className={`${td} sticky z-10 bg-inherit ${ring(rowIdx, 1)}`}
-                  style={{ left: COL1_W }}
-                >
-                  <div className="flex items-center gap-2">
-                    {r.thumbnail_url ? (
-                      <img
-                        src={r.thumbnail_url}
-                        alt={r.name}
-                        className="w-7 h-7 rounded object-cover shrink-0 cursor-zoom-in print:hidden"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onPreviewImage?.(r.image_url || r.thumbnail_url);
-                        }}
-                      />
-                    ) : (
-                      <div className="w-7 h-7 rounded bg-gray-200 dark:bg-slate-700 shrink-0 flex items-center justify-center print:hidden">
-                        <ImageOff className="w-3.5 h-3.5 text-gray-400" />
-                      </div>
-                    )}
-                    <span className="truncate">{r.name}</span>
-                  </div>
-                </td>
-                <td
-                  data-row-idx={rowIdx}
-                  data-col-idx={2}
-                  onClick={() => selectCell(rowIdx, 2)}
-                  className={`${td} text-center cursor-pointer ${ring(rowIdx, 2)}`}
-                >
-                  {r.unit}
-                </td>
-                {renderNumericCells(rowIdx, values, buildColorClasses())}
-              </tr>
-            );
-          })}
+          {!isPrinting && paddingTop > 0 && (
+            <tr aria-hidden>
+              <td colSpan={totalCols} style={{ height: paddingTop, padding: 0, border: "none" }} />
+            </tr>
+          )}
+          {renderedRows.map(({ row, rowIdx }) => renderRow(row, rowIdx))}
+          {!isPrinting && paddingBottom > 0 && (
+            <tr aria-hidden>
+              <td colSpan={totalCols} style={{ height: paddingBottom, padding: 0, border: "none" }} />
+            </tr>
+          )}
+          {!isPrinting && grandTotalRow && (
+            <tr aria-hidden>
+              <td colSpan={totalCols} style={{ height: footerRowHeight, padding: 0, border: "none" }} />
+            </tr>
+          )}
         </tbody>
         {grandTotalRow && (() => {
           const totals = grandTotalRow.totals;
@@ -388,7 +503,7 @@ export const ProductTurnoverTable = ({ rows, separateReturnOut, groupMode = "cat
           ];
           return (
             <tfoot>
-              <tr className="font-bold bg-emerald-100 dark:bg-emerald-900/50">
+              <tr ref={footerRowRef} className="font-bold bg-emerald-100 dark:bg-emerald-900/50">
                 <td className="border border-black dark:border-gray-700 sticky bottom-0 left-0 z-30 bg-emerald-100 dark:bg-emerald-900/50" />
                 <td className={`${td} sticky bottom-0 z-30 bg-emerald-100 dark:bg-emerald-900/50 text-right`} style={{ left: COL1_W }}>
                   {t("GrandTotal")}:

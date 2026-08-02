@@ -21,14 +21,16 @@ export interface SystemAlert {
 export const alertApi = {
   // ✅ unresolved_only=true — колокольчик показывает только активные, а не всю
   // историю (в т.ч. уже решённые) алертов за всё время.
-  getAll: async (unresolvedOnly = true) => {
+  getAll: async (unresolvedOnly = true, level?: "warning" | "critical") => {
     const res = await api.get<SystemAlert[]>("/accounting/system-alerts/", {
-      params: unresolvedOnly ? { unresolved_only: "true" } : {},
+      params: { ...(unresolvedOnly ? { unresolved_only: "true" } : {}), ...(level ? { level } : {}) },
     });
     return res.data;
   },
-  getUnresolvedCount: async () => {
-    const res = await api.get<{ count: number }>("/accounting/system-alerts/unresolved-count/");
+  getUnresolvedCount: async (level?: "warning" | "critical") => {
+    const res = await api.get<{ count: number }>("/accounting/system-alerts/unresolved-count/", {
+      params: level ? { level } : {},
+    });
     return res.data.count;
   },
   resolve: (id: number) => api.post<SystemAlert>(`/accounting/system-alerts/${id}/resolve/`),

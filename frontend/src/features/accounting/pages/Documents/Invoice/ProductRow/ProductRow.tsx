@@ -272,14 +272,21 @@ const ProductRow = forwardRef<ProductRowHandle, ProductRowProps>(({
 
   const productOptions: SelectOption[] = useMemo(
     () =>
-      selectableProducts.map((p) => ({
-        id: p.id,
-        label: p.name,
-        sublabel: p.unit_detail?.name,
-        thumbnail: p.main_image?.thumbnail_url ?? null,
-        fullImage: p.main_image?.image_url ?? null,
-        stock: stockMap.get(p.id) ?? null,
-      })),
+      selectableProducts.map((p) => {
+        const stock = stockMap.get(p.id);
+        return {
+          id: p.id,
+          label: p.name,
+          sublabel: p.unit_detail?.name,
+          thumbnail: p.main_image?.thumbnail_url ?? null,
+          fullImage: p.main_image?.image_url ?? null,
+          // ✅ Ед. изм. кладём внутрь stock (короткое обозначение — SearchableSelect
+          // показывает её один раз в конце строки остатка, см. StockBadge), а не
+          // только в sublabel — иначе при наличии остатка ед. изм. вообще негде
+          // показать (sublabel скрывается, чтобы не дублировать её отдельной строкой).
+          stock: stock ? { ...stock, unit: p.unit_detail?.short_name ?? p.unit_detail?.name ?? null } : null,
+        };
+      }),
     [selectableProducts, stockMap],
   );
 

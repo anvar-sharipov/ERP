@@ -95,7 +95,7 @@ class Product(models.Model):
         verbose_name="Разрешённые склады (пусто = везде)",
     )
 
-    cost_price = models.DecimalField(max_digits=15, decimal_places=2, default=0, verbose_name="Себестоимость")
+    cost_price = models.DecimalField(max_digits=15, decimal_places=3, default=0, verbose_name="Себестоимость")
     min_stock_level = models.IntegerField(default=0, verbose_name="Мин. остаток для заказа")
     is_active = models.BooleanField(default=True, verbose_name="Активен")
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="Дата создания")
@@ -261,7 +261,7 @@ class ProductPrice(models.Model):
     price_type = models.ForeignKey(PriceType, on_delete=models.CASCADE, related_name="prices")
     price = models.DecimalField(
         max_digits=15,
-        decimal_places=2,
+        decimal_places=3,
         default=0,
         validators=[MinValueValidator(0)]
     )
@@ -321,7 +321,7 @@ class ProductBundle(models.Model):
     )
     default_price = models.DecimalField(
         max_digits=15,
-        decimal_places=2,
+        decimal_places=3,
         default=0,
         validators=[MinValueValidator(0)],
         verbose_name="Цена по умолчанию (0 = бесплатно)"

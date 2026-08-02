@@ -7,17 +7,18 @@ from accounting.mixins import AuditMixin, BulkDestroyMixin
 # from django.db.models import F
 from django.db import models
 from decimal import Decimal
-from accounting.utils import resolve_product_price
+from accounting.utils import resolve_product_price, resolve_price_scope_quantity, record_price_change, log_audit
+from accounting.models.audit import AuditLog
 
 from ..models import (
     Unit, Brand, Tag, ProductCategory,
     Product, ProductImage, PriceType, ProductPrice,
     Counterparty, Warehouse, WarehouseStock, ProductBundle, VolumeDiscount,
-    QuantityPromotion
+    QuantityPromotion, DocumentItem
 )
 from ..serializers.product_serializers import (
     UnitSerializer, BrandSerializer, TagSerializer, ProductCategorySerializer,
-    ProductSerializer, ProductListSerializer,
+    ProductSerializer, ProductListSerializer, ProductDocumentSerializer,
     ProductImageSerializer, ProductImageUploadSerializer,
     PriceTypeSerializer, ProductPriceSerializer,
     CounterpartySerializer, WarehouseSerializer, WarehouseStockSerializer, ProductBundleSerializer,
@@ -122,11 +123,58 @@ class ProductViewSet(AuditMixin, BulkDestroyMixin, viewsets.ModelViewSet):
         qs = (
             Product.objects
             .select_related("category", "brand", "unit")
-            .prefetch_related("images")
             .order_by("name")
         )
         qs = self._filter_by_warehouse_or_branch(qs)
         serializer = ProductListSerializer(qs, many=True, context={"request": request})
+        return Response(serializer.data)
+
+    # ✅ Фото отдельно от list_light (см. докстринг ProductListSerializer) — bulk
+    # {product_id: {main_image, images}}, чтобы ProductsListPage.tsx могла
+    # отрисовать текст сразу, не дожидаясь синхронной генерации всех превью
+    # (django-imagekit), а фото дорисовать по готовности со своим спиннером.
+    @action(detail=False, methods=["get"], url_path="list-light-images")
+    def list_light_images(self, request):
+        qs = Product.objects.prefetch_related("images")
+        qs = self._filter_by_warehouse_or_branch(qs)
+        result = {}
+        for product in qs:
+            images = list(product.images.all())
+            if not images:
+                continue
+            main = next((img for img in images if img.is_main), images[0])
+            result[product.id] = {
+                "main_image": ProductImageSerializer(main, context={"request": request}).data,
+                "images": ProductImageSerializer(images, many=True, context={"request": request}).data,
+            }
+        return Response(result)
+
+    # ✅ Специально для DocumentFormPage.tsx/ProductRow.tsx — раньше эта форма
+    # использовала обычный getAll() (полный ProductSerializer: tags/category/
+    # allowed_warehouses/description/extra_data/вся галерея images на КАЖДЫЙ
+    # товар), потому что ей нужны prices/bundle_items/volume_discounts/
+    # quantity_promotions, которых нет в list-light. На каталоге в тысячи
+    # товаров (см. polisem) это и было причиной долгой загрузки SearchableSelect
+    # выбора товара — ProductDocumentSerializer отдаёт ровно то подмножество
+    # полей, см. его докстринг.
+    @action(detail=False, methods=["get"], url_path="list-for-document")
+    def list_for_document(self, request):
+        qs = (
+            Product.objects
+            .select_related("unit")
+            .prefetch_related(
+                # ✅ prices — только сам queryset (ProductDocumentPriceSerializer
+                # отдаёт price_type как голый id, без вложенного объекта, поэтому
+                # в отличие от полного ProductSerializer join на warehouse/branch/
+                # price_type тут не нужен).
+                "images", "prices",
+                "bundle_items__bundle_product__unit", "bundle_items__bundle_product__images",
+                "volume_discounts__price_type", "quantity_promotions__price_type",
+            )
+            .order_by("name")
+        )
+        qs = self._filter_by_warehouse_or_branch(qs)
+        serializer = ProductDocumentSerializer(qs, many=True, context={"request": request})
         return Response(serializer.data)
 
     def perform_update(self, serializer):
@@ -154,7 +202,20 @@ class ProductViewSet(AuditMixin, BulkDestroyMixin, viewsets.ModelViewSet):
         """
         GET /accounting/products/stocks-map/?warehouse=<id>
         Возвращает dict: { product_id: { quantity, reserved, available } }
-        Один запрос вместо N.
+        Один запрос вместо N. Используется в форме документа (ProductRow.tsx /
+        useWarehouseStocks.ts) для бейджа "Остаток/В резерве/Доступно" в
+        SearchableSelect выбора товара.
+
+        ⚠️ reserved считается ТАК ЖЕ, как в report_views.py::stock_balance
+        (ProductsListPage) — живым запросом по черновикам расходных накладных
+        (Document.status='draft', document_type='out'), а НЕ через
+        WarehouseStock.reserved_quantity (то поле нигде в коде не пишется,
+        всегда 0 — раньше бейдж резерва тут всегда показывал 0, хотя
+        ProductsListPage для того же товара/склада честно показывал резерв).
+        Держать эти два места в одной логике обязательно — иначе "Остаток"
+        на экране списка товаров и на экране накладной для одного и того же
+        товара расходятся (см. CLAUDE.md: экран/печать/отчёты не должны
+        расходиться по одной и той же величине).
         """
         warehouse_id = request.query_params.get("warehouse")
         if not warehouse_id:
@@ -163,23 +224,39 @@ class ProductViewSet(AuditMixin, BulkDestroyMixin, viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        stocks = (
+        stock_rows = (
             WarehouseStock.objects
             .filter(warehouse_id=warehouse_id)
-            .annotate(
-                available=models.F("quantity") - models.F("reserved_quantity")
-            )
-            .values("product_id", "quantity", "reserved_quantity", "available")
+            .values("product_id", "quantity")
         )
+        reserved_rows = (
+            DocumentItem.objects
+            .filter(
+                document__status="draft",
+                document__document_type="out",
+                document__warehouse_id=warehouse_id,
+            )
+            .values("product_id")
+            .annotate(qty=models.Sum("quantity"))
+        )
+        reserved_map = {r["product_id"]: (r["qty"] or Decimal("0")) for r in reserved_rows}
 
-        result = {
-            s["product_id"]: {
-                "quantity":  float(s["quantity"]),
-                "reserved":  float(s["reserved_quantity"]),
-                "available": float(s["available"]),
+        result = {}
+        for s in stock_rows:
+            pid = s["product_id"]
+            qty = s["quantity"]
+            reserved = reserved_map.get(pid, Decimal("0"))
+            result[pid] = {
+                "quantity": float(qty),
+                "reserved": float(reserved),
+                "available": float(qty - reserved),
             }
-            for s in stocks
-        }
+        # ✅ Товар может быть под резервом (черновик "Расход") без строки
+        # WarehouseStock вообще (остаток 0) — не пропускаем такие товары, иначе
+        # бейдж вообще не появится там, где по ProductsListPage резерв есть.
+        for pid, reserved in reserved_map.items():
+            if pid not in result:
+                result[pid] = {"quantity": 0.0, "reserved": float(reserved), "available": float(-reserved)}
 
         return Response(result)
     
@@ -212,6 +289,24 @@ class ProductImageViewSet(AuditMixin, viewsets.ModelViewSet):
 
     def get_permissions(self):
         return _rbac(self.action, "productimage")
+
+    # ✅ django-imagekit's ImageSpecField (thumbnail) по умолчанию ленивая
+    # (JustInTime) — генерируется СИНХРОННО при первом обращении к .url, а не
+    # при загрузке файла. Отчёты, читающие thumbnail_url массово по всему
+    # каталогу (product_turnover::_main_image, list_light_images) — раньше
+    # этим и тормозили: первый же реальный запрос отчёта после рестарта/
+    # переноса данных генерировал сотни/тысячи превью синхронно, в рамках
+    # ОДНОГО HTTP-запроса. Генерируем сразу при загрузке/замене фото (один раз,
+    # на действие админа, а не на каждое чтение отчёта любым пользователем) —
+    # generate() идемпотентен (force=False по умолчанию, не перегенерирует, если
+    # уже закэшировано).
+    def perform_create(self, serializer):
+        super().perform_create(serializer)
+        serializer.instance.thumbnail.generate()
+
+    def perform_update(self, serializer):
+        super().perform_update(serializer)
+        serializer.instance.thumbnail.generate()
 
     @action(detail=True, methods=["post"], url_path="set_main")
     def set_main(self, request, pk=None):
@@ -268,7 +363,36 @@ class ProductPriceViewSet(AuditMixin, viewsets.ModelViewSet):
         if self._is_global_price(instance) and not self.request.user.is_superuser:
             from rest_framework.exceptions import PermissionDenied
             raise PermissionDenied("Изменять глобальную цену может только администратор.")
-        serializer.save()
+
+        old_price = instance.price
+        updated = serializer.save()
+
+        # ✅ perform_update переопределён БЕЗ вызова AuditMixin — раньше изменение
+        # цены вообще не попадало в AuditLog (см. CLAUDE.md: RBAC/Scope/Audit
+        # обязательны для любого мутирующего действия). Заодно фиксируем в
+        # PriceChangeHistory (отчёт "История изменения цен") — та же точка, что и
+        # для себестоимости в Document._update_product_cost_prices.
+        if old_price != updated.price:
+            log_audit(
+                self.request, updated, AuditLog.Action.UPDATE,
+                changed_data={'price': {'before': str(old_price), 'after': str(updated.price)}},
+            )
+            quantity, resolved_branch_id = resolve_price_scope_quantity(
+                product_id=updated.product_id,
+                warehouse_id=updated.warehouse_id,
+                branch_id=updated.branch_id,
+            )
+            record_price_change(
+                product_id=updated.product_id,
+                price_type_id=updated.price_type_id,
+                product_price=updated,
+                warehouse_id=updated.warehouse_id,
+                branch_id=resolved_branch_id,
+                old_price=old_price,
+                new_price=updated.price,
+                quantity=quantity,
+                user=self.request.user,
+            )
 
     def perform_destroy(self, instance):
         if self._is_global_price(instance) and not self.request.user.is_superuser:

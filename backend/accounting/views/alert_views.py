@@ -35,11 +35,23 @@ class SystemAlertViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, views
         qs = SystemAlert.objects.select_related('content_type').all()
         if self.request.query_params.get('unresolved_only') == 'true':
             qs = qs.filter(is_resolved=False)
+        if level := self.request.query_params.get('level'):
+            qs = qs.filter(level=level)
         return qs.order_by('-created_at')
 
+    # ✅ ?level=critical — колокольчик в хедере (AlertBell.tsx) намеренно
+    # показывает только критические алерты (сейчас это только
+    # SNAPSHOT_MISMATCH), а не warning-уровень ("Мало товара" — это отдельная
+    # эксплуатационная сигнализация про дозаказ, не про целостность данных,
+    # ей не место в общем колокольчике). Сам SystemAlertViewSet при этом
+    # остаётся общим, без level=critical по умолчанию — под будущую страницу
+    # со всей историей алертов любого уровня.
     @action(detail=False, methods=['get'], url_path='unresolved-count')
     def unresolved_count(self, request):
-        return Response({'count': SystemAlert.objects.filter(is_resolved=False).count()})
+        qs = SystemAlert.objects.filter(is_resolved=False)
+        if level := request.query_params.get('level'):
+            qs = qs.filter(level=level)
+        return Response({'count': qs.count()})
 
     @action(detail=True, methods=['post'], url_path='resolve')
     def resolve(self, request, pk=None):

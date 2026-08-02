@@ -1,11 +1,12 @@
 // frontend/src/features/accounting/pages/Documents/Invoice/HeaderPage.tsx
+import { useEffect } from "react";
 import { BackButton } from "../../../../../components/ui/BackButton";
 import { ROUTES } from "../../../../../core/router/routes";
 import { DOC_TYPES } from "./Vars";
 import { Button } from "../../../../../components/ui/Button";
 import { CheckCircle, XCircle, Check, AlertCircle } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useRestoreScroll } from "../../../../../core/hooks/useRestoreScroll";
 
 // 1. Определение интерфейса для пропсов
@@ -30,7 +31,40 @@ interface HeaderProps {
 const Header = ({ docId, isEdit, header, docNumber, isPosted, setPostConfirm, postMutation, setUnpostConfirm, unpostMutation, saveMutation, disableSave, lastSavedAt, autosaveError }: HeaderProps) => {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const location = useLocation();
   const { getBackProps } = useRestoreScroll("selectedDocumentId", () => {});
+  // ✅ getBackProps сам пишет sessionStorage только по клику на BackButton/Alt+←
+  // (см. useRestoreScroll.ts) — но нативная кнопка "Назад" браузера (или свайп,
+  // Backspace) вызывает popstate напрямую, в обход нашего onClick, и запись просто
+  // не успевает произойти (см. тот же фикс в ProductTurnoverDetailPage.tsx). Поэтому
+  // пишем id проактивно, как только документ открылся — тогда неважно, каким
+  // способом вернулись на список накладных.
+  useEffect(() => {
+    if (!docId) return;
+    try {
+      sessionStorage.setItem("selectedDocumentId", String(docId));
+    } catch {}
+  }, [docId]);
+
+  // ✅ Страница списка (InvoicesPage.tsx::onRowDoubleClick), с которой открыли этот
+  // документ — передаётся через location.state, а не через постоянно пишущийся
+  // sessionStorage: иначе переход на любую ДРУГУЮ вкладку приложения и обратно на
+  // список накладных тоже "восстанавливал" бы последнюю страницу, хотя пользователь
+  // туда не за этим вернулся. state.fromInvoicesPage есть только когда документ
+  // открыли именно двойным кликом по строке списка — тогда и только тогда пишем
+  // страницу в sessionStorage (тем же проактивным способом, что и selectedDocumentId
+  // выше, чтобы тоже работать с нативной кнопкой "Назад" браузера).
+  useEffect(() => {
+    const state = location.state as { fromInvoicesPage?: number; fromInvoicesFilters?: Record<string, unknown> } | null;
+    const fromPage = state?.fromInvoicesPage;
+    if (fromPage == null) return;
+    try {
+      sessionStorage.setItem("invoices_list_return_page", String(fromPage));
+      if (state?.fromInvoicesFilters) {
+        sessionStorage.setItem("invoices_list_filters", JSON.stringify(state.fromInvoicesFilters));
+      }
+    } catch {}
+  }, [location.state]);
 
   return (
     <div className="flex items-center justify-between gap-3 mb-3 print:mb-1 flex-wrap">

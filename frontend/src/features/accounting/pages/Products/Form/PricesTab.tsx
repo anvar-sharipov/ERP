@@ -313,7 +313,7 @@ const PricesTab = ({ productId, prices, priceTypes, warehouses, onRefresh }: Pri
                   >
                     <td className="py-2 px-3">{p.price_type_name}</td>
                     <td className="py-2 px-3 text-gray-500">{p.warehouse_name ?? p.branch_name ?? <span className="text-amber-600 dark:text-amber-400 font-medium">Глобально</span>}</td>
-                    <td className="py-2 px-3 text-right font-medium">{Number(p.price).toLocaleString()}</td>
+                    <td className="py-2 px-3 text-right font-medium">{Number(p.price).toLocaleString("ru-RU", { minimumFractionDigits: 3 })}</td>
                     <td className="py-2 px-3 text-center">
                       <span className={`inline-block w-2 h-2 rounded-full ${p.is_active ? "bg-green-500" : "bg-gray-300"}`} />
                     </td>

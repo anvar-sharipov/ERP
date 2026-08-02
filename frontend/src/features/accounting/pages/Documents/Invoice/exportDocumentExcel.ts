@@ -36,16 +36,22 @@ const COUNTERPARTY_FONT_SIZE = 16;
 
 // ── Денежные/процентные колонки — отображаются как float с фиксированными 2 знаками
 // после запятой (как в настоящих документах), а не "как получится" в General-формате Excel.
-const FLOAT_KEYS = new Set<ColumnDef["key"]>(["cost_price", "price", "discount_percent", "discount_amount", "total", "income", "income_percent"]);
+const FLOAT_KEYS = new Set<ColumnDef["key"]>(["discount_percent", "discount_amount", "total", "income", "income_percent"]);
 const FLOAT_NUMFMT = "#,##0.00";
+
+// ✅ Себестоимость/цена товара — 3 знака после запятой по просьбе заказчика (см.
+// Product.cost_price/ProductPrice.price/DocumentItem.price|cost_price — все теперь
+// decimal_places=3), а не 2, как у денежных итогов строки/документа выше.
+const PRICE_KEYS = new Set<ColumnDef["key"]>(["cost_price", "price"]);
+const PRICE_NUMFMT = "#,##0.000";
 
 // ── Узкие колонки — сузил по просьбе пользователя (#, ед. изм., цена, скидка, итого).
 // Ширина в "символах" Excel; всё, чего нет в карте, использует DEFAULT_COLUMN_WIDTH.
 const NARROW_COLUMN_WIDTHS: Partial<Record<ColumnDef["key"], number>> = {
   index: 5,
   unit: 8,
-  cost_price: 10,
-  price: 10,
+  cost_price: 11,
+  price: 11,
   discount_percent: 8,
   discount_amount: 10,
   total: 12,
@@ -54,6 +60,7 @@ const PRODUCT_COLUMN_WIDTH = 32;
 const DEFAULT_COLUMN_WIDTH = 16;
 
 const fmt = (n: number) => Number(n.toFixed(2));
+const fmt3 = (n: number) => Number(n.toFixed(3));
 
 interface HeaderInfoLine {
   label: string;
@@ -140,9 +147,9 @@ function cellValueForColumn(col: ColumnDef, row: ItemRow, index: number, lineTot
     case "quantity":
       return fmt(parseFloat(row.quantity) || 0);
     case "cost_price":
-      return fmt(parseFloat(row.cost_price) || 0);
+      return fmt3(parseFloat(row.cost_price) || 0);
     case "price":
-      return fmt(parseFloat(row.price) || 0);
+      return fmt3(parseFloat(row.price) || 0);
     case "discount_percent":
       return fmt(parseFloat(row.discount_percent) || 0);
     case "discount_amount": {
@@ -261,8 +268,10 @@ export async function exportDocumentExcel(opts: ExportDocumentExcelOptions): Pro
       cell.border = { top: { style: "thin" }, left: { style: "thin" }, bottom: { style: "thin" }, right: { style: "thin" } };
       // ✅ Наименование/кол-во/все цены/все скидки — чуть крупнее остальных колонок
       cell.font = { size: EMPHASIZED_KEYS.has(key) ? EMPHASIZED_FONT_SIZE : BASE_FONT_SIZE };
-      // ✅ Цены/скидки/итого — float с фиксированными 2 знаками, как в настоящих документах
+      // ✅ Скидки/итого — float с фиксированными 2 знаками, как в настоящих документах;
+      // себестоимость/цена товара — 3 знака (см. PRICE_KEYS выше).
       if (FLOAT_KEYS.has(key)) cell.numFmt = FLOAT_NUMFMT;
+      else if (PRICE_KEYS.has(key)) cell.numFmt = PRICE_NUMFMT;
     });
   });
 

@@ -3,8 +3,10 @@ from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from django.core.exceptions import ValidationError
+from django.db.models import Q
 
-from accounting.models import Document, DocumentItem, DocumentParticipant
+from accounting.models import Document, DocumentItem, DocumentParticipant, AuditLog
+from accounting.mixins import AuditMixin
 from accounting.serializers.document_serializers import (
     DocumentSerializer,
     DocumentListSerializer,
@@ -43,10 +45,17 @@ DOCUMENT_ORDERING_FIELDS = {
 }
 
 
-class DocumentViewSet(viewsets.ModelViewSet):
+class DocumentViewSet(AuditMixin, viewsets.ModelViewSet):
     """
     Универсальный вьюсет для всех типов документов.
     Фильтрация по типу: ?document_type=in|out|move|return_in|return_out
+
+    ✅ AuditMixin — раньше здесь его не было вообще, поэтому создание/
+    редактирование/удаление накладной (пока она черновик) не попадало в
+    AuditLog. Только post()/unpost() логировались, и то вручную из модели
+    (Document._write_audit_log). perform_update/perform_destroy используют
+    дефолтную реализацию AuditMixin — у Document нет M2M-полей, которые
+    AuditMixin._snapshot() не видит (в отличие от ProductViewSet.allowed_warehouses).
     """
 
     def get_queryset(self):
@@ -99,6 +108,24 @@ class DocumentViewSet(viewsets.ModelViewSet):
         if counterparty:
             qs = qs.filter(counterparty_id=counterparty)
 
+        # ✅ Фильтр по сотруднику-участнику накладной (TripDetailPage.tsx: поиск
+        # накладных для рейса показывает только те, где ЭТОТ водитель уже указан
+        # участником накладной — id 20 рейса не должен предлагать накладные
+        # случайного другого водителя/агента/логиста). Роль — свободный текст
+        # (см. DocumentParticipant.role), поэтому фильтруем по employee, а не по
+        # конкретной строке роли.
+        driver_param = self.request.query_params.get('driver')
+        if driver_param:
+            qs = qs.filter(participants__employee_id=driver_param).distinct()
+
+        # ✅ Фильтр по рейсу (TripDetailPage.tsx) — ?trip=<id> для состава конкретного
+        # рейса, ?trip=none для поиска ещё не привязанных накладных при добавлении в рейс.
+        trip_param = self.request.query_params.get('trip')
+        if trip_param == 'none':
+            qs = qs.filter(trip__isnull=True)
+        elif trip_param:
+            qs = qs.filter(trip_id=trip_param)
+
         # ✅ Фильтр по автору (created_by) / по тому, кто провёл (posted_by) —
         # см. InvoicesPage.tsx, значения выбираются из filter_users() ниже.
         created_by = self.request.query_params.get('created_by')
@@ -108,6 +135,15 @@ class DocumentViewSet(viewsets.ModelViewSet):
         posted_by = self.request.query_params.get('posted_by')
         if posted_by:
             qs = qs.filter(posted_by_id=posted_by)
+
+        # ✅ Поиск (InvoicesPage.tsx) — раньше искался только по уже загруженной
+        # странице на клиенте (useTableFilter), поэтому документ мог реально
+        # существовать, но не найтись, если попадал на другую страницу. Теперь
+        # уходит на бэкенд, как и остальные фильтры/сортировка — те же поля,
+        # что были в frontend searchFields: number, counterparty_detail.name.
+        search = self.request.query_params.get('search')
+        if search:
+            qs = qs.filter(Q(number__icontains=search) | Q(counterparty__name__icontains=search))
 
         # Фильтр по дате
         date_from = self.request.query_params.get('date_from')
@@ -150,7 +186,8 @@ class DocumentViewSet(viewsets.ModelViewSet):
         return _rbac(self.action, 'document')
 
     def perform_create(self, serializer):
-        serializer.save(created_by=self.request.user)
+        instance = serializer.save(created_by=self.request.user)
+        self._write_log(self.request, instance, AuditLog.Action.CREATE)
 
     
     

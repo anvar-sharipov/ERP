@@ -8,7 +8,7 @@
 (модель PeriodicTask в public-схеме) — см. bootstrap_daily_checks_schedule.py
 management-команду, которая создаёт запись расписания один раз.
 """
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
 
 from celery import shared_task
 from django.contrib.contenttypes.models import ContentType
@@ -53,7 +53,7 @@ def _check_warehouse_snapshots():
     накопил ошибку, или кто-то напрямую поправил проводки в обход правильного
     пути) — заводит SystemAlert.
     """
-    from .models import Warehouse, WarehouseProductSnapshot, SystemAlert
+    from .models import Warehouse, WarehouseProductSnapshot, SystemAlert, Product
 
     ct = ContentType.objects.get_for_model(Warehouse)
     for warehouse in Warehouse.objects.all():
@@ -81,12 +81,31 @@ def _check_warehouse_snapshots():
             # знаков (см. models/stock.py::WarehouseProductSnapshot.value), а
             # сырой скан может отличаться на доли копейки/грамма — это не
             # реальное расхождение, см. обсуждение при первой проверке.
-            if round(f['qty'], 3) != round(s['qty'], 3) or round(f['value'], 2) != round(s['value'], 2):
+            # ✅ Округляем ТОЛЬКО через quantize(..., ROUND_HALF_UP), не через
+            # Python-встроенный round()/quantize() без явного rounding — тот
+            # использует банковское округление (round-half-to-even), а
+            # PostgreSQL при записи Decimal в NUMERIC(decimal_places=2)
+            # округляет по обычному "0.5 → вверх". На ровной границе (например
+            # 14.72500) эти два правила расходятся в разные стороны (14.72 vs
+            # 14.73) — реальный кейс, из-за которого товар #407 ушёл в ложный
+            # алерт при полностью совпадающем qty.
+            qty_diff = f['qty'].quantize(Decimal('0.001'), rounding=ROUND_HALF_UP) != s['qty'].quantize(Decimal('0.001'), rounding=ROUND_HALF_UP)
+            value_diff = f['value'].quantize(Decimal('0.01'), rounding=ROUND_HALF_UP) != s['value'].quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+            if qty_diff or value_diff:
                 mismatches.append({
                     'product_id': pid,
                     'fresh_qty': str(f['qty']), 'stored_qty': str(s['qty']),
                     'fresh_value': str(f['value']), 'stored_value': str(s['value']),
                 })
+
+        # ✅ Имя товара кладём прямо в extra_data одним bulk-запросом — иначе
+        # странице алертов (AlertsPage.tsx) пришлось бы делать N+1 запросов к
+        # /products/, чтобы просто показать "какой товар разошёлся", вместо
+        # голого product_id.
+        if mismatches:
+            names = dict(Product.objects.filter(id__in=[m['product_id'] for m in mismatches]).values_list('id', 'name'))
+            for m in mismatches:
+                m['product_name'] = names.get(m['product_id'], f"#{m['product_id']}")
 
         title = f"Расхождение снапшота: {warehouse.name}"
         message = (

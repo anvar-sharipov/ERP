@@ -1,5 +1,5 @@
 // // frontend/src/features/accounting/pages/Accounting/OSVPage.tsx
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
@@ -50,7 +50,7 @@ const OSVPage = () => {
   // выбран конкретный склад — показываем обороты только по нему; выбран только филиал
   // (без склада) — по всем складам этого филиала; не выбрано ничего — весь scope
   // пользователя (бэкенд сам пересекает это с RBAC-scope, см. JournalEntryViewSet.osv).
-  const { data: rows = [], isLoading } = useQuery<OSVRow[]>({
+  const { data: rowsData, isLoading } = useQuery<OSVRow[]>({
     queryKey: ["osv", periodFrom, periodTo, showZero, workBranch?.id, workWarehouse?.id],
     queryFn: () =>
       accountApi.getOSV({
@@ -61,6 +61,10 @@ const OSVPage = () => {
       }),
     enabled: !!periodFrom && !!periodTo && canView,
   });
+  // ✅ useMemo — "rows" стоит в deps эффекта setSidebarContent ниже; "?? []"
+  // создавал бы новую ссылку на каждый рендер, пока запрос грузится →
+  // "Maximum update depth exceeded".
+  const rows = useMemo(() => rowsData ?? [], [rowsData]);
 
   const handleExportExcel = () => {
     if (!periodFrom || !periodTo || rows.length === 0) return;
@@ -122,7 +126,7 @@ const OSVPage = () => {
                   дочерних счетов и подгрупп — не свои отдельные проводки (у групп проводок не бывает).
                 </li>
                 <li>
-                  <b>Двойной клик по счёту</b> (или Enter/F2, если строка выделена стрелками) открывает детализацию: если
+                  <b>Двойной клик по счёту</b> (или Enter, если строка выделена стрелками) открывает детализацию: если
                   у счёта настроено субконто (например "Контрагент") — детализацию по нему (сколько должен/начислено
                   каждому контрагенту), иначе — Журнал проводок, отфильтрованный по этому счёту, за тот же период. Для
                   счетов-групп это недоступно — у них нет своих проводок.

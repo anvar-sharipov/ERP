@@ -78,7 +78,53 @@ export const accountApi = {
     return res.data;
   },
 
-  getProductTurnover: async (params: { date_from: string; date_to: string; warehouse?: string; branch?: string }) => {
+  // ✅ account опционален — без него бэкенд отдаёт карточки СРАЗУ по всем счетам
+  // с активностью (см. transaction_views.py::_account_card_all), как ProductTurnoverPage —
+  // один экран, без обязательного выбора одной сущности, без пагинации.
+  getAccountCard: async (params: {
+    account?: string;
+    date_from: string;
+    date_to: string;
+    subconto_slug?: string;
+    subconto_id?: string;
+    entry_type?: string;
+    search?: string;
+    show_zero?: boolean;
+    warehouse?: string;
+    branch?: string;
+  }) => {
+    const res = await api.get('/accounting/journal-entries/account-card/', { params });
+    return res.data as {
+      cards: {
+        account_id: number;
+        account_code: string;
+        account_name: string;
+        items: {
+          id: number;
+          date: string;
+          journal_entry_id: number;
+          document_id: number | null;
+          comment: string;
+          corr_account: string;
+          debit: number;
+          credit: number;
+          balance: number;
+        }[];
+        opening_balance: number;
+        closing_balance: number;
+        total_debit: number;
+        total_credit: number;
+      }[];
+    };
+  },
+
+  // ✅ light — ProductsListPage.tsx (колонка "Оборот") не показывает
+  // name/sku/категорию/бренд/фото товара из этого отчёта (они и так уже есть
+  // из products-light/list_light_images) — light=1 просит бэкенд не отдавать
+  // и не считать их (см. report_views.py::_new_bucket докстринг), сильно
+  // сокращая и время ответа, и размер payload. ProductTurnoverPage.tsx эти
+  // поля реально показывает — light не передаёт, получает полный ответ.
+  getProductTurnover: async (params: { date_from: string; date_to: string; warehouse?: string; branch?: string; light?: boolean }) => {
     const res = await api.get('/accounting/reports/product-turnover/', { params });
     return res.data;
   },
@@ -86,6 +132,58 @@ export const accountApi = {
   getProductTurnoverDetail: async (params: { product: number | string; date_from: string; date_to: string; warehouse?: string; branch?: string }) => {
     const res = await api.get('/accounting/reports/product-turnover-detail/', { params });
     return res.data;
+  },
+
+  // ✅ product опционален — без него бэкенд отдаёт карточки СРАЗУ по всем товарам
+  // с движением за период (см. report_views.py::_product_card_all), как
+  // ProductTurnoverPage — один экран, без обязательного выбора одного товара,
+  // без пагинации.
+  getProductCard: async (params: {
+    product?: string;
+    date_from: string;
+    date_to: string;
+    partner?: string;
+    agent?: string;
+    document_type?: string;
+    search?: string;
+    show_zero?: boolean;
+    warehouse?: string;
+    branch?: string;
+  }) => {
+    const res = await api.get('/accounting/reports/product-card/', { params });
+    return res.data as {
+      cards: {
+        product_id: number;
+        product_name: string;
+        product_sku: string | null;
+        product_unit: string;
+        product_cost_price: number;
+        product_thumbnail_url: string | null;
+        product_image_url: string | null;
+        start_quantity: number;
+        start_value: number;
+        turnover: { in_qty: number; in_value: number; return_qty: number; return_value: number; out_qty: number; out_value: number };
+        end: { quantity: number; value: number };
+        rows: {
+          id: number;
+          date: string;
+          document_id: number;
+          document_number: string;
+          document_type: string;
+          partner: string;
+          counterparty_id: number | null;
+          agent_id: number | null;
+          note: string;
+          price: number;
+          discount_percent: number;
+          discount_amount: number;
+          in_qty: number; in_sum: number;
+          return_qty: number; return_sum: number;
+          out_qty: number; out_sum: number;
+          balance_qty: number; balance_sum: number;
+        }[];
+      }[];
+    };
   },
 
   getStockBalance: async (params: { warehouse?: string; branch?: string }) => {
@@ -121,10 +219,42 @@ export const accountApi = {
     }[];
   },
 
+  // ✅ Универсальный фильтр по документам (UniversalFilterPage.tsx) — см.
+  // ReportViewSet.universal_filter (report_views.py). document_type/warehouse/
+  // warehouse_to/counterparty/employee/product/category — CSV из id (или кодов
+  // типа документа), не массивы — так же, как ?warehouse=1,2,3 у остальных
+  // отчётов (_resolve_warehouse_ids).
+  getUniversalFilter: async (params: {
+    date_from: string; date_to: string;
+    document_type?: string; status?: string; group_by?: string;
+    warehouse?: string; branch?: string; warehouse_to?: string;
+    counterparty?: string; employee?: string; product?: string; category?: string;
+    search?: string;
+  }) => {
+    const res = await api.get('/accounting/reports/universal-filter/', { params });
+    return res.data as {
+      domain: string;
+      group_by: string;
+      has_profit: boolean;
+      rows: Record<string, string | number | null>[];
+      totals: Record<string, string | number | null>;
+    };
+  },
+
   // est backend paginasiya
-  getAuditLogs: async (params?: { page?: number; page_size?: number; action?: string; user?: number; ordering?: string }) => {
+  getAuditLogs: async (params?: { page?: number; page_size?: number; action?: string; user?: number; ordering?: string; date_from?: string; date_to?: string; search?: string }) => {
     const res = await api.get('/accounting/audit-logs/', { params })
     return res.data
+  },
+
+  getProductRevaluations: async (params?: { page?: number; page_size?: number; warehouse?: string; branch?: string; ordering?: string; date_from?: string; date_to?: string; search?: string }) => {
+    const res = await api.get('/accounting/product-revaluations/', { params });
+    return res.data;
+  },
+
+  getPriceChangeHistory: async (params?: { page?: number; page_size?: number; warehouse?: string; branch?: string; price_type?: string; ordering?: string; date_from?: string; date_to?: string; search?: string }) => {
+    const res = await api.get('/accounting/price-change-history/', { params });
+    return res.data;
   },
 
 

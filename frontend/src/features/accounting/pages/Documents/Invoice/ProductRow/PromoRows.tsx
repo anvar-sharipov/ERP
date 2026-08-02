@@ -134,7 +134,7 @@ const PromoCellContent = ({
       return <span className={`block text-right text-emerald-600 dark:text-emerald-400 font-medium ${viewMode ? "text-xl" : "text-base print:text-xl"}`}>+{row.quantity}</span>;
 
     case "price":
-      return <span className={`block text-right font-mono text-emerald-600 dark:text-emerald-400 ${viewMode ? "text-xl" : "text-base print:text-xl"}`}>0.00</span>;
+      return <span className={`block text-right font-mono text-emerald-600 dark:text-emerald-400 ${viewMode ? "text-xl" : "text-base print:text-xl"}`}>0.000</span>;
 
     case "discount_percent":
     case "discount_amount":

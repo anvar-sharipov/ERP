@@ -60,19 +60,15 @@ export const MiniChat: React.FC = () => {
           exit={{ opacity: 0, scale: 0.9 }}
           transition={{ type: "spring", stiffness: 400, damping: 30 }}
           style={{ left: pos.x, top: pos.y, width: 360 }}
-          className="fixed z-[200] rounded-2xl overflow-hidden shadow-2xl shadow-indigo-950/60 ring-1 ring-indigo-500/20 border border-slate-700/50 flex flex-col bg-slate-900"
+          className="fixed z-[200] rounded-2xl overflow-hidden shadow-2xl shadow-black/40 ring-1 ring-[#3390ec]/20 border border-slate-700/50 flex flex-col bg-[#17212b]"
         >
           {/* Шапка — drag handle */}
           <div
             onMouseDown={handleMouseDown}
-            style={{ background: "linear-gradient(135deg, #1e1b4b 0%, #312e81 60%, #1e1b4b 100%)" }}
-            className="relative flex items-center justify-between px-3 py-2 border-b border-indigo-500/20 cursor-grab active:cursor-grabbing select-none shrink-0"
+            className="relative flex items-center justify-between px-3 py-2 border-b border-[#3390ec]/20 bg-[#1c2733] cursor-grab active:cursor-grabbing select-none shrink-0"
           >
-            {/* Неоновая полоска сверху — в тон ChatToast */}
-            <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-transparent via-indigo-400 to-transparent" />
-
             <div className="flex items-center gap-2">
-              <MessageSquare className="w-4 h-4 text-indigo-300" />
+              <MessageSquare className="w-4 h-4 text-[#6ab2f2]" />
               <span className="text-sm font-semibold text-slate-100">{selectedConvId ? selectedConvName : t("Messages")}</span>
             </div>
 
@@ -84,19 +80,19 @@ export const MiniChat: React.FC = () => {
                     setSelectedConvId(null);
                     setActiveConvId(null);
                   }}
-                  className="px-2 py-0.5 text-xs text-indigo-300 hover:text-white hover:bg-indigo-700/40 rounded transition-colors"
+                  className="px-2 py-0.5 text-xs text-[#6ab2f2] hover:text-white hover:bg-[#3390ec]/30 rounded transition-colors"
                 >
                   ← {t("Back")}
                 </button>
               )}
 
               {/* Свернуть */}
-              <button onClick={() => setMinimized((v) => !v)} className="w-6 h-6 flex items-center justify-center text-indigo-300 hover:text-white hover:bg-indigo-700/40 rounded transition-colors">
+              <button onClick={() => setMinimized((v) => !v)} className="w-6 h-6 flex items-center justify-center text-[#6ab2f2] hover:text-white hover:bg-[#3390ec]/30 rounded transition-colors">
                 <Minus className="w-3.5 h-3.5" />
               </button>
 
               {/* Закрыть */}
-              <button onClick={toggleMiniChat} className="w-6 h-6 flex items-center justify-center text-indigo-300 hover:text-rose-400 hover:bg-indigo-700/40 rounded transition-colors">
+              <button onClick={toggleMiniChat} className="w-6 h-6 flex items-center justify-center text-[#6ab2f2] hover:text-rose-400 hover:bg-[#3390ec]/30 rounded transition-colors">
                 <X className="w-3.5 h-3.5" />
               </button>
             </div>

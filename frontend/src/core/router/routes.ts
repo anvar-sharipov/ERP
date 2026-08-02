@@ -36,8 +36,6 @@ export const ROUTES = {
     ACCOUNTING_SUBCONTO_TYPES: '/accounting/subconto-types', // добавить
 
     ACCOUNTING_OSV: '/accounting/osv',
-    ACCOUNTING_PRODUCT_TURNOVER: '/accounting/product-turnover',
-    ACCOUNTING_PRODUCT_TURNOVER_DETAIL: '/accounting/product-turnover/:id',
 
     ACCOUNTING_SUBCONTO_BREAKDOWN: '/accounting/account/:accountId/subconto',
     ACCOUNTING_SUBCONTO_CARD: '/accounting/account/:accountId/subconto/:subcontoId',
@@ -46,6 +44,9 @@ export const ROUTES = {
     EMPLOYEES: '/employees',
     EMPLOYEES_LIST: '/employees/list',
     POSITIONS: '/employees/positions',
+
+    TRIPS: '/trips',
+    TRIPS_VIEW: '/trips/:id',
 
     ACCOUNTING_AUDIT_LOG: '/accounting/audit-log',
 
@@ -65,25 +66,47 @@ export const ROUTES = {
     DOCUMENTS_VIEW: '/documents/:id/view',
 
     CHAT: '/chat',
-    EXCHANGE_RATES: '/exchange-rates', 
+
+    // ✅ Отдельная от "Accounting" вкладка в левом сайдбаре — сюда будем
+    // по одному добавлять новые отчёты (каждый как свой tab внутри Reports.tsx,
+    // тем же паттерном, что ROUTES.APP.ACCOUNTING/Accounting.tsx). Существующие
+    // отчёты (OSV/ProductTurnover/AuditLog) сюда пока не переносим — это была
+    // бы отдельная более крупная задача, не часть текущего запроса.
+    REPORTS: '/reports',
+    REPORTS_PRODUCT_TURNOVER_DETAIL: '/reports/product-turnover/:id',
+
+    // ✅ Отдельная от "Reports" вкладка в левом сайдбаре — аналитика/BI-отчёты
+    // (динамика продаж, ABC/XYZ, маржинальность, RFM и т.д.), тем же паттерном
+    // GoogleTabs + вложенные <Route>, что и Reports/Accounting.
+    ANALYTICS: '/analytics',
+
+
+
+    EXCHANGE_RATES: '/exchange-rates',
     EXCHANGE_RATES_RATES: '/exchange-rates/rates',
     EXCHANGE_RATES_CURRENCIES: '/exchange-rates/currencies',
 
   },
 
+  // ✅ Префикс намеренно "/company-admin/", а не "/admin/" — nginx.conf проксирует
+  // ЛЮБОЙ путь, начинающийся с "/admin/", напрямую в Django (location ~ ^/(api|admin)/,
+  // это для реальной Django-админки /admin/). Раньше эти React-роуты тоже сидели
+  // на "/admin/*" — прямой заход по ссылке или Ctrl+L+Enter в браузере уводил
+  // запрос в Django вместо SPA (тот же класс бага, что и /chat/ vs Django admin).
   COMPANY_ADMIN: {
-    USERS:      '/admin/users',
-    ROLES:      '/admin/roles',
-    ROLES_CREATE: '/admin/roles/create',
-    ROLES_EDIT:   '/admin/roles/:id/edit',
-    COMPANIES:  '/admin/companies',
-    BRANCHS:    '/admin/branchs',
-    DOCUMENT_SETTINGS: '/admin/document-settings',
+    USERS:      '/company-admin/users',
+    ROLES:      '/company-admin/roles',
+    ROLES_CREATE: '/company-admin/roles/create',
+    ROLES_EDIT:   '/company-admin/roles/:id/edit',
+    COMPANIES:  '/company-admin/companies',
+    BRANCHS:    '/company-admin/branchs',
+    DOCUMENT_SETTINGS: '/company-admin/document-settings',
+    ALERTS: '/company-admin/alerts',
   },
   ADMIN: {
-    DASHBOARD: '/admin/dashboard',
-    USERS: '/admin/users',
-    ROLES: '/admin/roles',
+    DASHBOARD: '/company-admin/dashboard',
+    USERS: '/company-admin/users',
+    ROLES: '/company-admin/roles',
   }
 } as const;
 

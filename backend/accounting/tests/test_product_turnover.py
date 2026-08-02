@@ -169,8 +169,12 @@ class ProductTurnoverTest(TenantTestCase):
 
         # closing_qty = 100 + 50 + 5 - 30 - 3 - 10 = 112
         self.assertEqual(row['closing_qty'], Decimal('112.000'))
-        # closing_value = 1000 + 500 + 60 - 405 - 24 - 100 = 1031
-        self.assertEqual(row['closing_value'], Decimal('1031.000000'))
+        # ✅ closing_value = closing_qty × ТЕКУЩАЯ себестоимость (_closing() в
+        # report_views.py, см. её докстринг) — 112 × 10.00 = 1120, а НЕ сумма
+        # исторических сумм прихода/расхода (1000+500+60-405-24-100=1031,
+        # старая формула). Раньше здесь стояло старое число — тест не обновили
+        # при переходе на qty×cost_price, хотя сам _closing() уже был переписан.
+        self.assertEqual(row['closing_value'], Decimal('1120.000000'))
 
     def test_draft_document_excluded(self):
         response = self._list(self.user_with_access, warehouse=self.wh1.id)

@@ -8,6 +8,12 @@ from ..models import User, UserRole
 from django.db.models import Prefetch
 from icecream import ic
 from users.permissions import _rbac
+from accounting.mixins import AuditMixin
+
+# ✅ password/last_login никогда не должны попадать в AuditLog.changed_data —
+# password это хэш (незачем светить даже его), last_login меняется при каждом
+# логине и не является административным изменением, которое стоит аудировать.
+_USER_AUDIT_EXCLUDE = AuditMixin.audit_fields_exclude + ['password', 'last_login']
 
 
 # users/views/user_views.py
@@ -20,12 +26,13 @@ from ..serializers.user_serializer import (
 from users.permissions import _rbac
 
 # user update edit for admin
-class UserManagementView(generics.ListCreateAPIView):
+class UserManagementView(AuditMixin, generics.ListCreateAPIView):
     pagination_class = None
     # Доступ только для тех, кто имеет право 'users:POST'
     # permission_classes = [IsAuthenticated, HasPermission('user', 'POST')]
     serializer_class = UserSerializer
-    
+    audit_fields_exclude = _USER_AUDIT_EXCLUDE
+
     def get_permissions(self):
         # GET -> 'list', POST -> 'create'
         action = 'list' if self.request.method == 'GET' else 'create'
@@ -37,11 +44,12 @@ class UserManagementView(generics.ListCreateAPIView):
             'userrole_set__role__rolepermission_set__permission'
         ).all()
     
-# user update edit for user   
-class ProfileUpdateView(generics.UpdateAPIView):
+# user update edit for user
+class ProfileUpdateView(AuditMixin, generics.UpdateAPIView):
     pagination_class = None
     permission_classes = [IsAuthenticated]
-    
+    audit_fields_exclude = _USER_AUDIT_EXCLUDE
+
     def get_serializer_class(self):
         # Если нужно, можно менять сериализатор динамически
         return ProfileUpdateSerializer
@@ -51,9 +59,10 @@ class ProfileUpdateView(generics.UpdateAPIView):
 
 
 
-class UserDetailView(generics.RetrieveUpdateDestroyAPIView):
+class UserDetailView(AuditMixin, generics.RetrieveUpdateDestroyAPIView):
     pagination_class = None
     serializer_class = UserSerializer
+    audit_fields_exclude = _USER_AUDIT_EXCLUDE
 
     def get_queryset(self):
         return User.objects.prefetch_related(

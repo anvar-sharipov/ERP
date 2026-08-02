@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { accountApi } from "../../services/accountingApi";
@@ -6,7 +6,7 @@ import { usePageAccess } from "../../../../core/hooks/usePageAccess";
 import { Table, type Column } from "../../../../components/ui/Table/Table";
 import { RBACGuard } from "../../../../components/ui/RBACGuard";
 import type { AuditLog } from "../../../../core/types";
-import { useTableFilter } from "../../../../core/hooks/useTableFilter";
+import { useDebouncedValue } from "../../../../core/hooks/useDebouncedValue";
 import { useSidebar } from "../../../../core/context/SidebarRightContext";
 import { Button } from "../../../../components/ui/Button";
 import { useDateStore } from "../../../../core/store/dateStore";
@@ -22,11 +22,15 @@ export default function AuditLogPage() {
   // console.log("canView", canView);
   
 
-  const { data: users = [] } = useQuery({
+  const { data: usersData } = useQuery({
     queryKey: ["users-lookup"],
     queryFn: usersApi.getUsersLookup,
     staleTime: 5 * 60 * 1000,
   });
+  // ✅ useMemo, а не "data: users = []" — этот массив стоит в deps эффекта
+  // setSidebarContent ниже; "?? []"/деструктуризация с дефолтом создаёт новую
+  // ссылку на каждый рендер, пока запрос грузится → "Maximum update depth exceeded".
+  const users = useMemo(() => usersData ?? [], [usersData]);
 
   const [page, setPage] = useState(1);
   //   const [pageSize, setPageSize] = useState(25);
@@ -46,6 +50,12 @@ export default function AuditLogPage() {
   const [sortBy, setSortBy] = useState<string | null>(null);
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
 
+  // ✅ Дебаунс поиска — раньше поиск фильтровал только уже загруженную с бэкенда
+  // страницу (useTableFilter), из-за чего запись могла реально существовать, но
+  // не находиться, если попадала на другую страницу. Теперь уходит в бэкенд как
+  // query-параметр (см. audit_views.py), поэтому нужен дебаунс.
+  const debouncedSearch = useDebouncedValue(searchQuery, 350);
+
   const filters = {
     page,
     page_size: pageSize,
@@ -56,6 +66,7 @@ export default function AuditLogPage() {
     ...(periodFrom && { date_from: periodFrom }),
     ...(periodTo && { date_to: periodTo }),
     ...(sortBy && { ordering: sortDir === "desc" ? `-${sortBy}` : sortBy }),
+    ...(debouncedSearch && { search: debouncedSearch }),
   };
 
   // ✅ AuditLog пишется из десятков разных мест по всему проекту (документы,
@@ -65,7 +76,7 @@ export default function AuditLogPage() {
   // ручной перезагрузки страницы (раньше новые записи появлялись только после F5).
   const { data, isLoading, error } = useQuery({
     // queryKey: ["audit-logs", filters],
-    queryKey: ["audit-logs", page, pageSize, actionFilter, userFilter, periodFrom, periodTo, sortBy, sortDir],
+    queryKey: ["audit-logs", page, pageSize, actionFilter, userFilter, periodFrom, periodTo, sortBy, sortDir, debouncedSearch],
     queryFn: () => accountApi.getAuditLogs(filters),
     enabled: canView,
     placeholderData: (prev) => prev,
@@ -77,7 +88,7 @@ export default function AuditLogPage() {
 
   useEffect(() => {
     setPage(1);
-  }, [periodFrom, periodTo, userFilter, actionFilter, sortBy, sortDir]);
+  }, [periodFrom, periodTo, userFilter, actionFilter, sortBy, sortDir, debouncedSearch]);
 
 
   useEffect(() => {
@@ -198,16 +209,11 @@ export default function AuditLogPage() {
     },
   ];
 
-  const filteredLogs = useTableFilter(logs, {
-    search: searchQuery,
-    searchFields: ["object_repr", "model_name", "action_display", "user_display", "ip_address"],
-  });
-
   return (
     <RBACGuard isLoading={isLoading} error={error} canView={canView} forbiddenText={t("ForbiddenAuditLog")}>
       <Table
         columns={columns}
-        data={filteredLogs}
+        data={logs}
         tableId="audit_logs"
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}

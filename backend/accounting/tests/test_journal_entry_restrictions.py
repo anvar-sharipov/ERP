@@ -14,7 +14,7 @@ from rest_framework.test import APIClient
 
 from companies.models import Company, Domain
 from users.models import Permission, Role, RolePermission, UserRole
-from accounting.models import Account, Branch, CompanyProfile, UserScope, Warehouse
+from accounting.models import Account, Branch, ClosedPeriod, CompanyProfile, UserScope, Warehouse
 from accounting.models.transaction import JournalEntry, TransactionLine
 
 User = get_user_model()
@@ -103,27 +103,27 @@ class JournalEntryRestrictionsTest(TenantTestCase):
     def test_list_without_entry_type_returns_all(self):
         response = self._client(self.user).get(JOURNAL_URL)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        numbers = {row['number'] for row in response.data}
+        numbers = {row['number'] for row in response.data['results']}
         self.assertIn("MANUAL-1", numbers)
         self.assertIn("DOC-1", numbers)
 
     def test_list_entry_type_manual_excludes_document_entries(self):
         response = self._client(self.user).get(JOURNAL_URL, {'entry_type': 'manual'})
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        numbers = {row['number'] for row in response.data}
+        numbers = {row['number'] for row in response.data['results']}
         self.assertIn("MANUAL-1", numbers)
         self.assertNotIn("DOC-1", numbers)
 
     def test_list_entry_type_document_excludes_manual_entries(self):
         response = self._client(self.user).get(JOURNAL_URL, {'entry_type': 'document'})
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        numbers = {row['number'] for row in response.data}
+        numbers = {row['number'] for row in response.data['results']}
         self.assertIn("DOC-1", numbers)
         self.assertNotIn("MANUAL-1", numbers)
 
     def test_is_manual_flag_correct_in_list(self):
         response = self._client(self.user).get(JOURNAL_URL)
-        by_number = {row['number']: row for row in response.data}
+        by_number = {row['number']: row for row in response.data['results']}
         self.assertTrue(by_number["MANUAL-1"]['is_manual'])
         self.assertFalse(by_number["DOC-1"]['is_manual'])
 
@@ -132,7 +132,7 @@ class JournalEntryRestrictionsTest(TenantTestCase):
     def test_scoped_user_does_not_see_other_branch_entries(self):
         response = self._client(self.scoped_user).get(JOURNAL_URL)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        numbers = {row['number'] for row in response.data}
+        numbers = {row['number'] for row in response.data['results']}
         self.assertIn("MANUAL-1", numbers)
         self.assertIn("DOC-1", numbers)
         self.assertNotIn("MANUAL-2", numbers, "scoped-пользователь не должен видеть проводки чужого филиала")
@@ -200,3 +200,79 @@ class JournalEntryRestrictionsTest(TenantTestCase):
         self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
         with tenant_context(self.company):
             self.assertFalse(JournalEntry.objects.filter(pk=self.manual_entry.pk).exists())
+
+    # ── удалять можно только draft-проводку в открытый день ──────────────────
+
+    def test_posted_manual_entry_cannot_be_deleted(self):
+        with tenant_context(self.company):
+            JournalEntry.objects.filter(pk=self.manual_entry.pk).update(status=JournalEntry.Status.POSTED)
+        response = self._client(self.user).delete(f"{JOURNAL_URL}{self.manual_entry.pk}/")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        with tenant_context(self.company):
+            self.assertTrue(JournalEntry.objects.filter(pk=self.manual_entry.pk).exists())
+
+    def test_manual_entry_cannot_be_deleted_when_period_closed(self):
+        with tenant_context(self.company):
+            ClosedPeriod.objects.create(date=self.manual_entry.date.date(), warehouse=self.wh1)
+        response = self._client(self.user).delete(f"{JOURNAL_URL}{self.manual_entry.pk}/")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("закрыт", response.data['detail'].lower())
+        with tenant_context(self.company):
+            self.assertTrue(JournalEntry.objects.filter(pk=self.manual_entry.pk).exists())
+
+    def test_bulk_destroy_rejects_entry_in_closed_period(self):
+        with tenant_context(self.company):
+            ClosedPeriod.objects.create(date=self.manual_entry.date.date(), warehouse=self.wh1)
+        response = self._client(self.user).delete(
+            f"{JOURNAL_URL}bulk-destroy/", {'ids': [self.manual_entry.pk]}, format='json',
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['deleted_ids'], [])
+        self.assertEqual(len(response.data['errors']), 1)
+        with tenant_context(self.company):
+            self.assertTrue(JournalEntry.objects.filter(pk=self.manual_entry.pk).exists())
+
+    # ── is_period_closed в списке — фронт дизейблит кнопки по этому флагу ────
+
+    def test_list_exposes_is_period_closed_flag(self):
+        with tenant_context(self.company):
+            ClosedPeriod.objects.create(date=self.manual_entry.date.date(), warehouse=self.wh1)
+        response = self._client(self.user).get(JOURNAL_URL)
+        by_number = {row['number']: row for row in response.data['results']}
+        self.assertTrue(by_number["MANUAL-1"]['is_period_closed'])
+        self.assertFalse(by_number["MANUAL-2"]['is_period_closed'], "у другого филиала/склада день не закрыт")
+
+    # ── bulk-destroy (чекбоксы в JournalPage.tsx) — те же ограничения ────────
+
+    def test_bulk_destroy_deletes_manual_entry(self):
+        response = self._client(self.user).delete(
+            f"{JOURNAL_URL}bulk-destroy/", {'ids': [self.manual_entry.pk]}, format='json',
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['deleted_ids'], [self.manual_entry.pk])
+        self.assertEqual(response.data['errors'], [])
+        with tenant_context(self.company):
+            self.assertFalse(JournalEntry.objects.filter(pk=self.manual_entry.pk).exists())
+
+    def test_bulk_destroy_rejects_document_entry(self):
+        response = self._client(self.user).delete(
+            f"{JOURNAL_URL}bulk-destroy/", {'ids': [self.document_entry.pk]}, format='json',
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['deleted_ids'], [])
+        self.assertEqual(len(response.data['errors']), 1)
+        self.assertEqual(response.data['errors'][0]['id'], self.document_entry.pk)
+        with tenant_context(self.company):
+            self.assertTrue(JournalEntry.objects.filter(pk=self.document_entry.pk).exists())
+
+    def test_bulk_destroy_mixed_manual_and_document_entries(self):
+        response = self._client(self.user).delete(
+            f"{JOURNAL_URL}bulk-destroy/",
+            {'ids': [self.manual_entry.pk, self.document_entry.pk]}, format='json',
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['deleted_ids'], [self.manual_entry.pk])
+        self.assertEqual(len(response.data['errors']), 1)
+        with tenant_context(self.company):
+            self.assertFalse(JournalEntry.objects.filter(pk=self.manual_entry.pk).exists())
+            self.assertTrue(JournalEntry.objects.filter(pk=self.document_entry.pk).exists())

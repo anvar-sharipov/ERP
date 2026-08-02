@@ -198,12 +198,15 @@ class DocumentSerializer(serializers.ModelSerializer):
             'items',
             'participants',
 
+            'trip', 'delivery_percent',
+
             'posted_at', 'posted_by', 'posted_by_name',
             'created_by', 'created_at', 'updated_at',
         ]
         read_only_fields = [
             'number', 'subtotal', 'discount_amount',
             'total', 'total_profit',
+            'trip', 'delivery_percent',
             'posted_at', 'posted_by',
             'created_at', 'updated_at',
         ]
@@ -265,11 +268,29 @@ class DocumentListSerializer(serializers.ModelSerializer):
     branch_detail         = BranchShortSerializer(source='branch', read_only=True)
     created_by_name       = serializers.CharField(source='created_by.get_full_name', read_only=True, default=None)
     posted_by_name        = serializers.SerializerMethodField()
+    driver_name           = serializers.SerializerMethodField()
 
     def get_posted_by_name(self, obj):
         if not obj.posted_by_id:
             return None
         return obj.posted_by.get_full_name() or obj.posted_by.username
+
+    # ✅ "Водитель" колонка InvoicesPage.tsx — ПЕРВЫЙ участник документа
+    # (participants[0]), а не текстовый поиск по role: role — это название
+    # должности сотрудника на момент назначения (см. DocumentParticipant.role),
+    # и совсем не обязательно буквально "Водитель" (может быть "Логист" и т.п.
+    # у сотрудника, который в реальности развозит товар). Первый участник —
+    # обязательное поле "Сотрудник" на самой накладной (см. HeadDocument.tsx:
+    # "Первый участник (сотрудник/водитель) — обязателен, всегда первый в
+    # массиве") — тот же слот, что пользователь заполняет как "кто отвечает/
+    # доставляет", независимо от формальной должности. min по id — порядок
+    # добавления, без доп. запроса (participants уже prefetch_related).
+    def get_driver_name(self, obj):
+        participants = list(obj.participants.all())
+        if not participants:
+            return None
+        primary = min(participants, key=lambda p: p.id)
+        return primary.employee.full_name
 
     # ✅ Признаки для фильтра/бейджей в списке фактур (InvoicesPage) — считаются из уже
     # предзагруженных items/product (ViewSet.get_queryset() делает prefetch_related,
@@ -309,7 +330,9 @@ class DocumentListSerializer(serializers.ModelSerializer):
             'total', 'total_profit',
             'has_discount', 'has_gift', 'has_bundle',
             'note',
+            'trip', 'delivery_percent',
             'created_by', 'created_by_name',
             'posted_by', 'posted_by_name',
+            'driver_name',
             'created_at',
         ]

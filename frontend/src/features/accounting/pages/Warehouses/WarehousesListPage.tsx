@@ -26,6 +26,7 @@ interface WarehouseForm {
   address: string;
   is_active: boolean;
   is_main: boolean;
+  currency: "TMT" | "USD";
   // ✅ Счета для автогенерации проводки при проведении "Расхода"/"Прихода" с этого
   // склада — заполняются пользователем вручную, ничего не подставляется по умолчанию.
   receivable_account: number | null;
@@ -48,6 +49,10 @@ interface WarehouseForm {
   receivable_account_supplier: number | null;
   payable_account_supplier: number | null;
   profit_account_supplier: number | null;
+  // ✅ Проводка ЗП водителя за рейс (см. accounting/models/trip.py::Trip.deliver) —
+  // тот же принцип "заполняются вручную", что и остальные счета склада.
+  delivery_expense_account: number | null;
+  driver_payable_account: number | null;
 }
 
 const EMPTY: WarehouseForm = {
@@ -56,6 +61,7 @@ const EMPTY: WarehouseForm = {
   address: "",
   is_active: true,
   is_main: false,
+  currency: "TMT",
   receivable_account: null,
   revenue_account: null,
   cogs_account: null,
@@ -67,6 +73,8 @@ const EMPTY: WarehouseForm = {
   receivable_account_supplier: null,
   payable_account_supplier: null,
   profit_account_supplier: null,
+  delivery_expense_account: null,
+  driver_payable_account: null,
 };
 
 const WarehousesListPage = () => {
@@ -114,6 +122,7 @@ const WarehousesListPage = () => {
         address: editing.address ?? "",
         is_active: editing.is_active,
         is_main: editing.is_main,
+        currency: editing.currency ?? "TMT",
         receivable_account: editing.receivable_account ?? null,
         revenue_account: editing.revenue_account ?? null,
         cogs_account: editing.cogs_account ?? null,
@@ -125,6 +134,8 @@ const WarehousesListPage = () => {
         receivable_account_supplier: editing.receivable_account_supplier ?? null,
         payable_account_supplier: editing.payable_account_supplier ?? null,
         profit_account_supplier: editing.profit_account_supplier ?? null,
+        delivery_expense_account: editing.delivery_expense_account ?? null,
+        driver_payable_account: editing.driver_payable_account ?? null,
       });
     } else {
       setForm(EMPTY);
@@ -210,6 +221,7 @@ const WarehousesListPage = () => {
       excelValue: (item) => item.branch_name ?? "—",
     },
     { header: t("Address"), accessor: "address", sortable: true, excelWidth: 25 },
+    { header: t("WarehouseCurrency"), accessor: "currency", sortable: true, excelWidth: 10 },
     {
       header: t("Status"),
       accessor: "is_active",
@@ -293,6 +305,23 @@ const WarehousesListPage = () => {
           </div>
 
           <TextArea label={t("Address")} rows={2} value={form.address} onChange={(e) => setForm((p) => ({ ...p, address: e.target.value }))} />
+
+          <div>
+            <label className="flex items-center gap-1.5 text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              {t("WarehouseCurrency")}
+              <HelpButton title={t("WarehouseCurrency")}>
+                <p>{t("WarehouseCurrencyHelp")}</p>
+              </HelpButton>
+            </label>
+            <select
+              value={form.currency}
+              onChange={(e) => setForm((p) => ({ ...p, currency: e.target.value as "TMT" | "USD" }))}
+              className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            >
+              <option value="TMT">{t("CurrencyTMT")}</option>
+              <option value="USD">{t("CurrencyUSD")}</option>
+            </select>
+          </div>
 
           {/* ✅ Счета для автогенерации проводки "Расхода"/"Прихода" с этого склада —
               заполняются вручную, ничего не подставляется автоматически (см. правило в CLAUDE.md). */}
@@ -594,6 +623,39 @@ const WarehousesListPage = () => {
                       <p>
                         <b>Необязательное override-поле, только для альтернативной схемы</b> (см. «Счёт прибыли» выше). Если контрагент
                         документа — «Поставщик», прибыль по строке пишется на ЭТОТ счёт вместо обычного «Счёта прибыли».
+                      </p>
+                    </>
+                  ),
+                },
+                {
+                  key: "delivery_expense_account",
+                  label: t("DeliveryExpenseAccountLabel"),
+                  help: (
+                    <>
+                      <p>
+                        Счёт <b>расхода</b> — сумма ЗП водителя за рейс с этого склада (см. страницу «Рейсы»). При закрытии рейса («Доставлено»)
+                        система пишет: <b>Дт «Расход на доставку» — Кт «Начислено водителю»</b>, на сумму <code>% доставки контрагента × сумма
+                        накладной</code>, просуммированную по всем накладным рейса.
+                      </p>
+                      <p>
+                        Если склад ведёт учёт в USD (см. «Валюта склада») — сумма конвертируется в манаты по курсу на дату рейса (не на день фактического закрытия)
+                        ПЕРЕД проводкой, оба счёта — всегда в манатах.
+                      </p>
+                    </>
+                  ),
+                },
+                {
+                  key: "driver_payable_account",
+                  label: t("DriverPayableAccountLabel"),
+                  help: (
+                    <>
+                      <p>
+                        Счёт <b>пассива</b> — сколько компания должна водителям за уже доставленные, но ещё не выплаченные рейсы. Кредитуется
+                        той же суммой, что дебетуется на «Счёт расхода на доставку» — см. пояснение там.
+                      </p>
+                      <p>
+                        Реальная выплата водителю (когда её отдали наличными/переводом) — отдельная, ручная проводка, система её не создаёт
+                        автоматически, так же как и с оплатой поставщику/от покупателя.
                       </p>
                     </>
                   ),

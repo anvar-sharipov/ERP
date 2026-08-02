@@ -123,7 +123,11 @@ const WarehouseStocksPage = () => {
 
       </div>,
     );
-  }, [setSidebarContent, canPost, warehouses, t]);
+  // ✅ "warehouses" убран из deps — эффект его вообще не использует (sidebar JSX
+  // не читает warehouses), а "data: warehouses = []" создаёт новую ссылку на
+  // каждый рендер, пока запрос грузится → был лишний риск "Maximum update depth
+  // exceeded" без единой причины держать эту переменную в зависимостях.
+  }, [setSidebarContent, canPost, t]);
 
   const filtered = useMemo(() => {
     let result = stocks as any[];

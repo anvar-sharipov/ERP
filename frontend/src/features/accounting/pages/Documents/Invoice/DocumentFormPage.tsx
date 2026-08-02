@@ -179,8 +179,8 @@ const DocumentFormPage = () => {
   // не по глобальному WorkDateWidget — при редактировании старого документа
   // они могут отличаться.
   const { data: products = [] } = useQuery({
-    queryKey: ["products-short", header.warehouse, header.branch],
-    queryFn: () => productApi.getAll(header.warehouse ? { warehouse: header.warehouse } : header.branch ? { branch: header.branch } : {}),
+    queryKey: ["products-for-document", header.warehouse, header.branch],
+    queryFn: () => productApi.getAllForDocument(header.warehouse ? { warehouse: header.warehouse } : header.branch ? { branch: header.branch } : {}),
     staleTime: 60_000,
   });
 

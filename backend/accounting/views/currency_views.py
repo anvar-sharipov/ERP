@@ -70,6 +70,16 @@ class ExchangeRateViewSet(AuditMixin, ListModelMixin, CreateModelMixin, Retrieve
         if date_to := params.get('date_to'):
             qs = qs.filter(date__lte=date_to)
 
+        # ✅ Поиск (RatesPage.tsx) — раньше искался только по уже загруженной
+        # странице на клиенте (useTableFilter). Те же поля, что были в frontend
+        # searchFields: currency_code, created_by_username ("date" не включаем -
+        # date__icontains на PostgreSQL требует явного текстового представления,
+        # а в UI пользователи ищут по валюте/автору, не по дате).
+        if search := params.get('search'):
+            qs = qs.filter(
+                Q(currency__code__icontains=search) | Q(created_by__username__icontains=search)
+            )
+
         ordering_param = params.get('ordering')
         if ordering_param:
             desc = ordering_param.startswith('-')

@@ -16,7 +16,14 @@ interface Props {
 }
 
 const fmt = (v: number) => v.toLocaleString("ru-RU", { maximumFractionDigits: 0 });
-const fmtDate = (d: string) => new Date(d).toLocaleDateString("ru-RU", { day: "2-digit", month: "2-digit" });
+// ✅ "31.08"/"18.11" было нечитаемо — не видно ни названия месяца, ни года
+// (за период длиннее года, например TV-режим/дашборд за "Год", это делает подписи
+// неоднозначными). Подписи оси — день + короткое имя месяца ("31 авг"), плюс год
+// ("31 авг '26"), если период захватывает больше одного календарного года.
+// Подсказка при наведении — с полным (длинным) именем месяца, там места хватает.
+const fmtAxisDate = (d: string, showYear: boolean) =>
+  new Date(d).toLocaleDateString("ru-RU", { day: "2-digit", month: "short", ...(showYear ? { year: "2-digit" } : {}) });
+const fmtTooltipDate = (d: string) => new Date(d).toLocaleDateString("ru-RU", { day: "2-digit", month: "long", year: "numeric" });
 
 const HEIGHT = 200;
 const PAD_LEFT = 56; // ✅ место под шкалу цен слева (подписи значений по Y)
@@ -24,6 +31,8 @@ const PAD_RIGHT = 12;
 const PAD_TOP = 24;
 const PAD_BOTTOM = 26;
 const Y_TICK_COUNT = 4;
+const TOOLTIP_W = 108;
+const TOOLTIP_H = 30;
 
 // ✅ Плавная кривая через все точки (Catmull-Rom → кубический Безье, uniform) —
 // как в Google Finance/курсах валют, вместо ломаной линии по прямым сегментам.
@@ -90,6 +99,7 @@ export const RevenueTrendChart = ({ data }: Props) => {
   const tickIdx = Array.from(new Set(
     Array.from({ length: tickCount }, (_, i) => Math.round((i / Math.max(1, tickCount - 1)) * (data.length - 1))),
   ));
+  const showYear = new Date(data[0].date).getFullYear() !== new Date(data[data.length - 1].date).getFullYear();
 
   // ✅ Шкала цен слева — несколько горизонтальных отметок по значению (min…max),
   // как курс валют/Google Finance, а не только сама кривая без осей.
@@ -142,56 +152,54 @@ export const RevenueTrendChart = ({ data }: Props) => {
           transition={{ duration: 0.6, ease: "easeInOut" }}
         />
 
-        {values.map((v, i) => (
-          <g key={data[i].date}>
-            {/* увеличенная невидимая цель для наведения */}
-            <rect
-              x={pointX(i) - Math.max(12, plotWidth / Math.max(data.length, 1) / 2)}
-              y={0}
-              width={Math.max(24, plotWidth / Math.max(data.length, 1))}
-              height={HEIGHT}
-              fill="transparent"
+        {values.map((v, i) => {
+          const boxX = Math.min(Math.max(pointX(i) - TOOLTIP_W / 2, 2), width - TOOLTIP_W - 2);
+          const boxY = Math.max(pointY(v) - TOOLTIP_H - 10, 2);
+          return (
+            <g
+              key={data[i].date}
+              // ✅ Обработчики — на всей группе (точка + подсказка), а не на отдельном
+              // sibling-rect'е: подсказка — ДОЧЕРНИЙ элемент этой же группы, значит
+              // наведение на неё саму не считается "уходом" с точки (см. комментарий
+              // выше про мерцание на пиках — тот же паттерн, что уже работает в
+              // RevenueByWarehouseChart.tsx).
               onMouseEnter={() => setHoverIdx(i)}
               onMouseLeave={() => setHoverIdx(null)}
               style={{ cursor: "pointer" }}
-            />
-            {hoverIdx === i && (
-              <>
-                <line x1={pointX(i)} y1={PAD_TOP} x2={pointX(i)} y2={HEIGHT - PAD_BOTTOM} stroke={ink.gridline} strokeWidth={1} strokeDasharray="3 3" />
-                <circle cx={pointX(i)} cy={pointY(v)} r={5} fill={lineColor} stroke={mode === "dark" ? "#1a1a19" : "#fcfcfb"} strokeWidth={2} />
-                <rect
-                  x={Math.min(Math.max(pointX(i) - 48, 2), width - 98)}
-                  y={Math.max(pointY(v) - 38, 2)}
-                  width={96}
-                  height={28}
-                  rx={6}
-                  fill={mode === "dark" ? "#1a1a19" : "#fcfcfb"}
-                  stroke={ink.baseline}
-                  strokeWidth={1}
-                />
-                <text
-                  x={Math.min(Math.max(pointX(i) - 48, 2), width - 98) + 48}
-                  y={Math.max(pointY(v) - 38, 2) + 12}
-                  textAnchor="middle"
-                  fontSize={10}
-                  fill={ink.secondary}
-                >
-                  {fmtDate(data[i].date)}
-                </text>
-                <text
-                  x={Math.min(Math.max(pointX(i) - 48, 2), width - 98) + 48}
-                  y={Math.max(pointY(v) - 38, 2) + 23}
-                  textAnchor="middle"
-                  fontSize={12}
-                  fontWeight={700}
-                  fill={ink.primary}
-                >
-                  {fmt(v)}
-                </text>
-              </>
-            )}
-          </g>
-        ))}
+            >
+              {/* увеличенная невидимая цель для наведения */}
+              <rect
+                x={pointX(i) - Math.max(12, plotWidth / Math.max(data.length, 1) / 2)}
+                y={0}
+                width={Math.max(24, plotWidth / Math.max(data.length, 1))}
+                height={HEIGHT}
+                fill="transparent"
+              />
+              {hoverIdx === i && (
+                <>
+                  <line x1={pointX(i)} y1={PAD_TOP} x2={pointX(i)} y2={HEIGHT - PAD_BOTTOM} stroke={ink.gridline} strokeWidth={1} strokeDasharray="3 3" />
+                  <circle cx={pointX(i)} cy={pointY(v)} r={5} fill={lineColor} stroke={mode === "dark" ? "#1a1a19" : "#fcfcfb"} strokeWidth={2} />
+                  <rect
+                    x={boxX}
+                    y={boxY}
+                    width={TOOLTIP_W}
+                    height={TOOLTIP_H}
+                    rx={6}
+                    fill={mode === "dark" ? "#1a1a19" : "#fcfcfb"}
+                    stroke={ink.baseline}
+                    strokeWidth={1}
+                  />
+                  <text x={boxX + TOOLTIP_W / 2} y={boxY + 12} textAnchor="middle" fontSize={9.5} fill={ink.secondary}>
+                    {fmtTooltipDate(data[i].date)}
+                  </text>
+                  <text x={boxX + TOOLTIP_W / 2} y={boxY + 24} textAnchor="middle" fontSize={12} fontWeight={700} fill={ink.primary}>
+                    {fmt(v)}
+                  </text>
+                </>
+              )}
+            </g>
+          );
+        })}
 
         {tickIdx.map((i) => (
           <text
@@ -202,7 +210,7 @@ export const RevenueTrendChart = ({ data }: Props) => {
             fontSize={11}
             fill={ink.secondary}
           >
-            {fmtDate(data[i].date)}
+            {fmtAxisDate(data[i].date, showYear)}
           </text>
         ))}
       </svg>

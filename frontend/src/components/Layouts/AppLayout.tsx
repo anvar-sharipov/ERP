@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { Outlet } from "react-router-dom";
+import { Outlet, useNavigate } from "react-router-dom";
 import { getTenantInfo } from "../../core/utils/tenant";
+import { ROUTES } from "../../core/router/routes";
 import Header from "./Header";
 import SidebarLeft from "./SidebarLeft";
 import SidebarRight from "./SidebarRight";
@@ -9,17 +10,32 @@ import { AdminSidebarLeft } from "./AdminSidebarLeft";
 import { useCompany } from "../../core/context/CompanyContext";
 import { useUser } from "../../core/context/UserContext";
 import { CompanyHeaderInfo } from "../ui/CompanyHeaderInfo";
+import { FloatingClock } from "../ui/FloatingClock";
 import { useTranslation } from "react-i18next";
 import { focusManager } from "../../core/utils/focusManager";
-import { playAsideSound } from "../../core/utils/sound";
+import { playAsideSound, playClick2Sound } from "../../core/utils/sound";
 
 import { useQuery } from "@tanstack/react-query";
 import { branchApi } from "../../features/accounting/services/branchApi";
 import { useDateStore } from "../../core/store/dateStore";
 
+// ✅ Глобальные F1-F5 — переход по разделам (см. CLAUDE.md-подобное требование
+// пользователя: работают везде, независимо от того, что сфокусировано, в т.ч.
+// внутри таблиц — поэтому F2 больше НЕ используется таблицами как "открыть
+// строку" (см. Table.tsx/OSVTable.tsx/ProductTurnoverTable.tsx — там остался
+// только Enter).
+const F_KEY_ROUTES: Record<string, string> = {
+  F1: ROUTES.APP.DOCUMENTS,
+  F2: ROUTES.APP.JOURNAL,
+  F3: ROUTES.APP.REPORTS,
+  F4: ROUTES.APP.COUNTERPARTIES,
+  F5: ROUTES.APP.EMPLOYEES,
+};
+
 export const AppLayout: React.FC = () => {
   const tenantInfo = useMemo(() => getTenantInfo(), []);
   const { isSubdomain } = tenantInfo;
+  const navigate = useNavigate();
   const { company: currentCompany } = useCompany();
   const { user: currentUser } = useUser();
   const { t } = useTranslation();
@@ -40,6 +56,14 @@ export const AppLayout: React.FC = () => {
 
   useEffect(() => {
     const handleGlobalJump = (e: KeyboardEvent) => {
+      const fRoute = F_KEY_ROUTES[e.key];
+      if (fRoute && isSubdomain) {
+        e.preventDefault();
+        playClick2Sound();
+        navigate(fRoute);
+        return;
+      }
+
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "b") {
         playAsideSound();
         e.preventDefault();
@@ -87,7 +111,7 @@ export const AppLayout: React.FC = () => {
     };
     window.addEventListener("keydown", handleGlobalJump);
     return () => window.removeEventListener("keydown", handleGlobalJump);
-  }, []);
+  }, [navigate, isSubdomain]);
 
   const [isLeftOpen, setIsLeftOpen] = useState<boolean>(() => {
     const saved = localStorage.getItem("sidebar_left_open");
@@ -187,6 +211,10 @@ export const AppLayout: React.FC = () => {
           {isSubdomain && <SidebarRight isOpen={isRightOpen} setIsOpen={setIsRightOpen} />}
         </div>
       </div>
+
+      {/* ✅ Плавающие часы (Header.tsx — кнопка-переключатель) — поверх всего
+          приложения, видны на любой странице, не только здесь в AppLayout. */}
+      {isSubdomain && <FloatingClock />}
     </div>
   );
 };

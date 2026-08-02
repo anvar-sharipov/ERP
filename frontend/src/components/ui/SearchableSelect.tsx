@@ -17,6 +17,11 @@ export interface SelectOption {
     quantity: number;
     reserved: number;
     available: number;
+    // ✅ Короткое обозначение ед. изм. (Unit.short_name, напр. "sany"/"шт") —
+    // показывается один раз в конце строки остатка (см. StockBadge), а не
+    // отдельной строкой под названием — сама единица измерения одна и та же
+    // для остатка/резерва/доступно, дублировать её три раза незачем.
+    unit?: string | null;
   } | null;
 }
 
@@ -65,21 +70,37 @@ const stockColor = (available: number) => {
 
 const fmt3 = (n: number) => (n % 1 === 0 ? String(n) : n.toLocaleString("ru-RU", { maximumFractionDigits: 3 }));
 
+// ✅ Без этого ограничения открытый список без поискового запроса рендерил в DOM
+// ВСЕ переданные опции разом (каждую со своей <img>-миниатюрой) — на каталоге в
+// тысячи товаров (см. DocumentFormPage.tsx/ProductRow.tsx на большом каталоге)
+// это и было причиной "долго открывается список товаров в фактуре": браузер разом
+// вставлял тысячи строк и запускал тысячи запросов картинок. Реального смысла
+// показывать больше здесь нет — пользователь всё равно ищет конкретный товар
+// через поиск, а не листает тысячи строк вручную.
+const MAX_VISIBLE_OPTIONS = 100;
+
 // ── Компонент остатка ─────────────────────────────────────────────────────────
 
+// ✅ Одна строка вместо трёх фрагментов вразнобой — ед. изм. показывается один
+// раз, в самом конце (она одна и та же для остатка/резерва/доступно, повторять
+// её три раза незачем). Числа сделаны крупнее и жирнее подписей — на первый
+// взгляд должно быть видно именно значение, а не текст вокруг него.
 const StockBadge = ({ stock }: { stock: NonNullable<SelectOption["stock"]> }) => {
   const { t } = useTranslation();
   return (
-    <div className="flex items-center gap-1.5 text-[10px] mt-0.5">
-      <span className="text-gray-400">
-        {t("InStock")}: {fmt3(stock.quantity)}
-      </span>
+    <div className="flex items-center flex-wrap gap-x-1 gap-y-0.5 text-sm md:text-base mt-0.5">
+      <span className="text-gray-400">{t("InStock")}:</span>
+      <span className="font-bold text-gray-700 dark:text-gray-200">{fmt3(stock.quantity)}</span>
       {stock.reserved > 0 && (
-        <span className="text-orange-400">
-          −{fmt3(stock.reserved)} {t("Reserved")}
-        </span>
+        <>
+          <span className="text-orange-400">−</span>
+          <span className="font-bold text-orange-500 dark:text-orange-400">{fmt3(stock.reserved)}</span>
+          <span className="text-orange-400">{t("Reserved")}</span>
+        </>
       )}
-      <span className={`font-semibold ${stockColor(stock.available)}`}>= {fmt3(stock.available)}</span>
+      <span className="text-gray-400">=</span>
+      <span className={`font-extrabold text-base md:text-lg ${stockColor(stock.available)}`}>{fmt3(stock.available)}</span>
+      {stock.unit && <span className="text-gray-400 font-normal">{stock.unit}</span>}
     </div>
   );
 };
@@ -104,6 +125,12 @@ const SearchableSelect = forwardRef<SearchableSelectHandle, SearchableSelectProp
 
     const selected = options.find((o) => o.id === value) ?? null;
     const filtered = search.trim() ? options.filter((o) => o.label.toLowerCase().includes(search.toLowerCase()) || o.sublabel?.toLowerCase().includes(search.toLowerCase())) : options;
+    // ✅ Реально рендерим в DOM/клавиатурную навигацию только первые MAX_VISIBLE_OPTIONS
+    // из filtered — см. комментарий у константы выше. "Found"-счётчик внизу списка
+    // и подсказка "показаны первые N" считаются от filtered.length (реального числа
+    // совпадений), а не от урезанного visibleOptions.length.
+    const visibleOptions = filtered.slice(0, MAX_VISIBLE_OPTIONS);
+    const truncatedCount = filtered.length - visibleOptions.length;
 
     useImperativeHandle(ref, () => ({
       open: () => {
@@ -126,7 +153,7 @@ const SearchableSelect = forwardRef<SearchableSelectHandle, SearchableSelectProp
       const rect = triggerRef.current.getBoundingClientRect();
       const spaceBelow = window.innerHeight - rect.bottom;
       const spaceAbove = rect.top;
-      const dropdownH = 320;
+      const dropdownH = 420;
       const openUpward = spaceBelow < dropdownH && spaceAbove > spaceBelow;
 
       setDropdownStyle({
@@ -143,7 +170,7 @@ const SearchableSelect = forwardRef<SearchableSelectHandle, SearchableSelectProp
         recalcPosition();
         setTimeout(() => inputRef.current?.focus(), 50);
         if (value !== null) {
-          const idx = filtered.findIndex((o) => o.id === value);
+          const idx = visibleOptions.findIndex((o) => o.id === value);
           setHighlightedIndex(idx);
         }
       }
@@ -213,7 +240,7 @@ const SearchableSelect = forwardRef<SearchableSelectHandle, SearchableSelectProp
         switch (e.key) {
           case "ArrowDown":
             e.preventDefault();
-            setHighlightedIndex((p) => (p < filtered.length - 1 ? p + 1 : 0));
+            setHighlightedIndex((p) => (p < visibleOptions.length - 1 ? p + 1 : 0));
             break;
           case "ArrowUp":
             e.preventDefault();
@@ -227,8 +254,8 @@ const SearchableSelect = forwardRef<SearchableSelectHandle, SearchableSelectProp
             break;
           case "Enter":
             e.preventDefault();
-            if (highlightedIndex >= 0 && filtered[highlightedIndex]) {
-              doSelect(filtered[highlightedIndex].id);
+            if (highlightedIndex >= 0 && visibleOptions[highlightedIndex]) {
+              doSelect(visibleOptions[highlightedIndex].id);
             } else if (filtered.length === 1) {
               doSelect(filtered[0].id);
             }
@@ -261,7 +288,7 @@ const SearchableSelect = forwardRef<SearchableSelectHandle, SearchableSelectProp
             break;
         }
       },
-      [open, filtered, highlightedIndex, onArrowUpFirst, search, onEnterWhenClosed, onArrowLeft],
+      [open, filtered, visibleOptions, highlightedIndex, onArrowUpFirst, search, onEnterWhenClosed, onArrowLeft],
     );
 
     // ── Рендер ───────────────────────────────────────────────────────────────
@@ -310,11 +337,11 @@ const SearchableSelect = forwardRef<SearchableSelectHandle, SearchableSelectProp
         </div>
 
         {/* Список */}
-        <ul ref={listRef} role="listbox" className={`max-h-64 overflow-y-auto py-1 m-2 border rounded-md divide-y ${isSidebar ? "border-indigo-900 divide-indigo-900" : "border-black divide-black"}`}>
+        <ul ref={listRef} role="listbox" className={`max-h-96 overflow-y-auto py-1 m-2 border rounded-md divide-y ${isSidebar ? "border-indigo-900 divide-indigo-900" : "border-black divide-black"}`}>
           {filtered.length === 0 ? (
             <li className="px-3 py-4 text-center text-sm text-gray-400">{t("NotFound")}</li>
           ) : (
-            filtered.map((opt, idx) => {
+            visibleOptions.map((opt, idx) => {
               const isHighlighted = idx === highlightedIndex;
               const isSelected = opt.id === value;
               return (
@@ -328,31 +355,41 @@ const SearchableSelect = forwardRef<SearchableSelectHandle, SearchableSelectProp
                   onClick={() => doSelect(opt.id)}
                   onMouseEnter={() => setHighlightedIndex(idx)}
                   className={
-                    "flex items-center gap-2.5 px-2 py-1.5 cursor-pointer text-sm transition-colors " +
+                    "flex items-center gap-3 px-3 py-2.5 cursor-pointer text-base md:text-lg transition-colors " +
+                    // ✅ isHighlighted — пункт под клавиатурной/мышиной навигацией (Enter
+                    // выберет именно его). Раньше был еле заметным лёгким оттенком, почти не
+                    // отличимым от isSelected — сделан явно "громче": сплошной фон + ring +
+                    // жирный текст, чтобы на глаз сразу было видно, какая строка сейчас активна
+                    // (особенно важно при быстрой навигации стрелками по длинному списку товаров).
                     (isSidebar
                       ? isHighlighted
-                        ? "bg-indigo-900/40 text-indigo-300"
+                        ? "bg-indigo-600 text-white shadow-sm ring-2 ring-inset ring-indigo-300 font-semibold"
                         : isSelected
-                          ? "bg-indigo-900/20 text-indigo-400"
+                          ? "bg-indigo-900/30 text-indigo-300 font-medium"
                           : "text-indigo-200 hover:bg-slate-800"
                       : isHighlighted
-                        ? "bg-indigo-50 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300"
+                        ? "bg-indigo-600 dark:bg-indigo-500 text-white shadow-sm ring-2 ring-inset ring-indigo-400 dark:ring-indigo-300 font-semibold"
                         : isSelected
-                          ? "bg-indigo-50/50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400"
+                          ? "bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 font-medium"
                           : "text-gray-900 dark:text-gray-100 hover:bg-gray-50 dark:hover:bg-slate-700")
                   }
                 >
                   {/* Фото */}
                   {opt.thumbnail ? (
-                    <img src={opt.thumbnail} alt={opt.label} className="w-8 h-8 object-cover rounded shrink-0" />
+                    <img src={opt.thumbnail} alt={opt.label} loading="lazy" className={`w-11 h-11 md:w-12 md:h-12 object-cover rounded shrink-0 ${isHighlighted ? "ring-2 ring-white/70" : ""}`} />
                   ) : (
-                    <div className={`w-8 h-8 rounded shrink-0 ${isSidebar ? "bg-slate-800" : "bg-gray-100 dark:bg-slate-700"}`} />
+                    <div className={`w-11 h-11 md:w-12 md:h-12 rounded shrink-0 ${isSidebar ? "bg-slate-800" : "bg-gray-100 dark:bg-slate-700"}`} />
                   )}
 
                   {/* Название + остаток */}
                   <div className="flex-1 min-w-0">
-                    <div className="font-medium truncate">{opt.label}</div>
-                    {opt.sublabel && <div className={`text-xs truncate ${isSidebar ? "text-indigo-400/70" : "text-gray-400 dark:text-gray-500"}`}>{opt.sublabel}</div>}
+                    <div className="font-semibold truncate">{opt.label}</div>
+                    {/* ✅ Ед. изм. отдельной строкой показываем только когда нет остатка — если
+                        остаток есть, она уже показана один раз в конце строки StockBadge, дублировать
+                        её тут (opt.sublabel — та же ед. изм.) незачем. */}
+                    {opt.sublabel && opt.stock == null && (
+                      <div className={`text-sm md:text-base truncate ${isHighlighted ? "text-indigo-100" : isSidebar ? "text-indigo-400/70" : "text-gray-400 dark:text-gray-500"}`}>{opt.sublabel}</div>
+                    )}
                     {opt.stock != null && <StockBadge stock={opt.stock} />}
                   </div>
                 </li>
@@ -361,7 +398,11 @@ const SearchableSelect = forwardRef<SearchableSelectHandle, SearchableSelectProp
           )}
         </ul>
 
-        {search && filtered.length > 0 && <div className={`px-3 py-1.5 border-t text-xs text-gray-400 ${isSidebar ? "border-indigo-900" : "border-gray-100 dark:border-slate-700"}`}>{t("Found", { count: filtered.length })}</div>}
+        {(truncatedCount > 0 || (search && filtered.length > 0)) && (
+          <div className={`px-3 py-1.5 border-t text-xs text-gray-400 ${isSidebar ? "border-indigo-900" : "border-gray-100 dark:border-slate-700"}`}>
+            {truncatedCount > 0 ? t("SearchableSelectTruncated", { shown: visibleOptions.length, total: filtered.length }) : t("Found", { count: filtered.length })}
+          </div>
+        )}
       </div>
     ) : null;
 

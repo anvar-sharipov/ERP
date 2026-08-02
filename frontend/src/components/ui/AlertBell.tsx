@@ -12,6 +12,10 @@ import { useNotify } from "../../core/context/NotificationContext";
 // расхождение снапшота с проводками, остаток товара ниже минимального). Без
 // WebSocket-инфраструктуры под это (как и AuditLogPage.tsx) — просто поллинг,
 // алертов мало и не критично увидеть их с задержкой в минуту, а не мгновенно.
+// ✅ Показываем только level=critical (сейчас это только расхождение снапшота
+// с проводками) — "Мало товара" (warning) сюда сознательно не попадает, это
+// отдельная эксплуатационная сигнализация про дозаказ, не про целостность
+// данных; см. обсуждение в CLAUDE.md.
 export const AlertBell = () => {
   const { t } = useTranslation();
   const { canView } = usePageAccess("systemalert");
@@ -21,14 +25,14 @@ export const AlertBell = () => {
 
   const { data: count = 0 } = useQuery({
     queryKey: ["system-alerts-count"],
-    queryFn: alertApi.getUnresolvedCount,
+    queryFn: () => alertApi.getUnresolvedCount("critical"),
     enabled: canView,
     refetchInterval: 60_000,
   });
 
   const { data: alerts = [], isLoading } = useQuery({
     queryKey: ["system-alerts-list"],
-    queryFn: () => alertApi.getAll(true),
+    queryFn: () => alertApi.getAll(true, "critical"),
     enabled: canView && open,
   });
 

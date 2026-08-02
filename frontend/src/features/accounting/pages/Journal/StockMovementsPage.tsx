@@ -117,7 +117,7 @@ export default function StockMovementsPage() {
       width: "110px",
       sortable: true,
       excelWidth: 14,
-      render: (item) => <span className="font-mono text-sm">{Number(item.cost_price).toLocaleString("ru-RU", { minimumFractionDigits: 2 })}</span>,
+      render: (item) => <span className="font-mono text-sm">{Number(item.cost_price).toLocaleString("ru-RU", { minimumFractionDigits: 3 })}</span>,
     },
     { header: t("Note"), accessor: "note", sortable: true, render: (item) => <span className="text-sm text-gray-500">{item.note || "—"}</span> },
     { header: t("Author"), accessor: "created_by_name", width: "140px", sortable: true, render: (item) => <span className="text-sm text-gray-500">{item.created_by_name || "—"}</span> },

@@ -82,7 +82,19 @@ const ProductTurnoverDetailPage = () => {
   // useRestoreScroll. Иначе (пришли из ProductTurnoverPage) — свой отдельный ключ,
   // scroll/выделение на самой странице оборота тут не нужны.
   const cameFromProducts = searchParams.get("from") === "products";
-  const { getBackProps } = useRestoreScroll(cameFromProducts ? "selectedProductId" : "selectedTurnoverDetailProductId", () => {});
+  const restoreKey = cameFromProducts ? "selectedProductId" : "selectedTurnoverDetailProductId";
+  const { getBackProps } = useRestoreScroll(restoreKey, () => {});
+  // ✅ getBackProps сам пишет sessionStorage только по клику на BackButton/Alt+←
+  // (см. useRestoreScroll.ts) — но нативная кнопка "Назад" браузера (или свайп,
+  // Backspace) вызывает popstate напрямую, в обход нашего onClick, и запись просто
+  // не успевает произойти. Поэтому пишем id проактивно, как только страница
+  // открылась — тогда неважно, каким способом ушли обратно на список.
+  useEffect(() => {
+    if (!id) return;
+    try {
+      sessionStorage.setItem(restoreKey, id);
+    } catch {}
+  }, [id, restoreKey]);
   const containerRef = useRef<HTMLDivElement>(null);
   const [selectedCell, setSelectedCell] = useState<{ rowIdx: number; colIdx: number } | null>(null);
   // ✅ react-query делает фоновый refetch при каждом монтировании (staleTime по
@@ -190,7 +202,7 @@ const ProductTurnoverDetailPage = () => {
           setSelectedCell({ rowIdx, colIdx: prev });
           scrollToCell(rowIdx, prev);
         }
-      } else if (e.key === "Enter" || e.key === "F2") {
+      } else if (e.key === "Enter") {
         e.preventDefault();
         openDocument(rowIdx);
       }

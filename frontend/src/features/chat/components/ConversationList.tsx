@@ -73,14 +73,14 @@ export const ConversationList: React.FC<Props> = ({ onSelect }) => {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder={t("Search")}
-            className="w-full pl-8 pr-3 py-1.5 text-xs rounded-lg bg-gray-100 dark:bg-slate-700/60 text-gray-900 dark:text-slate-200 placeholder-gray-400 dark:placeholder-slate-500 border border-gray-200 dark:border-slate-600/50 focus:outline-none focus:border-indigo-500 transition-colors"
+            className="w-full pl-8 pr-3 py-1.5 text-xs rounded-full bg-gray-100 dark:bg-slate-700/60 text-gray-900 dark:text-slate-200 placeholder-gray-400 dark:placeholder-slate-500 border border-gray-200 dark:border-slate-600/50 focus:outline-none focus:border-[#3390ec] transition-colors"
           />
         </div>
       </div>
 
       <div className="flex-1 overflow-y-auto">
         {filtered.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-full text-indigo-400/50 gap-2 p-4">
+          <div className="flex flex-col items-center justify-center h-full text-[#3390ec]/50 gap-2 p-4">
             <span className="text-3xl">💬</span>
             <span className="text-sm">{search ? t("NothingFound") : t("NoConversations")}</span>
           </div>
@@ -96,25 +96,17 @@ export const ConversationList: React.FC<Props> = ({ onSelect }) => {
                 key={conv.id}
                 onClick={() => handleSelect(conv)}
                 className={`
-                  w-full flex items-center gap-3 px-3 py-3 transition-all duration-150 text-left border-b border-slate-700/30
-                  ${
-                    isActive
-                      ? "bg-gradient-to-r from-indigo-600/25 via-violet-600/10 to-transparent border-l-2 border-l-indigo-500 shadow-[inset_0_0_16px_-6px_rgba(99,102,241,0.5)]"
-                      : "hover:bg-slate-700/40 border-l-2 border-l-transparent"
-                  }
+                  w-full flex items-center gap-3 px-3 py-3 transition-colors duration-150 text-left border-b border-slate-700/30 active:bg-[#3390ec]/20
+                  ${isActive ? "bg-[#3390ec]/12 dark:bg-[#3390ec]/18" : "hover:bg-gray-100 dark:hover:bg-slate-700/40"}
                 `}
               >
-                <div className="relative w-10 h-10 rounded shrink-0 overflow-hidden">
+                <div className="relative w-10 h-10 rounded-full shrink-0 overflow-hidden">
                   {(() => {
                     const other = conv.participants.find((p: any) => p.id !== user?.id);
                     return isValidMediaUrl(other?.photo_thumbnail) ? (
                       <img src={other.photo_thumbnail!} alt={name} loading="lazy" className="w-full h-full object-cover" />
                     ) : (
-                      <div
-                        className={`w-full h-full flex items-center justify-center text-sm font-bold ${
-                          isActive ? "bg-gradient-to-br from-indigo-500 to-violet-600 shadow-[0_0_8px_rgba(99,102,241,0.5)]" : "bg-slate-600"
-                        }`}
-                      >
+                      <div className={`w-full h-full flex items-center justify-center text-sm font-bold text-white rounded-full ${isActive ? "bg-[#3390ec] dark:bg-[#2b5278]" : "bg-slate-600"}`}>
                         {getInitials(name)}
                       </div>
                     );
@@ -123,7 +115,7 @@ export const ConversationList: React.FC<Props> = ({ onSelect }) => {
 
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between gap-1">
-                    <span className={`text-sm font-medium truncate ${isActive ? "text-indigo-600 dark:text-indigo-200" : "text-gray-900 dark:text-slate-200"}`}>{name}</span>
+                    <span className={`text-sm font-medium truncate ${isActive ? "text-[#3390ec] dark:text-[#6ab2f2]" : "text-gray-900 dark:text-slate-200"}`}>{name}</span>
 
                     {lastMsg && (
                       <span className="text-xs text-slate-500 shrink-0">
@@ -147,7 +139,7 @@ export const ConversationList: React.FC<Props> = ({ onSelect }) => {
                     </span>
 
                     {hasUnread && (
-                      <span className="shrink-0 min-w-[20px] h-5 px-1.5 rounded-full bg-gradient-to-br from-fuchsia-500 to-indigo-500 shadow-[0_0_8px_rgba(217,70,239,0.55)] text-white text-xs flex items-center justify-center font-medium">
+                      <span className="shrink-0 min-w-[20px] h-5 px-1.5 rounded-full bg-[#3390ec] text-white text-xs flex items-center justify-center font-medium">
                         {conv.unread_count > 99 ? "99+" : conv.unread_count}
                       </span>
                     )}

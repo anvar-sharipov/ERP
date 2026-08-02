@@ -91,6 +91,13 @@ class Document(models.Model):
         'self', on_delete=models.SET_NULL,
         null=True, blank=True, related_name='child_documents'
     )
+    # ✅ Рейс водителя, в который включена эта накладная (см. accounting/models/trip.py::Trip).
+    # Только для document_type=OUT — Trip.add_document сам это проверяет.
+    trip = models.ForeignKey(
+        'Trip', on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='documents',
+        verbose_name="Рейс",
+    )
 
     default_price_type = models.ForeignKey(
         PriceType, on_delete=models.SET_NULL,
@@ -106,6 +113,17 @@ class Document(models.Model):
     discount_amount  = models.DecimalField(max_digits=15, decimal_places=2, default=0)
     total            = models.DecimalField(max_digits=15, decimal_places=2, default=0)
     total_profit     = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+
+    # ✅ Снимок Counterparty.delivery_percent на момент ПРОВЕДЕНИЯ (не создания —
+    # черновик ещё может поменять контрагента) — используется Trip.deliver() для
+    # расчёта ЗП водителя. Намеренно копия, а не обращение к живому полю
+    # контрагента: если процент потом поменяют, уже проведённые (и тем более уже
+    # доставленные в рейсе) накладные не должны задним числом пересчитаться —
+    # см. CLAUDE.md про "хранить то, что реально произошло".
+    delivery_percent = models.DecimalField(
+        max_digits=5, decimal_places=2, default=0,
+        verbose_name="Процент водителю за доставку (снимок с контрагента)",
+    )
 
     note       = models.CharField(max_length=500, blank=True)
     extra_data = models.JSONField(default=dict, blank=True)
@@ -149,7 +167,12 @@ class Document(models.Model):
                     allowed = {
                         'status', 'posted_at', 'posted_by',
                         'journal_entry', 'subtotal', 'discount_amount',
-                        'total', 'total_profit',
+                        'total', 'total_profit', 'delivery_percent',
+                        # ✅ Единственное поле, которое Trip.add_document/remove_document
+                        # трогает на уже проведённом документе — состав рейса не меняет
+                        # ни одну проведённую сумму/проводку самого документа (см.
+                        # accounting/models/trip.py).
+                        'trip',
                     }
                     update_fields = kwargs.get('update_fields')
                     if update_fields is None:
@@ -284,11 +307,13 @@ class Document(models.Model):
             self._generate_return_in_posting(user=user)
         if self.document_type == self.Type.RETURN_OUT:
             self._generate_return_out_posting(user=user)
+        if self.document_type == self.Type.OUT and self.counterparty_id:
+            self.delivery_percent = self.counterparty.delivery_percent
         self.status    = self.Status.POSTED
         self.posted_at = timezone.now()
         self.posted_by = user
-        self.save(update_fields=['status', 'posted_at', 'posted_by', 'journal_entry'])
-        self._write_audit_log(user, AuditLog.Action.POST)
+        self.save(update_fields=['status', 'posted_at', 'posted_by', 'journal_entry', 'delivery_percent'])
+        self._write_audit_log(user, AuditLog.Action.POST, before_status=self.Status.DRAFT)
         if self.document_type in (self.Type.OUT, self.Type.RETURN_OUT):
             from accounting.broadcasts import broadcast_dashboard_update
             broadcast_dashboard_update()
@@ -300,8 +325,17 @@ class Document(models.Model):
         затем в расходных документах для расчёта дохода/маржи. Каждое изменение
         себестоимости пишется в AuditLog (см. CLAUDE.md: RBAC/Scope/Audit — товары
         входят в список того, что обязательно аудировать).
+
+        Отдельно фиксируется переоценка (см. ProductRevaluation, отчёт "Переоценка
+        товаров") — cost_price ГЛОБАЛЬНОЕ поле товара (не по складам), поэтому
+        изменение себестоимости переоценивает остаток НА КАЖДОМ складе, где товар
+        есть, а не только на складе этого документа. Фиксируется явным вызовом
+        здесь (а не сигналом post_save) — Product.objects.filter(...).update(...)
+        выше не триггерит Django-сигналы вообще (см. CLAUDE.md про QuerySet.update()
+        и AuditMixin), так что сигнал этот момент никогда бы не поймал.
         """
-        from accounting.models import Product
+        from accounting.models import Product, ProductRevaluation, WarehouseStock
+        from accounting.utils import record_price_change
         for item in self.items.select_related('product'):
             old_cost_price = item.product.cost_price
             if old_cost_price == item.price:
@@ -314,6 +348,55 @@ class Document(models.Model):
                 action=AuditLog.Action.UPDATE,
                 user=user if user and user.is_authenticated else None,
                 changed_data={'cost_price': {'before': str(old_cost_price), 'after': str(item.price)}},
+            )
+
+            # ✅ На складе ЭТОГО документа WarehouseStock.quantity уже включает
+            # только что поступившее количество (_create_stock_movements() отработал
+            # раньше, см. post()) — эти единицы получили новую себестоимость как
+            # свою РЕАЛЬНУЮ цену прихода, а не были "переоценены", поэтому вычитаем
+            # item.quantity именно на складе документа, чтобы не задвоить сумму.
+            revaluations = []
+            stocks = (
+                WarehouseStock.objects
+                .filter(product_id=item.product_id)
+                .exclude(quantity=0)
+                .select_related('warehouse')
+            )
+            for stock in stocks:
+                qty = stock.quantity
+                if stock.warehouse_id == self.warehouse_id:
+                    qty -= item.quantity
+                if qty <= 0:
+                    continue
+                revaluations.append(ProductRevaluation(
+                    product_id=item.product_id,
+                    warehouse=stock.warehouse,
+                    branch_id=stock.warehouse.branch_id,
+                    document=self,
+                    date=self.date,
+                    quantity=qty,
+                    old_cost_price=old_cost_price,
+                    new_cost_price=item.price,
+                    diff_amount=(qty * (item.price - old_cost_price)).quantize(Decimal('0.01')),
+                    created_by=user if user and user.is_authenticated else None,
+                ))
+            if revaluations:
+                ProductRevaluation.objects.bulk_create(revaluations)
+
+            # ✅ Отчёт "История изменения цен" (PriceChangeHistory, price_type=None
+            # означает "Себестоимость") — ОДНА обзорная строка на событие, а не
+            # по складу, как ProductRevaluation выше; остаток — сумма тех же
+            # per-warehouse qty, что уже посчитаны в revaluations (без второго
+            # запроса к БД).
+            record_price_change(
+                product_id=item.product_id,
+                price_type_id=None,
+                document=self,
+                old_price=old_cost_price,
+                new_price=item.price,
+                quantity=sum((r.quantity for r in revaluations), Decimal('0')),
+                user=user,
+                date=self.date,
             )
 
     def _resolve_role_account(self, wh, default_field, supplier_field):
@@ -630,14 +713,14 @@ class Document(models.Model):
             description=f"Возврат поставщику по документу №{self.number}",
         )
 
-    def _write_audit_log(self, user, action):
+    def _write_audit_log(self, user, action, before_status):
         AuditLog.objects.create(
             content_type=ContentType.objects.get_for_model(Document),
             object_id=self.pk,
             object_repr=str(self)[:255],
             action=action,
             user=user if user and user.is_authenticated else None,
-            changed_data={'status': {'after': self.status}},
+            changed_data={'status': {'before': before_status, 'after': self.status}},
         )
 
     @transaction.atomic
@@ -645,6 +728,11 @@ class Document(models.Model):
         from accounting.utils import check_period_open
         if self.status == self.Status.DRAFT:
             raise ValidationError("Документ ещё не проведён.")
+        if self.trip_id:
+            raise ValidationError(
+                "Накладная включена в рейс — сначала уберите её из рейса (или отмените "
+                "доставку рейса, если он уже закрыт), затем отменяйте проведение."
+            )
         # check_period_open(self.date)
         check_period_open(self.date, branch_id=self.branch_id, warehouse_id=self.warehouse_id)
         self._rollback_stock_movements()
@@ -655,7 +743,7 @@ class Document(models.Model):
         self.posted_at = None
         self.posted_by = None
         self.save(update_fields=['status', 'posted_at', 'posted_by', 'journal_entry'])
-        self._write_audit_log(user, AuditLog.Action.UNPOST)
+        self._write_audit_log(user, AuditLog.Action.UNPOST, before_status=self.Status.POSTED)
         if self.document_type in (self.Type.OUT, self.Type.RETURN_OUT):
             from accounting.broadcasts import broadcast_dashboard_update
             broadcast_dashboard_update()
@@ -717,7 +805,7 @@ class DocumentItem(models.Model):
         max_digits=15, decimal_places=3,
         validators=[MinValueValidator(Decimal('0.001'))]
     )
-    price            = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    price            = models.DecimalField(max_digits=15, decimal_places=3, default=0)
     price_type       = models.ForeignKey(
         PriceType, on_delete=models.SET_NULL,
         null=True, blank=True
@@ -726,7 +814,7 @@ class DocumentItem(models.Model):
         max_digits=5, decimal_places=2, default=0,
         validators=[MinValueValidator(0)]
     )
-    cost_price = models.DecimalField(max_digits=15, decimal_places=2, default=0)
+    cost_price = models.DecimalField(max_digits=15, decimal_places=3, default=0)
     extra_data = models.JSONField(default=dict, blank=True)
 
     class Meta:

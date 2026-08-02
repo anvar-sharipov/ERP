@@ -20,6 +20,10 @@ import {
   EMPLOYEES_ICON,
   DOCUMENTS_ICON,
   CHAT_ICON,
+  REPORTS_ICON,
+  ALERTS_ICON,
+  ANALYTICS_ICON,
+  TRIPS_ICON,
 } from "../Icons/LeftBarIcons";
 import { playClick2Sound, playAside2Sound } from "../../core/utils/sound";
 import { useAccess } from "../../core/hooks/useAccess";
@@ -41,15 +45,18 @@ interface SidebarLeftProps {
 const NAV_ITEMS = {
   main: [
     { name: "Admin", path: ROUTES.COMPANY_ADMIN.USERS, icon: ADMIN_ICON, permission: ["user", "GET"] },
-    { name: "Desktop", path: ROUTES.APP.DASHBOARD, icon: DASHBOARD_ICON },
-    { name: "Accounting", path: ROUTES.APP.ACCOUNTING, icon: ACCOUNT_ICON, permission: ["account", "GET"] },
+    { name: "Invoices", path: ROUTES.APP.DOCUMENTS, icon: DOCUMENTS_ICON, permission: ["document", "GET"] },
     { name: "Transaction", path: ROUTES.APP.JOURNAL, icon: JOURNAL_ICON, permission: ["journalentry", "GET"] },
+    { name: "Reports", path: ROUTES.APP.REPORTS, icon: REPORTS_ICON },
+    { name: "Analytics", path: ROUTES.APP.ANALYTICS, icon: ANALYTICS_ICON },
+    { name: "Counterparties", path: ROUTES.APP.COUNTERPARTIES, icon: COUNTERPARTY_ICON, permission: ["counterparty", "GET"] },
+    { name: "Employees", path: ROUTES.APP.EMPLOYEES, icon: EMPLOYEES_ICON, permission: ["employee", "GET"] },
+    { name: "Trips", path: ROUTES.APP.TRIPS, icon: TRIPS_ICON, permission: ["trip", "GET"] },
+    { name: "Accounting", path: ROUTES.APP.ACCOUNTING, icon: ACCOUNT_ICON, permission: ["account", "GET"] },
     { name: "Directoryes", path: ROUTES.APP.DIRECTORY, icon: DIRECTORY_ICON, permission: ["directory", "GET"] },
     { name: "Products", path: ROUTES.APP.PRODUCTS, icon: PRODUCT_ICON, permission: ["product", "GET"] },
-    { name: "Counterparties", path: ROUTES.APP.COUNTERPARTIES, icon: COUNTERPARTY_ICON, permission: ["counterparty", "GET"] },
     { name: "Warehouses", path: ROUTES.APP.WAREHOUSES, icon: WAREHOUSE_ICON, permission: ["warehouse", "GET"] },
-    { name: "Employees", path: ROUTES.APP.EMPLOYEES, icon: EMPLOYEES_ICON, permission: ["employee", "GET"] },
-    { name: "Invoices", path: ROUTES.APP.DOCUMENTS, icon: DOCUMENTS_ICON, permission: ["document", "GET"] },
+    { name: "Desktop", path: ROUTES.APP.DASHBOARD, icon: DASHBOARD_ICON },
     { name: "Chat", path: ROUTES.APP.CHAT, icon: CHAT_ICON },
   ],
   admin: [
@@ -58,13 +65,14 @@ const NAV_ITEMS = {
     { name: "Company", path: ROUTES.COMPANY_ADMIN.COMPANIES, icon: COMPANY_ICON },
     { name: "Branchs", path: ROUTES.COMPANY_ADMIN.BRANCHS, icon: BRANCH_ICON },
     { name: "DocumentSettings", path: ROUTES.COMPANY_ADMIN.DOCUMENT_SETTINGS, icon: DOCUMENT_SETTINGS_ICON },
+    { name: "SystemAlerts", path: ROUTES.COMPANY_ADMIN.ALERTS, icon: ALERTS_ICON },
   ],
 };
 
 const SidebarLeft: React.FC<SidebarLeftProps> = ({ isOpen }) => {
   const { hasPermission, isLoading } = useAccess();
   const location = useLocation();
-  const isAdminSection = location.pathname.startsWith("/admin");
+  const isAdminSection = location.pathname.startsWith("/company-admin");
   const { t } = useTranslation();
   const sidebarRef = useRef<HTMLElement>(null);
   const { unreadCount } = useChat();

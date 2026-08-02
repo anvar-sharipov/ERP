@@ -1,5 +1,5 @@
 // frontend/src/features/accounting/pages/Employees/EmployeesPage.tsx
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { employeeApi, positionApi } from "../../services/employeeApi";
 import { useNotify } from "../../../../core/context/NotificationContext";
@@ -98,10 +98,14 @@ const EmployeesPage = () => {
   // const { workBranch } = useDateStore();
   const workBranch = useDateStore((s) => s.workBranch);
 
-  const { data: positions = [] } = useQuery<Position[]>({
+  const { data: positionsData } = useQuery<Position[]>({
     queryKey: ["positions"],
     queryFn: positionApi.getAll,
   });
+  // ✅ useMemo — "positions"/"branches" стоят в deps эффекта setSidebarContent
+  // ниже; "?? []"/деструктуризация с дефолтом создаёт новую ссылку на каждый
+  // рендер, пока запрос грузится → "Maximum update depth exceeded".
+  const positions = useMemo(() => positionsData ?? [], [positionsData]);
 
   const { data: usersLookup = [] } = useQuery({
     queryKey: ["users-lookup"],
@@ -127,7 +131,7 @@ const EmployeesPage = () => {
     queryFn: () => userScopeApi.getMyScope().then((r) => r.data),
     staleTime: 60_000,
   });
-  const branches = scope?.branches ?? [];
+  const branches = useMemo(() => scope?.branches ?? [], [scope]);
   const hasScope = !scope?.is_global;
 
   const {

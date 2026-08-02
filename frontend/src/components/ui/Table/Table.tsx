@@ -33,6 +33,13 @@ export interface Column<T> {
   isActionColumn?: boolean; // колонка с кнопками действий (Edit, Delete и т.д.)
   frozen?: boolean; // фиксировать колонку при горизонтальном скролле
   isLoading?: boolean;
+  // ✅ Строка "Итого" под таблицей (см. TripDetailPage.tsx) — полностью опционально:
+  // если ни у одной колонки footerValue не задан, <tfoot> вообще не рендерится, на
+  // остальные использования Table.tsx это никак не влияет. Считается по ВСЕМ
+  // отфильтрованным/отсортированным строкам (sortedData), а не только по текущей
+  // странице — при server-пагинации это, соответственно, только текущая страница,
+  // т.к. остальные страницы физически не загружены на клиенте.
+  footerValue?: (data: T[]) => React.ReactNode;
 }
 
 // backend pagination
@@ -75,6 +82,11 @@ interface TableProps<T> {
   // выбора перешёл на другую страницу (server-пагинация) и строка пропала из data.
   selectable?: boolean;
   onBulkDelete?: (ids: (string | number)[]) => Promise<void> | void;
+  // ✅ Опциональная подсветка строки по данным (например, разные цвета для
+  // разных типов документов — приход/расход/возврат). Должна включать и
+  // hover-вариант (см. использование ниже) — без неё при наведении цвет
+  // строки просто пропадёт.
+  rowClassName?: (item: T) => string;
 }
 
 function usePersistedSet(key: string, defaultIndices: number[]): [Set<number>, (i: number) => void] {
@@ -123,7 +135,18 @@ function getPaginationRange(current: number, total: number): (number | "...")[] 
 const PAGE_SIZE_OPTIONS = [10, 25, 50, 100, 500] as const;
 const DEFAULT_PAGE_SIZE = 25;
 
-export const Table = <T extends { id: string | number }>({
+// ✅ Обёрнуто в React.memo (см. низ файла) — страницы со своим состоянием формы
+// в том же компоненте, что и таблица (например CounterpartiesPage.tsx: `form`
+// живёт рядом с `columns`/`data`), раньше вызывали полный ре-рендер и
+// ре-реконсиляцию ВСЕХ строк таблицы на каждое нажатие клавиши в поле формы —
+// даже когда props самой таблицы (columns/data) не менялись. На таблице в
+// несколько сотен строк с тяжёлыми ячейками (вложенные таблицы сальдо и т.п.)
+// это давало реальные фризы UI (keydown handler >400мс). memo пропускает
+// ре-рендер, когда props действительно не изменились (shallow-equal) — но это
+// работает, только если сам вызывающий код передаёт СТАБИЛЬНЫЕ ссылки
+// (columns/data обёрнуты в useMemo с правильными deps на стороне страницы),
+// иначе memo ничего не даст.
+const TableInner = <T extends { id: string | number }>({
   columns,
   data,
   onRowClick,
@@ -138,6 +161,7 @@ export const Table = <T extends { id: string | number }>({
   onFetchAllData,
   selectable = false,
   onBulkDelete,
+  rowClassName,
 }: TableProps<T>) => {
   const isServer = pagination?.mode === "server";
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -188,6 +212,27 @@ export const Table = <T extends { id: string | number }>({
   const containerRef = useRef<HTMLDivElement>(null);
   const prevSelectedRowId = useRef<string | number | null>(null);
   const selectedRowRef = useRef<string | number | null>(null);
+
+  // ✅ Шапка закреплена (sticky top-0 на th, см. ниже), но scrollIntoView ничего не
+  // знает про то, что верх контейнера визуально перекрыт ею — если строка формально
+  // уже попадает в scrollTop..scrollTop+height контейнера, браузер считает её "уже
+  // видимой" и не скроллит вообще, даже если реально она под шапкой (именно так
+  // терялась самая первая строка при восстановлении выделения/навигации). Меряем
+  // реальную высоту шапки и резервируем её через scroll-padding-top на контейнере —
+  // тогда все scrollIntoView-вызовы ниже (стрелки, восстановление выделения,
+  // пагинация) сами учитывают перекрытую зону, без правок в каждом месте отдельно.
+  const theadRef = useRef<HTMLTableSectionElement>(null);
+  const [headerHeight, setHeaderHeight] = useState(40);
+  useEffect(() => {
+    const el = theadRef.current;
+    if (!el) return;
+    const observer = new ResizeObserver((entries) => {
+      const h = entries[0].contentRect.height;
+      if (h > 0) setHeaderHeight(h);
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
 
   const [excelDropdownOpen, setExcelDropdownOpen] = useState(false);
   const excelDropdownRef = useRef<HTMLDivElement>(null);
@@ -531,6 +576,14 @@ export const Table = <T extends { id: string | number }>({
   }, [selectedRowId, columns, hiddenInView]);
 
   useEffect(() => {
+    // ✅ В серверной пагинации `sortedData` — это только уже загруженная с бэкенда
+    // страница (≤ pageSize строк), а не весь датасет: `index` тут всегда попадает
+    // в диапазон [0, pageSize), поэтому targetPage ниже всегда считался бы как 1,
+    // и это МОЛЧА перебивало страницу, восстановленную родителем (см. InvoicesPage.tsx
+    // ::PAGE_STORAGE_KEY) обратно на первую. Для server-режима правильная страница
+    // должна быть выставлена снаружи ДО загрузки данных — здесь её пересчитать
+    // из локальных данных в принципе нельзя.
+    if (isServer) return;
     if (selectedRowId == null || !pageSize) return;
 
     const index = sortedData.findIndex((item) => item.id === selectedRowId);
@@ -540,7 +593,7 @@ export const Table = <T extends { id: string | number }>({
     if (targetPage !== currentPage) {
       setCurrentPage(targetPage);
     }
-  }, [selectedRowId, sortedData, pageSize]);
+  }, [selectedRowId, sortedData, pageSize, isServer]);
 
   // ── Helpers для фокуса пагинации ─────────────────────────────────────────
 
@@ -685,14 +738,6 @@ export const Table = <T extends { id: string | number }>({
           return;
         }
         // Обычная ячейка — открыть запись
-        const item = paginatedData[rowIndex];
-        if (item && onRowDoubleClick) onRowDoubleClick(item);
-        return;
-      }
-
-      // F2 — редактировать (аналог двойного клика)
-      if (e.key === "F2") {
-        e.preventDefault();
         const item = paginatedData[rowIndex];
         if (item && onRowDoubleClick) onRowDoubleClick(item);
         return;
@@ -1245,6 +1290,8 @@ export const Table = <T extends { id: string | number }>({
     );
   }
 
+  const showPagination = Boolean(pageSize && totalPages > 1);
+
   return (
     <div className="flex flex-col shadow-[0_12px_35px_-15px_rgba(0,0,0,0.3)] print:shadow-none rounded-xl">
       {/* ✅ Тулбар — верхняя "титульная" полоса окна (в духе Modal.tsx/ProductFormPage.tsx):
@@ -1275,6 +1322,10 @@ export const Table = <T extends { id: string | number }>({
               placeholder={t("Search_press_esc_to_reset")}
               leftIcon={<Search size={18} />}
               onClear={() => onSearchChange("")}
+              // ✅ Выразительный фокус (см. запрос: "чтобы в глаза бросалась") —
+              // шире кольцо + свечение тенью + более заметная граница, поверх
+              // дефолтного focus-стиля Input.tsx (только для поиска в таблице).
+              inputClassName="focus:ring-4 focus:ring-indigo-500/40 dark:focus:ring-indigo-400/30 focus:border-indigo-500 dark:focus:border-indigo-400 focus:shadow-lg focus:shadow-indigo-500/25"
             />
           </div>
         )}
@@ -1477,7 +1528,20 @@ export const Table = <T extends { id: string | number }>({
       </div>
 
       {data.length > 0 ? (
-        <div className="overflow-auto rounded-b-xl border-x border-b border-slate-200/80 dark:border-slate-700 print:border-black" ref={containerRef}>
+        // ✅ max-h + overflow-auto здесь (а не sticky-позиционирование тулбара/пагинации
+        // над скроллом всей страницы) — строки скроллятся ВНУТРИ этого блока, а тулбар
+        // поиска сверху и пагинация снизу остаются обычными (не sticky) соседними
+        // элементами вне зоны скролла — поэтому первая/последняя строка никогда не
+        // уезжают у них "под низ" (см. жалобу пользователя на первую версию с sticky:
+        // те же строки на скролле реально прятались под тулбаром/пагинацией, т.к. sticky
+        // просто рисует их ПОВЕРХ содержимого, которое проезжает под ними). Печать
+        // (print:max-h-none) — распечатать должны все строки целиком, а не только
+        // видимую в скролле часть.
+        <div
+          className={`overflow-auto max-h-[70vh] print:max-h-none border-x border-slate-200/80 dark:border-slate-700 print:border-black ${showPagination ? "" : "rounded-b-xl border-b"}`}
+          ref={containerRef}
+          style={{ scrollPaddingTop: headerHeight }}
+        >
           <table
             className="w-full text-left border-collapse min-w-max"
             onFocus={() => {
@@ -1487,11 +1551,18 @@ export const Table = <T extends { id: string | number }>({
               }
             }}
           >
-            <thead className="border-b border-gray-300 dark:border-gray-700">
+            {/* ✅ sticky top-0 на каждом th (не на thead — position:sticky на самом
+                <thead> ненадёжен в браузерах) — шапка остаётся видимой при скролле
+                строк внутри max-h блока выше (см. запрос пользователя). z-30 для
+                frozen-колонок (им и так нужен больший z ради горизонтальной sticky-
+                логики — угловая ячейка "прилипает" и сверху, и слева одновременно),
+                z-20 для остальных — выше z-10 у tbody-ячеек, чтобы шапка не
+                просвечивала строками, проезжающими под ней при скролле. */}
+            <thead ref={theadRef} className="border-b border-gray-300 dark:border-gray-700 print:static">
               <tr>
                 {selectable && (
                   <th
-                    className={`px-2 py-2 bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 print:hidden ${hasFrozen ? "sticky left-0 z-20" : ""}`}
+                    className={`px-2 py-2 bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 print:hidden print:static sticky top-0 ${hasFrozen ? "left-0 z-30" : "z-20"}`}
                     style={{ width: CHECKBOX_COL_WIDTH }}
                   >
                     <input ref={selectAllRef} type="checkbox" checked={allOnPageSelected} onChange={toggleSelectAllOnPage} className="cursor-pointer" title={t("SelectAllOnPage")} />
@@ -1499,7 +1570,7 @@ export const Table = <T extends { id: string | number }>({
                 )}
                 <th
                   className={`px-2 py-2 bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 font-medium text-gray-500 w-10
-                    ${hasFrozen ? "sticky z-20" : ""}
+                    print:static sticky top-0 ${hasFrozen ? "z-30" : "z-20"}
                   `}
                   style={hasFrozen ? { left: selectable ? CHECKBOX_COL_WIDTH : 0 } : undefined}
                 >
@@ -1511,9 +1582,9 @@ export const Table = <T extends { id: string | number }>({
                     className={`
                       relative px-1 py-0.5 md:px-2 md:py-2 bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700
                       font-medium text-gray-700 dark:text-gray-300 print:!text-black
+                      print:static sticky top-0 ${col.frozen ? "z-30" : "z-20"}
                       ${hiddenInView.has(i) ? "hidden print:table-cell" : ""}
                       ${hiddenInPrint.has(i) ? "print:hidden" : ""}
-                      ${col.frozen ? "sticky z-20" : ""}
                     `}
                     style={{
                       width: getColWidth(i, col),
@@ -1550,7 +1621,7 @@ export const Table = <T extends { id: string | number }>({
                   <tr
                     key={item.id}
                     data-row-id={item.id}
-                    className={`${isRowSelected ? "bg-yellow-100 dark:bg-yellow-900/30" : "hover:bg-gray-50 dark:hover:bg-gray-800/60"} transition-colors
+                    className={`${isRowSelected ? "bg-yellow-100 dark:bg-yellow-900/30" : rowClassName?.(item) || "hover:bg-gray-50 dark:hover:bg-gray-800/60"} transition-colors
                       ${selectable && checkedItems.size > 0 && !isChecked ? "print:hidden" : ""}
                     `}
                   >
@@ -1601,12 +1672,58 @@ export const Table = <T extends { id: string | number }>({
                 );
               })}
             </tbody>
-          </table>
 
-          {/* ── Пагинация ────────────────────────────────────────────────── */}
-          {pageSize && totalPages > 1 && (
-            <div className="flex items-center justify-between px-2 py-2 print:hidden">
-              <span className="text-sm text-gray-500 dark:text-gray-400">
+            {/* ✅ Строка "Итого" — рендерится, только если хотя бы одна колонка
+                задаёт footerValue (см. Column.footerValue выше). Ячейки повторяют
+                структуру/ширины из thead/tbody (checkbox-плейсхолдер, №-плейсхолдер
+                с подписью "Итого", затем сами колонки), чтобы визуально совпадать
+                с остальной таблицей 1:1, включая frozen-колонки. */}
+            {columns.some((c) => c.footerValue) && (
+              <tfoot>
+                <tr className="bg-gray-100 dark:bg-gray-800 font-semibold">
+                  {selectable && <td className="px-2 py-1 border border-gray-200 dark:border-gray-700 print:hidden" style={{ width: CHECKBOX_COL_WIDTH }} />}
+                  <td
+                    className={`px-2 py-1 border border-gray-200 dark:border-gray-700 text-center text-gray-500 dark:text-gray-400 text-xs ${hasFrozen ? "sticky z-10 bg-gray-100 dark:bg-gray-800" : ""}`}
+                    style={hasFrozen ? { left: selectable ? CHECKBOX_COL_WIDTH : 0 } : undefined}
+                  >
+                    {t("Total")}
+                  </td>
+                  {columns.map((col, i) => (
+                    <td
+                      key={i}
+                      className={`
+                        px-1 py-0.5 md:px-2 md:py-1 border border-gray-200 dark:border-gray-700
+                        text-gray-800 dark:text-gray-100
+                        ${hiddenInView.has(i) ? "hidden print:table-cell" : ""}
+                        ${hiddenInPrint.has(i) ? "print:hidden" : ""}
+                        ${col.frozen ? "sticky z-10 bg-gray-100 dark:bg-gray-800" : ""}
+                      `}
+                      style={{
+                        width: getColWidth(i, col),
+                        ...(col.frozen && frozenOffsets[i] !== undefined ? { left: frozenOffsets[i] } : {}),
+                      }}
+                    >
+                      {col.footerValue ? col.footerValue(sortedData) : null}
+                    </td>
+                  ))}
+                </tr>
+              </tfoot>
+            )}
+          </table>
+        </div>
+      ) : (
+        <div className="rounded-b-xl border-x border-b border-slate-200/80 dark:border-slate-700 px-2">
+          <EmptyState />
+        </div>
+      )}
+
+      {/* ── Пагинация ────────────────────────────────────────────────── */}
+      {/* ✅ Вынесена из overflow-auto контейнера таблицы (там, где строки скроллятся
+          внутри max-h блока выше) — она обычный (не sticky) сосед этого блока, поэтому
+          всегда полностью видна и никогда не перекрывает и не прячет строки под собой. */}
+      {data.length > 0 && showPagination && (
+        <div className="flex items-center justify-between px-2 py-2 rounded-b-xl border-x border-b border-t border-slate-200/80 dark:border-slate-700 bg-white dark:bg-gray-900 print:hidden">
+          <span className="text-sm text-gray-500 dark:text-gray-400">
                 {t("ShowingResults", {
                   from: (currentPage - 1) * pageSize + 1,
                   // to: Math.min(currentPage * pageSize, sortedData.length),
@@ -1681,12 +1798,6 @@ export const Table = <T extends { id: string | number }>({
                 </button>
               </div>
             </div>
-          )}
-        </div>
-      ) : (
-        <div className="rounded-b-xl border-x border-b border-slate-200/80 dark:border-slate-700 px-2">
-          <EmptyState />
-        </div>
       )}
 
       {selectable && onBulkDelete && (
@@ -1704,3 +1815,7 @@ export const Table = <T extends { id: string | number }>({
     </div>
   );
 };
+
+// as typeof TableInner — сохраняет дженерик-сигнатуру TableInner<T> снаружи;
+// React.memo сам по себе стирает generics, оборачивая тип в NamedExoticComponent.
+export const Table = React.memo(TableInner) as typeof TableInner;

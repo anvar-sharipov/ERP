@@ -14,7 +14,8 @@ from accounting.serializers.transaction_serializers import (
     StockMovementSerializer,
     ClosedPeriodSerializer
 )
-from accounting.mixins import AuditMixin
+from accounting.mixins import AuditMixin, BulkDestroyMixin
+from accounting.utils import is_period_closed
 from users.permissions import _rbac
 from users.scoping import apply_scope
 
@@ -162,6 +163,147 @@ def _compute_subconto_card(request, account, subconto_slug, subconto_id, subcont
     }
 
 
+def _compute_account_card(request, account, date_from, date_to, subconto_slug=None, subconto_id=None,
+                           entry_type=None, search=None):
+    """
+    Карточка счёта (общий, не привязанный к одному значению субконто) — та же
+    механика бегущего остатка, что и в _compute_subconto_card, но без
+    обязательного субконто (subconto_slug/subconto_id опциональны, сужают
+    карточку до одного значения, если заданы). Полный список проводок за период
+    одним запросом (как и в _compute_subconto_card/product_turnover) — объём
+    ограничен количеством ПРОВОДОК по КОНКРЕТНОМУ счёту за период, а не всей
+    историей компании, поэтому постраничная выдача здесь не нужна — см.
+    account_card ниже, который в режиме "без выбранного счёта" зовёт эту функцию
+    по кругу для всех счетов сразу (как ProductTurnoverPage.tsx — один экран,
+    без выбора конкретной сущности).
+    """
+    from accounting.models import TransactionLine
+
+    branch_ids, warehouse_ids = get_user_scope(request.user)
+    base_filter = _tl_scope_filter(request, branch_ids, warehouse_ids)
+
+    # ✅ entry_type/search НЕ фильтруют queryset здесь — они сужают только
+    # ПОКАЗАННЫЙ список строк (см. items-фильтр в конце функции), а не саму
+    # выборку, по которой считается бегущий остаток. Раньше entry_type/search
+    # применялись прямо к qs/period_qs ДО расчёта остатка — это тихо портило и
+    # opening_balance (реальная история "что было ДО периода" ужималась до
+    # "что было ДО периода из отфильтрованных ручных/документных проводок"), и
+    # сам бегущий остаток внутри периода. Тот же принцип уже применяется в
+    # report_views.py::_filter_product_card_rows для карточки товара.
+    qs = TransactionLine.objects.filter(base_filter, account_id=account.id)
+    if subconto_slug and subconto_id:
+        qs = qs.filter(**{f'subcontos__{subconto_slug}': int(subconto_id)})
+
+    pre_totals = qs.filter(journal_entry__date__date__lt=date_from).aggregate(
+        debit=Sum('amount', filter=Q(side='debit'), default=Decimal('0')),
+        credit=Sum('amount', filter=Q(side='credit'), default=Decimal('0')),
+    )
+    opening_balance = (pre_totals['debit'] or Decimal('0')) - (pre_totals['credit'] or Decimal('0'))
+
+    period_qs = qs.filter(journal_entry__date__date__gte=date_from, journal_entry__date__date__lte=date_to)
+
+    grouped = period_qs.values(
+        'journal_entry_id', 'journal_entry__date', 'journal_entry__description',
+    ).annotate(
+        debit=Sum('amount', filter=Q(side='debit'), default=Decimal('0')),
+        credit=Sum('amount', filter=Q(side='credit'), default=Decimal('0')),
+    ).order_by('journal_entry__date', 'journal_entry_id')
+
+    # ✅ Список группированных проводок реализуется (list()) один раз здесь — это
+    # единственный способ честно посчитать бегущий остаток по порядку. Объём
+    # ограничен количеством ПРОВОДОК по счёту за период (а не строк документов),
+    # что даже для активного счёта за год — тысячи, не миллионы строк на бэкенде.
+    # В JSON-ответ ниже попадает только срез rows[start:start+page_size].
+    rows = list(grouped)
+
+    total_debit  = Decimal('0')
+    total_credit = Decimal('0')
+    running = opening_balance
+    for row in rows:
+        d = row['debit'] or Decimal('0')
+        c = row['credit'] or Decimal('0')
+        total_debit  += d
+        total_credit += c
+        running += d - c
+        row['balance'] = running
+
+    closing_balance = running
+
+    je_ids = [r['journal_entry_id'] for r in rows]
+    corr_map = {}
+    doc_map = {}
+    if je_ids:
+        for tl in TransactionLine.objects.filter(journal_entry_id__in=je_ids).exclude(account_id=account.id).select_related('account'):
+            corr_map.setdefault(tl.journal_entry_id, tl.account.code)
+        # ✅ document — обратная OneToOne-связь (Document.journal_entry,
+        # related_name='document'), поле document_id живёт на Document, а не
+        # на JournalEntry — .values_list('id', 'document_id') на JournalEntry
+        # падает с FieldError. Идём от Document.
+        for je_id, doc_id in Document.objects.filter(journal_entry_id__in=je_ids).values_list('journal_entry_id', 'id'):
+            doc_map[je_id] = doc_id
+
+    items = [{
+        'id':               r['journal_entry_id'],
+        'date':             r['journal_entry__date'],
+        'journal_entry_id': r['journal_entry_id'],
+        'document_id':      doc_map.get(r['journal_entry_id']),
+        'comment':          r['journal_entry__description'],
+        'corr_account':     corr_map.get(r['journal_entry_id'], '?'),
+        'debit':  r['debit'] or Decimal('0'),
+        'credit': r['credit'] or Decimal('0'),
+        'balance': r['balance'],
+    } for r in rows]
+
+    if entry_type == 'manual':
+        items = [i for i in items if i['document_id'] is None]
+    elif entry_type == 'document':
+        items = [i for i in items if i['document_id'] is not None]
+    if search:
+        s = search.lower()
+        items = [i for i in items if s in (i['comment'] or '').lower()]
+
+    return {
+        'account_id': account.id,
+        'account_code': account.code,
+        'account_name': account.name,
+        'items': items,
+        'opening_balance': opening_balance,
+        'closing_balance': closing_balance,
+        'total_debit': total_debit,
+        'total_credit': total_credit,
+    }
+
+
+def _account_card_all(request, date_from, date_to, entry_type, search, show_zero):
+    """
+    Режим "без выбранного счёта" — карточки СРАЗУ по всем счетам, у которых есть
+    хоть какая-то активность (как ProductTurnoverPage.tsx — один экран со всеми
+    товарами, без обязательного выбора одного). ✅ Дешёвый предфильтр: сначала
+    одним запросом узнаём, у каких счетов вообще ЕСТЬ хоть одна проводка (в рамках
+    scope) — счета без единой проводки пропускаем сразу, не тратя на них 2-3
+    запроса _compute_account_card. Порядок величины — количество счетов в плане
+    счетов (десятки-сотни), а не проводок, поэтому цикл запросов приемлем для
+    отчёта без пагинации.
+    """
+    from accounting.models import Account, TransactionLine
+
+    branch_ids, warehouse_ids = get_user_scope(request.user)
+    base_filter = _tl_scope_filter(request, branch_ids, warehouse_ids)
+    active_account_ids = set(TransactionLine.objects.filter(base_filter).values_list('account_id', flat=True).distinct())
+
+    accounts = Account.objects.filter(is_group=False, is_active=True).order_by('code')
+    if not show_zero:
+        accounts = accounts.filter(id__in=active_account_ids)
+
+    cards = []
+    for account in accounts:
+        card = _compute_account_card(request, account, date_from, date_to, entry_type=entry_type, search=search)
+        if not show_zero and card['opening_balance'] == 0 and card['closing_balance'] == 0 and card['total_debit'] == 0 and card['total_credit'] == 0:
+            continue
+        cards.append(card)
+    return cards
+
+
 def _osv_base_filter(request, branch_ids, warehouse_ids):
     """
     Общий Q-фильтр для OSV (Account.annotate по reverse-related 'transaction_lines') —
@@ -185,8 +327,26 @@ def _osv_base_filter(request, branch_ids, warehouse_ids):
     return f
 
 
-class JournalEntryViewSet(AuditMixin, viewsets.ModelViewSet):
-    pagination_class = None
+# ✅ Сортировка при server-side пагинации (см. JournalPage.tsx — Table.tsx с
+# pagination.mode="server", тот же принцип, что и DOCUMENT_ORDERING_FIELDS в
+# document_views.py). debit_accounts/credit_accounts сюда сознательно не входят —
+# это SerializerMethodField, собирающий счета со ВСЕХ строк проводки в одну
+# строку (проводка может иметь несколько дебетуемых счетов), у него нет одного
+# ORM-пути для сортировки (см. driver_name в document_views.py — тот же случай).
+JOURNAL_ORDERING_FIELDS = {
+    'number': ['number'],
+    'date': ['date'],
+    'description': ['description'],
+    'debit_total': ['debit_total'],
+}
+
+
+class JournalEntryViewSet(AuditMixin, BulkDestroyMixin, viewsets.ModelViewSet):
+    # ✅ Раньше здесь стоял pagination_class = None — список отдавался ПОЛНОСТЬЮ,
+    # одним запросом, без разбивки на страницы (см. CLAUDE.md: JournalEntry прямо
+    # назван как пример таблицы, которая обязана быть на server-пагинации). Теперь
+    # используется глобальный DEFAULT_PAGINATION_CLASS (config.pagination.StandardPagination),
+    # как и у DocumentViewSet.
 
     def get_permissions(self):
         return _rbac(self.action, 'journalentry')
@@ -223,10 +383,16 @@ class JournalEntryViewSet(AuditMixin, viewsets.ModelViewSet):
         if date_to := params.get('date_to'):
             qs = qs.filter(date__date__lte=date_to)
         if search := params.get('search'):
+            # ✅ Раньше поиск по счетам (debit_accounts/credit_accounts) работал
+            # только на клиенте (useTableFilter по уже загруженной странице) —
+            # теперь список на server-пагинации, значит и поиск должен искать по
+            # ВСЕМ проводкам на бэкенде, а не только по видимой странице.
             qs = qs.filter(
                 Q(number__icontains=search) |
-                Q(description__icontains=search)
-            )
+                Q(description__icontains=search) |
+                Q(lines__account__code__icontains=search) |
+                Q(lines__account__name__icontains=search)
+            ).distinct()
         if branch := params.get('branch'):
             qs = qs.filter(branch_id=branch)
         if warehouse := params.get('warehouse'):
@@ -243,6 +409,16 @@ class JournalEntryViewSet(AuditMixin, viewsets.ModelViewSet):
             qs = qs.filter(source_document_id__isnull=True)
         elif entry_type == 'document':
             qs = qs.filter(source_document_id__isnull=False)
+
+        # ✅ Сортировка по клику на колонку (см. JOURNAL_ORDERING_FIELDS выше) —
+        # без параметра остаётся дефолтный order_by('-date', '-number').
+        ordering_param = params.get('ordering')
+        if ordering_param:
+            desc = ordering_param.startswith('-')
+            key = ordering_param[1:] if desc else ordering_param
+            fields = JOURNAL_ORDERING_FIELDS.get(key)
+            if fields:
+                return qs.order_by(*[f'-{f}' if desc else f for f in fields])
 
         return qs.order_by('-date', '-number')
 
@@ -287,11 +463,32 @@ class JournalEntryViewSet(AuditMixin, viewsets.ModelViewSet):
             return Response({'detail': _get_error_detail(e)}, status=status.HTTP_400_BAD_REQUEST)
         return Response({'detail': 'Проведение отменено.'})
 
+    # ✅ Общая причина отказа в удалении — переиспользуется в destroy() (единичное
+    # удаление, отдаёт чистый Response) и perform_destroy() (bulk_destroy из
+    # BulkDestroyMixin вызывает self.perform_destroy(instance) напрямую, минуя
+    # destroy(), поэтому исключение здесь ловится в bulk_destroy's try/except и
+    # попадает в errors). Удалить можно только ручную непроведённую (draft)
+    # проводку в открытый день — то же условие, что показывает кнопку "Удалить"
+    # в Действия в JournalPage.tsx, теперь проверяется и на бэкенде.
+    def _delete_block_reason(self, entry):
+        if entry.source_document_id:
+            return 'Эта проводка создана документом — удаление управляется через сам документ, а не напрямую из журнала.'
+        if entry.status == JournalEntry.Status.POSTED:
+            return 'Нельзя удалить проведённую операцию — сначала отмените проведение.'
+        if is_period_closed(entry.date, branch_id=entry.branch_id, warehouse_id=entry.warehouse_id):
+            return f'День {entry.date:%d.%m.%Y} закрыт — удаление запрещено.'
+        return None
+
     def destroy(self, request, *args, **kwargs):
         entry = self.get_object()
-        if rejected := self._reject_if_document_entry(entry):
-            return rejected
+        if reason := self._delete_block_reason(entry):
+            return Response({'detail': reason}, status=status.HTTP_400_BAD_REQUEST)
         return super().destroy(request, *args, **kwargs)
+
+    def perform_destroy(self, instance):
+        if reason := self._delete_block_reason(instance):
+            raise ValidationError(reason)
+        super().perform_destroy(instance)
 
     @action(detail=False, methods=['get'], url_path='osv')
     def osv(self, request):
@@ -643,6 +840,53 @@ class JournalEntryViewSet(AuditMixin, viewsets.ModelViewSet):
             return Response({'detail': 'Элемент субконто не найден'}, status=404)
 
         return Response(_compute_subconto_card(request, account, subconto_slug, subconto_id, subconto_obj, date_from, date_to))
+
+    @action(detail=False, methods=['get'], url_path='account-card')
+    def account_card(self, request):
+        """
+        Карточка счёта (отдельный отчёт "Карточка счёта", см. AccountCardPage.tsx) —
+        хронологический список проводок с бегущим остатком, общий движок в
+        _compute_account_card. ✅ Счёт (account) НЕОБЯЗАТЕЛЕН — как и
+        ProductTurnoverPage.tsx, отчёт по умолчанию показывает карточки СРАЗУ по
+        всем счетам с активностью (без пагинации, один экран — не "1 счёт за раз
+        с постраничной прокруткой проводок", как было раньше); ?account=<id> сужает
+        до одного конкретного счёта (опционально ещё и до одного субконто через
+        subconto_slug/subconto_id).
+        """
+        from accounting.models import Account, AccountSubconto
+
+        date_from = request.query_params.get('date_from')
+        date_to   = request.query_params.get('date_to')
+        if not date_from or not date_to:
+            return Response({'detail': 'Укажите date_from и date_to'}, status=400)
+
+        entry_type = request.query_params.get('entry_type')
+        search     = request.query_params.get('search')
+        account_id = request.query_params.get('account')
+
+        if not account_id:
+            show_zero = request.query_params.get('show_zero', 'false') == 'true'
+            return Response({'cards': _account_card_all(request, date_from, date_to, entry_type, search, show_zero)})
+
+        try:
+            account = Account.objects.get(id=account_id)
+        except Account.DoesNotExist:
+            return Response({'detail': 'Счёт не найден'}, status=404)
+
+        if account.is_group:
+            return Response({'detail': 'У счёта-группы не бывает своих проводок'}, status=400)
+
+        subconto_slug = request.query_params.get('subconto_slug') or None
+        subconto_id   = request.query_params.get('subconto_id') or None
+        if subconto_slug and not AccountSubconto.objects.filter(account=account, subconto_type__slug=subconto_slug).exists():
+            return Response({'detail': 'У счёта не настроено такое субконто'}, status=400)
+
+        card = _compute_account_card(
+            request, account, date_from, date_to,
+            subconto_slug=subconto_slug, subconto_id=subconto_id,
+            entry_type=entry_type, search=search,
+        )
+        return Response({'cards': [card]})
 
 
 class StockMovementViewSet(viewsets.ModelViewSet):

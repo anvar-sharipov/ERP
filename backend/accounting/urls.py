@@ -3,7 +3,7 @@ from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from rest_framework_nested import routers as nested_routers
 
-from .views.company_views import CompanyProfileViewSet, BranchViewSet, UserScopeViewSet, DocumentSettingsViewSet
+from .views.company_views import CompanyProfileViewSet, BranchViewSet, UserScopeViewSet, DocumentSettingsViewSet, TenantSettingsView
 from .views.account_views import AccountViewSet, SubcontoTypeViewSet, available_content_types
 from .views.directory_views import DirectoryViewSet, DirectoryFieldViewSet, DirectoryRecordViewSet
 from .views.product_views import (
@@ -18,7 +18,11 @@ from .views.transaction_views import JournalEntryViewSet, StockMovementViewSet, 
 from .views.document_views import DocumentViewSet, DocumentItemViewSet, DocumentParticipantViewSet
 from .views.currency_views import CurrencyViewSet, ExchangeRateViewSet
 from .views.report_views import ReportViewSet
+from .views.analytics_views import AnalyticsViewSet
 from .views.alert_views import SystemAlertViewSet
+from .views.revaluation_views import ProductRevaluationViewSet
+from .views.price_change_history_views import PriceChangeHistoryViewSet
+from .views.trip_views import TripViewSet
 
 
 
@@ -75,6 +79,8 @@ router.register(r'exchange-rates', ExchangeRateViewSet, basename='exchange-rate'
 
 # Audit
 router.register(r'audit-logs', AuditLogViewSet, basename='audit-log')
+router.register(r'product-revaluations', ProductRevaluationViewSet, basename='product-revaluation')
+router.register(r'price-change-history', PriceChangeHistoryViewSet, basename='price-change-history')
 
 # System alerts (колокольчик в хедере — см. tasks.py::run_daily_checks)
 router.register(r'system-alerts', SystemAlertViewSet, basename='system-alert')
@@ -82,8 +88,14 @@ router.register(r'system-alerts', SystemAlertViewSet, basename='system-alert')
 # Reports
 router.register(r'reports', ReportViewSet, basename='report')
 
+# Аналитика (см. AnalyticsViewSet)
+router.register(r'analytics', AnalyticsViewSet, basename='analytics')
+
 # Documents (основной роутер)
 router.register(r'documents', DocumentViewSet, basename='document')
+
+# Рейсы водителей (см. accounting/models/trip.py::Trip)
+router.register(r'trips', TripViewSet, basename='trip')
 
 router.register(r'user-scopes', UserScopeViewSet, basename='user-scopes')
 
@@ -113,5 +125,6 @@ urlpatterns = [
     path('', include(documents_router.urls)),
     path('', include(products_router.urls)),  # ← вот это
     path('content-types/', available_content_types),
+    path('tenant-settings/', TenantSettingsView.as_view()),
 ]
 

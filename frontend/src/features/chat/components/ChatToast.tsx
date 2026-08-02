@@ -38,16 +38,12 @@ export const ChatToast: React.FC<Props> = ({ toasts, onClose }) => {
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.9 }}
               transition={{ type: "spring", stiffness: 500, damping: 30 }}
-              className="relative w-80 rounded-2xl overflow-hidden shadow-2xl"
-              style={{ background: "linear-gradient(135deg, #1e1b4b 0%, #312e81 50%, #1e1b4b 100%)" }}
+              className="relative w-80 rounded-2xl overflow-hidden shadow-2xl bg-[#17212b]"
             >
-              {/* Верхняя полоска */}
-              <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-transparent via-indigo-400 to-transparent" />
-
               <div className="flex items-center gap-3 px-4 py-3">
                 {/* Аватар */}
                 <div className="relative shrink-0">
-                  <div className="w-11 h-11 rounded overflow-hidden ring-2 ring-indigo-400/60">
+                  <div className="w-11 h-11 rounded-full overflow-hidden ring-2 ring-[#3390ec]/50">
                     {(() => {
                       return isValidMediaUrl(t?.photo) ? (
                         <img src={t.photo!} loading="lazy" className="w-full h-full object-cover" />
@@ -57,16 +53,16 @@ export const ChatToast: React.FC<Props> = ({ toasts, onClose }) => {
                     })()}
                   </div>
                   {/* Иконка сообщения */}
-                  <div className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full bg-indigo-500 flex items-center justify-center ring-2 ring-indigo-900">
+                  <div className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full bg-[#3390ec] flex items-center justify-center ring-2 ring-[#17212b]">
                     <MessageSquare className="w-2.5 h-2.5 text-white" />
                   </div>
                 </div>
 
                 {/* Текст */}
                 <div className="flex-1 min-w-0">
-                  {t.convName && <div className="text-indigo-300 text-[10px] font-medium truncate mb-0.5 uppercase tracking-wider">{t.username}</div>}
+                  {t.convName && <div className="text-[#6ab2f2] text-[10px] font-medium truncate mb-0.5 uppercase tracking-wider">{t.username}</div>}
                   <div className="text-white text-sm font-semibold truncate leading-tight">{t.senderName}</div>
-                  <div className="text-indigo-200/70 text-xs truncate mt-0.5">{t.text}</div>
+                  <div className="text-slate-400 text-xs truncate mt-0.5">{t.text}</div>
                 </div>
 
                 {/* Закрыть */}
@@ -81,7 +77,7 @@ export const ChatToast: React.FC<Props> = ({ toasts, onClose }) => {
                 animate={{ scaleX: 0 }}
                 transition={{ duration: 5, ease: "linear" }}
                 style={{ transformOrigin: "left" }}
-                className="h-0.5 bg-gradient-to-r from-indigo-400 to-purple-400"
+                className="h-0.5 bg-[#3390ec]"
               />
             </motion.div>
           );

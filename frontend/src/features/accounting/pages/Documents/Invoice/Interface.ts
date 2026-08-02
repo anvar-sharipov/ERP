@@ -126,7 +126,7 @@ export interface Product {
   barcode?: string;
   is_active?: boolean;
   unit?: number;
-  unit_detail?: { name: string };
+  unit_detail?: { name: string; short_name?: string };
   cost_price?: number;
   prices?: { price_type: number; price: number }[];
   bundle_items?: BundleItem[];
