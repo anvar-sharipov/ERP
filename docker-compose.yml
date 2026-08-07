@@ -87,6 +87,22 @@ services:
       - DJANGO_SAAS_SUPERUSER_LOGIN=${DJANGO_SAAS_SUPERUSER_LOGIN} 
       - DJANGO_SAAS_SUPERUSER_EMAIL=${DJANGO_SAAS_SUPERUSER_EMAIL}
       - REDIS_URL=${REDIS_URL}
+    # ✅ depends_on у nginx раньше просто ждал, что backend "запустился"
+    # (container started), а не что он реально готов принимать соединения на
+    # 8000 — там ещё идут миграции/sync_permissions/collectstatic, это
+    # занимает время. nginx же резолвит адрес backend'а один раз при своём
+    # старте и кэширует — если он успел подключиться раньше, чем backend
+    # реально поднялся (типичная гонка при одновременном старте всего стека,
+    # например после перезагрузки хоста), получали 502 до ручного
+    # "docker compose restart nginx". Healthcheck через реальное TCP-
+    # подключение к 8000 (python уже есть в образе, curl/wget — нет) решает
+    # это так же, как уже сделано для db выше.
+    healthcheck:
+      test: ["CMD", "python", "-c", "import socket; socket.create_connection(('localhost', 8000), timeout=3).close()"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
     depends_on:
       redis:
         condition: service_started
@@ -186,6 +202,7 @@ services:
   # 4. Фронтенд + Маршрутизатор Nginx
   nginx:
     build: ./frontend
+    image: my_erp-nginx:latest
     restart: always
     ports:
       - "8100:80"
@@ -199,8 +216,10 @@ services:
       - django_static:/app/backend_static:ro
       - django_media:/app/backend_media:ro
     depends_on:
-      - backend
-      - ssl-gen
+      backend:
+        condition: service_healthy
+      ssl-gen:
+        condition: service_started
 
 volumes:
   postgres_data:
