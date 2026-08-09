@@ -36,7 +36,7 @@ const ClockToggleButton = () => {
       className={`p-2 transition-colors rounded hover:bg-slate-700 ${visible ? "text-indigo-400" : "text-gray-400 hover:text-white"}`}
       title={t("FloatingClockToggle")}
     >
-      <Clock className="w-5 h-5" />
+      <Clock className="w-5 h-5" />gg
     </button>
   );
 };
