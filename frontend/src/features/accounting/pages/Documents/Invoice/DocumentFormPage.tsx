@@ -141,7 +141,15 @@ const DocumentFormPage = () => {
 
   // ── Справочники ──────────────────────────────────────────────────────────────
 
-  const counterpartyType = ["in", "return_out"].includes(header.document_type) ? "supplier" : "client";
+  // ✅ "out" (Расход) теперь показывает и клиентов, и поставщиков — Document.
+  // _resolve_role_account сам выбирает нужный счёт (Warehouse.receivable_account
+  // для клиента, Warehouse.receivable_account_supplier для поставщика), так что
+  // фильтровать список контрагентов по типу здесь больше не нужно.
+  const counterpartyType: "client" | "supplier" | undefined = ["in", "return_out"].includes(header.document_type)
+    ? "supplier"
+    : header.document_type === "out"
+      ? undefined
+      : "client";
 
   // ✅ staleTime — справочники (типы цен/контрагенты/сотрудники/товары) меняются
   // редко в рамках одной сессии; без staleTime react-query рефетчит их заново
@@ -164,7 +172,7 @@ const DocumentFormPage = () => {
 
   const { data: counterparties = [] } = useQuery({
     queryKey: ["counterparties", counterpartyType],
-    queryFn: () => counterpartyApi.getAll({ type: counterpartyType }),
+    queryFn: () => counterpartyApi.getAll(counterpartyType ? { type: counterpartyType } : undefined),
     staleTime: 60_000,
   });
 

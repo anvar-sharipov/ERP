@@ -8,7 +8,10 @@ from rest_framework import viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
-from accounting.models import Document, DocumentItem, DocumentParticipant, Product, Warehouse, WarehouseStock, WarehouseProductSnapshot
+from accounting.models import (
+    Document, DocumentItem, DocumentParticipant, Product, Warehouse, WarehouseStock,
+    WarehouseProductSnapshot, ProductPrice, DocumentSettings,
+)
 from users.permissions import _rbac
 from users.scoping import get_user_scope, apply_agent_scope
 
@@ -272,7 +275,51 @@ def _main_image(product):
     return thumbnail_url, image_url
 
 
-def _new_bucket(product, light=False):
+def _valuation_price_type_id():
+    """
+    ✅ По просьбе пользователя (2026-08-10): "Начало"/"Конец" в отчётах по
+    остаткам должны оцениваться по цене ИЗ СПРАВОЧНИКА ЦЕН (тот тип цены,
+    что настроен как "цена для прихода" — DocumentSettings.purchase_price_type),
+    а не по Product.cost_price (факт цены последнего проведённого Прихода).
+    На практике для товара, чью цену в накладной не меняли вручную, эти два
+    числа совпадают — DocumentSettings.purchase_price_type как раз и есть тот
+    тип цены, что подставляется по умолчанию в новый Приход (см. Document.py).
+    Расходятся они только когда цена в справочнике успела уйти вперёд/назад
+    относительно факта последней проводки (типичный кейс мигрированных из
+    Polisem данных, см. MIGRATION_TODO.txt) — тогда именно справочник цен
+    считается источником истины для оценки остатка.
+    Настройка singleton на тенант (не на склад/филиал) — id типа цены
+    одинаков для всех складов, а вот сама ЦЕНА по этому типу — уже
+    per-warehouse (см. _valuation_price_map).
+    """
+    settings = DocumentSettings.objects.only('purchase_price_type_id').first()
+    return settings.purchase_price_type_id if settings else None
+
+
+def _valuation_price_map(warehouse_id, price_type_id):
+    """product_id -> цена (см. _valuation_price_type_id) для одного склада."""
+    if not price_type_id:
+        return {}
+    return dict(
+        ProductPrice.objects
+        .filter(warehouse_id=warehouse_id, price_type_id=price_type_id, is_active=True)
+        .values_list('product_id', 'price')
+    )
+
+
+def _valuation_price(product, price_map):
+    """
+    Цена для "Начало"/"Конец" — из price_map (справочник цен, см.
+    _valuation_price_type_id), а если для товара такой цены нет — честный
+    фолбэк на product.cost_price (не хардкодим 0 там, где есть хоть
+    какая-то реальная оценка, см. CLAUDE.md про "не хардкодить источник
+    значения" — при отсутствии настроенной цены остаётся факт последнего
+    Прихода, а не пустое место).
+    """
+    return price_map.get(product.id, product.cost_price)
+
+
+def _new_bucket(product, light=False, price_map=None):
     """
     ✅ light=True — для ProductsListPage.tsx (колонка "Оборот"): у неё УЖЕ есть
     имя/sku/категория/бренд/фото товара из products-light/list_light_images
@@ -291,8 +338,9 @@ def _new_bucket(product, light=False):
         'return_out_qty': Decimal('0'), 'return_out_value': Decimal('0'),
         'move_qty': Decimal('0'), 'move_value': Decimal('0'),
     }
+    cost_price = _valuation_price(product, price_map or {})
     if light:
-        return {'id': product.id, 'cost_price': product.cost_price, **flows}
+        return {'id': product.id, 'cost_price': cost_price, **flows}
     thumbnail_url, image_url = _main_image(product)
     return {
         'id': product.id,
@@ -303,7 +351,7 @@ def _new_bucket(product, light=False):
         'category_name': product.category.name if product.category_id else 'Без категории',
         'brand_id': product.brand_id,
         'brand_name': product.brand.name if product.brand_id else 'Без бренда',
-        'cost_price': product.cost_price,
+        'cost_price': cost_price,
         'thumbnail_url': thumbnail_url,
         'image_url': image_url,
         **flows,
@@ -312,15 +360,18 @@ def _new_bucket(product, light=False):
 
 def _closing(b):
     """
-    ✅ По просьбе пользователя: "Начало"/"Конец" — ВСЕГДА qty × текущая
-    себестоимость товара (b['cost_price']), не накопленная историческая сумма.
-    "Приход"/"Расход" при этом остаются реальными суммами по факту документа
-    (см. основной цикл ниже) — это отдельная витрина "что реально было по
-    накладным", она сознательно НЕ обязана арифметически сходиться с
-    Начало/Конец (это разные вещи: факт движения денег vs текущая оценка
-    остатка). Раньше Конец считался как Начало+Приход-Расход по историческим
-    суммам — из-за разницы цены продажи и себестоимости на разных документах
-    сумма могла уйти в минус, хотя количество было верным.
+    ✅ По просьбе пользователя: "Начало"/"Конец" — ВСЕГДА qty × цена оценки
+    (b['cost_price'] — несмотря на имя ключа, с 2026-08-10 это НЕ обязательно
+    Product.cost_price, а цена из справочника по типу DocumentSettings.
+    purchase_price_type, см. _valuation_price_type_id()/_new_bucket() выше),
+    не накопленная историческая сумма. "Приход"/"Расход" при этом остаются
+    реальными суммами по факту документа (см. основной цикл ниже) — это
+    отдельная витрина "что реально было по накладным", она сознательно НЕ
+    обязана арифметически сходиться с Начало/Конец (это разные вещи: факт
+    движения денег vs текущая оценка остатка). Раньше Конец считался как
+    Начало+Приход-Расход по историческим суммам — из-за разницы цены продажи
+    и себестоимости на разных документах сумма могла уйти в минус, хотя
+    количество было верным.
     """
     closing_qty = (
         b['opening_qty'] + b['in_qty'] + b['return_in_qty']
@@ -340,6 +391,21 @@ def _compute_product_card_rows(request, product, wh_set, date_from, date_to):
     """
     date_from_obj = datetime.date.fromisoformat(date_from)
     thumbnail_url, image_url = _main_image(product)
+
+    # ✅ Цена для "Начало"/"Остаток"/"Конец" — см. _valuation_price_type_id()
+    # выше. Для карточки одного товара берём цену по первому складу из
+    # wh_set, где она реально задана (один плоский valuation_price на всю
+    # карточку, как раньше был один product.cost_price) — если нигде не
+    # задана, честный фолбэк на product.cost_price.
+    price_type_id = _valuation_price_type_id()
+    valuation_price = product.cost_price
+    if price_type_id:
+        price_row = ProductPrice.objects.filter(
+            product_id=product.id, warehouse_id__in=wh_set,
+            price_type_id=price_type_id, is_active=True,
+        ).first()
+        if price_row:
+            valuation_price = price_row.price
 
     # ✅ Как и в product_turnover — берём снапшот (см. WarehouseProductSnapshot,
     # создаётся при закрытии дня) отдельно по каждому складу из wh_set вместо
@@ -398,7 +464,7 @@ def _compute_product_card_rows(request, product, wh_set, date_from, date_to):
                 if doc.warehouse_to_id == warehouse_id:
                     opening_qty += qty
 
-    opening_value = opening_qty * product.cost_price
+    opening_value = opening_qty * valuation_price
 
     period_items = (
         DocumentItem.objects
@@ -419,12 +485,13 @@ def _compute_product_card_rows(request, product, wh_set, date_from, date_to):
     turnover = {'in_qty': Decimal('0'), 'in_value': Decimal('0'), 'return_qty': Decimal('0'), 'return_value': Decimal('0'), 'out_qty': Decimal('0'), 'out_value': Decimal('0')}
 
     # ✅ По просьбе пользователя: "Приход"/"Расход" ниже — РЕАЛЬНЫЕ суммы по
-    # факту документа (gross/net от item.price), не себестоимость. А вот
-    # "Остаток" (balance_sum на каждой строке, и итоговый end_value) —
-    # ВСЕГДА qty × текущая себестоимость (product.cost_price), пересчитывается
-    # заново на каждой строке, а не накапливается — поэтому эти два ряда
-    # цифр сознательно не обязаны биться "Начало+Приход-Расход=Остаток" по
-    # сумме (только по количеству), см. _closing() в product_turnover выше.
+    # факту документа (gross/net от item.price), не по цене из справочника. А
+    # вот "Остаток" (balance_sum на каждой строке, и итоговый end_value) —
+    # ВСЕГДА qty × valuation_price (см. _valuation_price_type_id() выше),
+    # пересчитывается заново на каждой строке, а не накапливается — поэтому
+    # эти два ряда цифр сознательно не обязаны биться "Начало+Приход-Расход=
+    # Остаток" по сумме (только по количеству), см. _closing() в
+    # product_turnover выше.
     for item in period_items:
         doc = item.document
         qty = item.quantity
@@ -470,7 +537,7 @@ def _compute_product_card_rows(request, product, wh_set, date_from, date_to):
                 value = gross
                 balance_qty += qty
 
-        balance_value = balance_qty * product.cost_price
+        balance_value = balance_qty * valuation_price
 
         rows.append({
             'id': item.id,
@@ -498,7 +565,7 @@ def _compute_product_card_rows(request, product, wh_set, date_from, date_to):
         })
 
     end_qty = balance_qty
-    end_value = end_qty * product.cost_price
+    end_value = end_qty * valuation_price
 
     return {
         'product_id': product.id,
@@ -677,6 +744,51 @@ class ReportViewSet(viewsets.ViewSet):
                 }
 
         return Response(result)
+
+    @action(detail=False, methods=['get'], url_path='reservations')
+    def reservations(self, request):
+        """
+        Список черновиков "Расходных" накладных, резервирующих конкретный товар —
+        попап по клику на бейдж "В резерве" в ProductsListPage.tsx. Тот же
+        product + warehouse-scope (_resolve_warehouse_ids), что и в stock_balance
+        выше — иначе сумма количеств в попапе разъедется с цифрой на бейдже.
+        Гейтится 'document' (не 'warehousestock', см. get_permissions выше) —
+        это данные о самих накладных (номер/дата/контрагент), а не об остатках.
+        """
+        product_id = request.query_params.get('product')
+        if not product_id:
+            return Response({'detail': 'Укажите product'}, status=400)
+
+        wh_set = _resolve_warehouse_ids(request)
+        if not wh_set:
+            return Response([])
+
+        rows = (
+            DocumentItem.objects
+            .filter(
+                product_id=product_id,
+                document__status='draft',
+                document__document_type='out',
+                document__warehouse_id__in=wh_set,
+            )
+            .values(
+                'document_id', 'document__number', 'document__date',
+                'document__counterparty__name', 'document__warehouse__name',
+            )
+            .annotate(qty=Sum('quantity'))
+            .order_by('document__date', 'document__number')
+        )
+        return Response([
+            {
+                'document_id': r['document_id'],
+                'number': r['document__number'],
+                'date': r['document__date'],
+                'counterparty_name': r['document__counterparty__name'],
+                'warehouse_name': r['document__warehouse__name'],
+                'quantity': str(r['qty']),
+            }
+            for r in rows
+        ])
 
     @action(detail=False, methods=['get'], url_path='revenue-by-warehouse')
     def revenue_by_warehouse(self, request):
@@ -921,6 +1033,7 @@ class ReportViewSet(viewsets.ViewSet):
             category_ids = [int(c) for c in category_param.split(',') if c.strip().isdigit()]
 
         balance = {}
+        price_type_id = _valuation_price_type_id()
 
         # ✅ Обрабатываем каждый склад из wh_set ОТДЕЛЬНО (а не одним общим
         # запросом с warehouse_id__in=wh_set, как раньше) — это позволяет у
@@ -930,6 +1043,7 @@ class ReportViewSet(viewsets.ViewSet):
         # истории склада. Если снапшота ещё нет (склад ни разу не закрывали) —
         # старое поведение, полный скан до date_to.
         for warehouse_id in wh_set:
+            price_map = _valuation_price_map(warehouse_id, price_type_id)
             snapshot_date = (
                 WarehouseProductSnapshot.objects
                 .filter(warehouse_id=warehouse_id, date__lt=date_from_obj)
@@ -949,7 +1063,7 @@ class ReportViewSet(viewsets.ViewSet):
                 if category_ids:
                     snap_qs = snap_qs.filter(product__category_id__in=category_ids)
                 for snap in snap_qs.iterator(chunk_size=500):
-                    b = balance.setdefault(snap.product.id, _new_bucket(snap.product, light=light))
+                    b = balance.setdefault(snap.product.id, _new_bucket(snap.product, light=light, price_map=price_map))
                     b['opening_qty'] += snap.quantity
                     # ✅ opening_value НЕ берём из снапшота — см. _closing() выше,
                     # оно всегда пересчитывается как opening_qty × текущая
@@ -976,7 +1090,7 @@ class ReportViewSet(viewsets.ViewSet):
             for item in items_qs.iterator(chunk_size=500):
                 doc = item.document
                 product = item.product
-                b = balance.setdefault(product.id, _new_bucket(product, light=light))
+                b = balance.setdefault(product.id, _new_bucket(product, light=light, price_map=price_map))
 
                 qty = item.quantity
                 gross = qty * item.price

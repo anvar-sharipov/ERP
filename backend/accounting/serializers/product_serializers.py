@@ -253,21 +253,6 @@ class ProductListSerializer(serializers.ModelSerializer):
         ]
 
 
-class ProductDocumentPriceSerializer(serializers.ModelSerializer):
-    """
-    ✅ Цена товара только теми двумя полями, что реально читает форма документа
-    (Invoice/Interface.ts::Product.prices: {price_type, price} — используется в
-    ProductRow.tsx для автоподстановки цены строки по выбранному типу цены).
-    Полный ProductPriceSerializer (warehouse_name/branch_name/valid_from/
-    valid_to/is_active/id/product) тут не нужен — с ~24 тыс. строк цен на
-    каталоге polisem (в среднем ~8 цен на товар) именно этот вложенный список
-    был основным весом ответа /products/list-for-document/.
-    """
-    class Meta:
-        model = ProductPrice
-        fields = ["price_type", "price"]
-
-
 class ProductDocumentSerializer(ProductMainImageMixin, serializers.ModelSerializer):
     """
     ✅ Облегчённый сериализатор для GET /products/list-for-document/ —
@@ -286,7 +271,14 @@ class ProductDocumentSerializer(ProductMainImageMixin, serializers.ModelSerializ
     """
     unit_detail = UnitShortSerializer(source="unit", read_only=True)
     main_image = serializers.SerializerMethodField()
-    prices = ProductDocumentPriceSerializer(many=True, read_only=True)
+    # ⚠️ НЕ обычный prefetch_related-based ModelSerializer(many=True) — раньше
+    # так отдавались ВСЕ ProductPrice товара, со всех складов сразу (баг
+    # 2026-08-09, см. list_for_document()). Читает уже отфильтрованный по
+    # текущему складу/филиалу {product_id: [{price_type, price}]} из контекста
+    # (view сам резолвит склад -> филиал -> глобальная цена одним bulk-запросом
+    # на весь каталог, см. accounting/utils.py::resolve_product_price — та же
+    # приоритетность, просто без N+1).
+    prices = serializers.SerializerMethodField()
     bundle_items = BundleItemSerializer(many=True, read_only=True)
     volume_discounts = VolumeDiscountSerializer(many=True, read_only=True)
     quantity_promotions = QuantityPromotionSerializer(many=True, read_only=True)
@@ -300,6 +292,9 @@ class ProductDocumentSerializer(ProductMainImageMixin, serializers.ModelSerializ
             "weight", "volume_m3", "length", "width", "height",
             "main_image",
         ]
+
+    def get_prices(self, obj):
+        return self.context.get("price_map", {}).get(obj.id, [])
 
 
 class ProductSerializer(ProductMainImageMixin, serializers.ModelSerializer):

@@ -163,18 +163,61 @@ class ProductViewSet(AuditMixin, BulkDestroyMixin, viewsets.ModelViewSet):
             Product.objects
             .select_related("unit")
             .prefetch_related(
-                # ✅ prices — только сам queryset (ProductDocumentPriceSerializer
-                # отдаёт price_type как голый id, без вложенного объекта, поэтому
-                # в отличие от полного ProductSerializer join на warehouse/branch/
-                # price_type тут не нужен).
-                "images", "prices",
+                "images",
                 "bundle_items__bundle_product__unit", "bundle_items__bundle_product__images",
                 "volume_discounts__price_type", "quantity_promotions__price_type",
             )
             .order_by("name")
         )
         qs = self._filter_by_warehouse_or_branch(qs)
-        serializer = ProductDocumentSerializer(qs, many=True, context={"request": request})
+
+        # ⚠️ БАГ найден 2026-08-09: раньше "prices" был обычным prefetch_related
+        # ("prices" — reverse FK product.prices.all()) и отдавал ВСЕ ProductPrice
+        # товара, СО ВСЕХ складов вперемешку, без разбора. DocumentFormPage.tsx
+        # берёт нужную цену через prod.prices.find(p => p.price_type === X) —
+        # без фильтра по складу это могло подставить цену СОВСЕМ ДРУГОГО склада
+        # (напр. Optom с warehouse=14 вместо Optom с текущим warehouse=6) —
+        # молча, без ошибки, просто неверная цена в новой накладной.
+        # Резолвим здесь сами, ОДНИМ bulk-запросом на весь каталог (не по
+        # товару — иначе N+1 на тысячах товаров), по той же приоритетности,
+        # что и accounting/utils.py::resolve_product_price (склад -> филиал
+        # склада -> глобальная), и отдаём во ProductDocumentSerializer уже
+        # готовый {product_id: [{price_type, price}]} через контекст —
+        # см. get_prices() в ProductDocumentSerializer.
+        warehouse_id = request.query_params.get("warehouse")
+        branch_id = request.query_params.get("branch")
+        if warehouse_id and not branch_id:
+            branch_id = Warehouse.objects.filter(pk=warehouse_id).values_list("branch_id", flat=True).first()
+
+        price_scope = models.Q(warehouse__isnull=True, branch__isnull=True)
+        if branch_id:
+            price_scope |= models.Q(warehouse__isnull=True, branch_id=branch_id)
+        if warehouse_id:
+            price_scope |= models.Q(warehouse_id=warehouse_id)
+
+        best = {}  # (product_id, price_type_id) -> (priority, price)
+        rows = (
+            ProductPrice.objects.filter(is_active=True).filter(price_scope)
+            .values("product_id", "price_type_id", "price", "warehouse_id", "branch_id")
+        )
+        for row in rows:
+            if warehouse_id and row["warehouse_id"] is not None and str(row["warehouse_id"]) == str(warehouse_id):
+                priority = 0
+            elif row["warehouse_id"] is None and branch_id and row["branch_id"] is not None and str(row["branch_id"]) == str(branch_id):
+                priority = 1
+            elif row["warehouse_id"] is None and row["branch_id"] is None:
+                priority = 2
+            else:
+                continue
+            key = (row["product_id"], row["price_type_id"])
+            if key not in best or priority < best[key][0]:
+                best[key] = (priority, row["price"])
+
+        price_map = {}
+        for (product_id, price_type_id), (_, price) in best.items():
+            price_map.setdefault(product_id, []).append({"price_type": price_type_id, "price": price})
+
+        serializer = ProductDocumentSerializer(qs, many=True, context={"request": request, "price_map": price_map})
         return Response(serializer.data)
 
     def perform_update(self, serializer):

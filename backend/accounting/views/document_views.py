@@ -244,14 +244,35 @@ class DocumentViewSet(AuditMixin, viewsets.ModelViewSet):
             return Response({'detail': 'Укажите counterparty, warehouse, document_type и date'}, status=400)
 
         try:
-            warehouse = Warehouse.objects.select_related('receivable_account', 'payable_account').get(id=warehouse_id)
+            warehouse = Warehouse.objects.select_related(
+                'receivable_account', 'payable_account',
+                'receivable_account_supplier', 'payable_account_supplier',
+            ).get(id=warehouse_id)
         except Warehouse.DoesNotExist:
             return Response({'detail': 'Склад не найден'}, status=404)
 
+        try:
+            counterparty = Counterparty.objects.get(id=counterparty_id)
+        except Counterparty.DoesNotExist:
+            return Response({'detail': 'Контрагент не найден'}, status=404)
+
+        # ✅ Тот же выбор счёта, что и в Document._resolve_role_account при реальном
+        # проведении — если этот контрагент поставщик и на складе настроен override,
+        # берём его (например 75 вместо обычного 60), иначе обычный default_field.
+        # Раньше здесь был захардкожен только default_field, из-за чего сайдбар
+        # показывал баланс по чужому счёту для поставщика, выбранного в "Расходе"/
+        # "Приходе" (см. CLAUDE.md про screen/print/export не должны расходиться —
+        # тот же принцип применим и к этому сайдбар-виджету).
+        def _resolve(default_field, supplier_field):
+            override = getattr(warehouse, supplier_field, None)
+            if override is not None and counterparty.type == Counterparty.Type.SUPPLIER:
+                return override
+            return getattr(warehouse, default_field)
+
         if document_type in (Document.Type.OUT, Document.Type.RETURN_IN):
-            account = warehouse.receivable_account
+            account = _resolve('receivable_account', 'receivable_account_supplier')
         elif document_type in (Document.Type.IN, Document.Type.RETURN_OUT):
-            account = warehouse.payable_account
+            account = _resolve('payable_account', 'payable_account_supplier')
         else:
             account = None
 
@@ -264,11 +285,6 @@ class DocumentViewSet(AuditMixin, viewsets.ModelViewSet):
             )
         except AccountSubconto.DoesNotExist:
             return Response({'available': False})
-
-        try:
-            counterparty = Counterparty.objects.get(id=counterparty_id)
-        except Counterparty.DoesNotExist:
-            return Response({'detail': 'Контрагент не найден'}, status=404)
 
         data = _compute_subconto_card(request, account, acc_subconto.subconto_type.slug, counterparty_id, counterparty, date, date)
         data['available'] = True

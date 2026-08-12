@@ -100,6 +100,10 @@ def _rbac(action: str, resource: str):
         # бы в POST (раньше так и было — пользователь без права "создавать товар"
         # не смог бы даже открыть форму накладной, т.к. запрос падал в 403).
         'stocks_map': 'GET',
+        # ✅ Список черновиков "Расхода", резервирующих конкретный товар
+        # (ProductViewSet.reservations, попап по клику на бейдж "В резерве" в
+        # ProductsListPage.tsx) — тоже просто чтение, без явной записи ушло бы в POST.
+        'reservations': 'GET',
     }
     method = action_map.get(action, 'POST')  # неизвестные экшены → POST
     return [IsAuthenticated(), HasPermission(resource, method)()]

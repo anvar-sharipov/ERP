@@ -34,7 +34,12 @@ class Counterparty(models.Model):
         BOTH = 'both', 'Клиент и поставщик'
 
     name = models.CharField(max_length=255, verbose_name="Название контрагента")
-    type = models.CharField(max_length=20, choices=Type.choices, default=Type.BOTH)
+    # ✅ default=CLIENT, а не BOTH — тип "и клиент, и поставщик" временно
+    # недоступен для выбора в CounterpartiesPage.tsx (Document._resolve_role_account
+    # пока не умеет решать, по какому счёту — 60 или 75 — проводить документ для
+    # такого контрагента), так что и дефолт при создании без явного type не должен
+    # тихо создавать "both"-запись в обход этого ограничения.
+    type = models.CharField(max_length=20, choices=Type.choices, default=Type.CLIENT)
     inn = models.CharField(max_length=20, blank=True, verbose_name="ИНН")
     phone = models.CharField(max_length=30, blank=True)
     email = models.EmailField(blank=True)

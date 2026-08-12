@@ -191,6 +191,22 @@ export const accountApi = {
     return res.data as Record<string, { quantity: string; reserved: string; available: string; min_stock_level: number | null; is_low: boolean }>;
   },
 
+  // ✅ Попап по клику на бейдж "В резерве" в ProductsListPage.tsx — список
+  // черновиков "Расхода", резервирующих конкретный товар (см. ReportViewSet.
+  // reservations). Тот же warehouse/branch, что и getStockBalance выше, иначе
+  // сумма количеств в попапе разъедется с цифрой на бейдже.
+  getReservations: async (params: { product: string; warehouse?: string; branch?: string }) => {
+    const res = await api.get('/accounting/reports/reservations/', { params });
+    return res.data as {
+      document_id: number;
+      number: string;
+      date: string;
+      counterparty_name: string | null;
+      warehouse_name: string;
+      quantity: string;
+    }[];
+  },
+
   getRevenueByWarehouse: async (params: { date_from: string; date_to: string; warehouse?: string; branch?: string }) => {
     const res = await api.get('/accounting/reports/revenue-by-warehouse/', { params });
     return res.data as {

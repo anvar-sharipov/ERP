@@ -47,7 +47,7 @@ interface CounterpartyForm {
 
 const EMPTY: CounterpartyForm = {
   name: "",
-  type: "both",
+  type: "client",
   inn: "",
   phone: "",
   email: "",
@@ -458,7 +458,12 @@ const CounterpartiesPage = () => {
               className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
             >
               {COUNTERPARTY_TYPES(t).map((ct) => (
-                <option key={ct.value} value={ct.value}>
+                // ✅ "both" временно недоступен для выбора — Document._resolve_role_account
+                // не умеет решать, по какому счёту (60 или 75) проводить документ для
+                // контрагента, который одновременно и клиент, и поставщик (см. обсуждение
+                // с пользователем). Существующие "both"-записи (если появятся другим путём)
+                // всё ещё отображаются корректно, просто выбрать это значение заново нельзя.
+                <option key={ct.value} value={ct.value} disabled={ct.value === "both"}>
                   {ct.label}
                 </option>
               ))}

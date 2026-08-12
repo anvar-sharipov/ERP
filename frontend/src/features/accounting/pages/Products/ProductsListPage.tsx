@@ -14,6 +14,7 @@ import { ConfirmModal } from "../../../../components/ui/Modal/ConfirmModal";
 import { RBACGuard } from "../../../../components/ui/RBACGuard";
 import { StatusBadge } from "../../../../components/ui/StatusBadge";
 import { ImagePreview } from "../../../../components/ui/ImagePreview";
+import { ProductReservationsModal } from "./ProductReservationsModal";
 import SearchableSelect from "../../../../components/ui/SearchableSelect";
 import { Plus, AlertTriangle, EyeOff } from "lucide-react";
 import { useTranslation } from "react-i18next";
@@ -54,6 +55,7 @@ const ProductsListPage = () => {
   const [activeFilter, setActiveFilter] = useState<"all" | "active" | "inactive">("all");
   const [lowStockOnly, setLowStockOnly] = useState(false);
   const [reservedOnly, setReservedOnly] = useState(false);
+  const [reservationsProduct, setReservationsProduct] = useState<{ id: number; name: string; unit: string } | null>(null);
   const { workBranch, workWarehouse, periodFrom, periodTo } = useDateStore();
 
   const goToTurnover = (item: any) => {
@@ -391,9 +393,21 @@ const ProductsListPage = () => {
                     {t("Stock")}: {qty.toLocaleString("ru-RU")} {unit}
                   </span>
                   {reserved > 0 && (
-                    <span className="px-2 py-1 rounded text-xs md:text-sm font-medium bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300">
+                    // ✅ Кликабельно — открывает ProductReservationsModal со списком
+                    // конкретных черновиков "Расхода", резервирующих товар (номер/дата/
+                    // контрагент), с переходом в накладную. stopPropagation — чтобы клик
+                    // по бейджу не триггерил выделение/двойной клик строки таблицы.
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setReservationsProduct({ id: item.id, name: item.name, unit });
+                      }}
+                      className="px-2 py-1 rounded text-xs md:text-sm font-medium bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300 hover:bg-orange-200 dark:hover:bg-orange-900/70 cursor-pointer"
+                      title={t("ReservedHint")}
+                    >
                       {t("Reserved")}: {reserved.toLocaleString("ru-RU")} {unit}
-                    </span>
+                    </button>
                   )}
                   <span
                     className={`px-2 py-1 rounded text-xs md:text-sm font-medium ${
@@ -611,6 +625,8 @@ const ProductsListPage = () => {
         startIndex={previewIndex}
         onClose={() => setPreviewGallery([])}
       />
+
+      <ProductReservationsModal product={reservationsProduct} onClose={() => setReservationsProduct(null)} />
     </RBACGuard>
   );
 };

@@ -14,6 +14,7 @@
     (createdb + psql -f <dump>.sql -d polisem_check).
   - SRC_DSN / MEDIA_SRC_DIR ниже должны указывать на актуальный дамп/медиа.
 """
+import datetime
 import os
 import sys
 import django
@@ -33,10 +34,10 @@ from django.db import transaction as db_transaction
 from django_tenants.utils import schema_context
 
 SRC_DSN = dict(
-    host='127.0.0.1', port=5432, user='postgres',
+    host='db', port=5432, user='postgres',
     password='novedu112garagoz', dbname='polisem_check',
 )
-MEDIA_SRC_DIR = r"C:\Users\Anvar\Desktop\polisem_store\19.07.2026_1200_backup\media_2026-07-19_12-00\products"
+MEDIA_SRC_DIR = r"/tmp/polisem_media/products"
 
 TENANT_SCHEMA = 'polisem'
 TARGET_WAREHOUSE_ID = 6     # "Polisem Sklad1"
@@ -76,7 +77,7 @@ def q3(v):
 def phase1_wipe():
     from accounting.models import (
         TransactionLine, StockMovement, AuditLog, DocumentItem, Document,
-        JournalEntry, WarehouseStock, Trip, ClosedPeriod,
+        JournalEntry, WarehouseStock, Trip, ClosedPeriod, WarehouseProductSnapshot,
     )
     from accounting.models.currency import ExchangeRate
 
@@ -102,6 +103,19 @@ def phase1_wipe():
         print("  ClosedPeriod удалено:", n[0])
         n = ExchangeRate.objects.filter(currency__code='USD').delete()
         print("  ExchangeRate(USD) удалено:", n[0])
+        # ⚠️ WarehouseProductSnapshot — кэш остатков на конец дня (используется
+        # report_views.py::product_turnover как стартовая точка для периода).
+        # Если не снести вместе со всем остальным — старые снапшоты остаются
+        # привязаны к УЖЕ УДАЛЁННЫМ Document/DocumentItem этого прогона и
+        # ломают отчёты по остаткам для ЛЮБОГО периода после последней даты
+        # снапшота (найдено 2026-08-09: 720449 протухших строк ломали отчёт
+        # "оборот товара" почти для всего каталога). Снапшоты пересоздаются
+        # автоматически (report_views.py при отсутствии снапшота честно
+        # сканирует всю историю DocumentItem — корректно, но медленнее) или
+        # явно через `manage.py recompute_warehouse_snapshots --full` в конце
+        # этого скрипта (см. main()).
+        n = WarehouseProductSnapshot.objects.all().delete()
+        print("  WarehouseProductSnapshot удалено:", n[0])
     print("Фаза 1 завершена.\n")
 
 
@@ -392,8 +406,15 @@ def phase3_trips(cur, employee_map):
     from accounting.models import Trip
 
     print("=== ФАЗА 3.1: рейсы (Trip) ===")
+    # ⚠️ invoice_date — timestamptz, в источнике ВСЕГДА хранится как ровно
+    # 19:00:00 UTC (= полночь по Ашхабаду/Туркменистан, UTC+5) — это по
+    # сути date-only поле, просто закодированное как местная полночь.
+    # Голый .date() от значения psycopg2 (которое приходит в UTC) даёт
+    # день МИНУС ОДИН от настоящего — конвертируем в местное время явно на
+    # уровне SQL (баг найден 2026-08-09, см. MIGRATION_TODO.txt).
     cur.execute("""
-        SELECT t.id, t.driver_id, MIN(i.invoice_date) AS min_date
+        SELECT t.id, t.driver_id,
+               MIN(i.invoice_date AT TIME ZONE 'Asia/Ashgabat') AS min_date
         FROM store_trip t
         LEFT JOIN store_invoice i ON i.trip_id = t.id
         GROUP BY t.id, t.driver_id
@@ -439,8 +460,11 @@ def phase3_main(cur, product_map, counterparty_map, employee_map, trip_map):
     }
 
     # ── исходные накладные ──────────────────────────────────────────
+    # ⚠️ invoice_date AT TIME ZONE 'Asia/Ashgabat' — см. комментарий в
+    # phase3_trips выше про баг с часовым поясом (2026-08-09).
     cur.execute("""
-        SELECT i.id, i.wozwrat_or_prihod, i.is_entry, i.canceled_at, i.invoice_date,
+        SELECT i.id, i.wozwrat_or_prihod, i.is_entry, i.canceled_at,
+               (i.invoice_date AT TIME ZONE 'Asia/Ashgabat') AS invoice_date,
                i.partner_id, i.trip_id, i.comment, p.type AS partner_type
         FROM store_invoice i
         LEFT JOIN store_partner p ON p.id = i.partner_id
@@ -519,11 +543,19 @@ def phase3_main(cur, product_map, counterparty_map, employee_map, trip_map):
         if not doc_id or not prod_id or not qty or qty <= 0:
             skipped_bad += 1
             continue
-        price = it['selected_price']
+        # ⚠️ selected_price/price_after_discount в источнике NOT NULL — при
+        # незаполненной цене там реальный 0, а не NULL, поэтому проверка
+        # "is None" фолбэк не ловила (баг найден 2026-08-09, см.
+        # MIGRATION_TODO.txt). Трактуем 0 как "не задано" так же, как None,
+        # и в качестве последнего фолбэка используем ещё и purchase_price
+        # (для "Приход"-накладных retail_price/purchase_price совпадают).
+        price = it['selected_price'] or None
         if price is None:
-            price = it['price_after_discount']
+            price = it['price_after_discount'] or None
         if price is None:
-            price = it['retail_price']
+            price = it['retail_price'] or None
+        if price is None:
+            price = it['purchase_price']
         price = q3(price)
         cost_price = q3(it['purchase_price'])
         line_counter[doc_id] += 1
@@ -601,7 +633,17 @@ def phase3_main(cur, product_map, counterparty_map, employee_map, trip_map):
     # ⚠️ Транзакции черновиков/отменённых накладных НЕ переносим — иначе задвоение
     # (эти транзакции реально не отражают факт хозяйственной жизни в Polisem,
     # см. MIGRATION_TODO.txt, аудит 2026-07-13).
-    cur.execute("SELECT id, date, invoice_id, description FROM store_transaction")
+    # ⚠️ Приводим к местной дате (Asia/Ashgabat) и берём именно ::date, а не
+    # timestamptz — JournalEntry.date хотя и DateTimeField, но по конвенции
+    # всего кода (см. document.py: date=self.date, где self.date —
+    # DateField) хранит "дату документа" как полночь UTC этой даты, а не
+    # реальное время; передавать сырой timestamptz из источника напрямую
+    # (баг 2026-08-09) даёт день минус один.
+    cur.execute("""
+        SELECT id, (date AT TIME ZONE 'Asia/Ashgabat')::date AS date,
+               invoice_id, description
+        FROM store_transaction
+    """)
     all_transactions = cur.fetchall()
     transactions = [t for t in all_transactions if t['invoice_id'] not in no_posting_invoice_ids]
     skipped_draft_tx = len(all_transactions) - len(transactions)
@@ -704,8 +746,13 @@ def phase3_stock(all_item_meta, cur):
         Document.Type.RETURN_OUT: StockMovement.Direction.OUT,
     }
 
-    cur.execute("SELECT id, invoice_date FROM store_invoice WHERE warehouse_id = %s", (SRC_WAREHOUSE_ID,))
-    date_by_invoice = {r['id']: r['invoice_date'].date() for r in cur.fetchall()}
+    # ⚠️ AT TIME ZONE 'Asia/Ashgabat' — см. комментарий про баг с часовым
+    # поясом (2026-08-09) выше в phase3_trips/phase3_main.
+    cur.execute("""
+        SELECT id, (invoice_date AT TIME ZONE 'Asia/Ashgabat')::date AS invoice_date
+        FROM store_invoice WHERE warehouse_id = %s
+    """, (SRC_WAREHOUSE_ID,))
+    date_by_invoice = {r['id']: r['invoice_date'] for r in cur.fetchall()}
 
     movements = []
     net_by_product = defaultdict(Decimal)  # product_id(myerp) -> net qty (in - out)
@@ -736,8 +783,8 @@ def phase3_stock(all_item_meta, cur):
     return net_by_product, real_qty_by_src_product
 
 
-def phase3_stock_finalize(net_by_product, real_qty_by_src_product, product_map, last_date):
-    from accounting.models import StockMovement, WarehouseStock
+def phase3_stock_finalize(net_by_product, real_qty_by_src_product, product_map, correction_date):
+    from accounting.models import Document, DocumentItem, StockMovement, WarehouseStock
 
     print("=== ФАЗА 3.4: корректировка остатков до значений Polisem ===")
     # product_map: src_product_id -> myerp product_id
@@ -750,6 +797,7 @@ def phase3_stock_finalize(net_by_product, real_qty_by_src_product, product_map, 
     all_products = set(net_by_product) | set(real_qty_by_myerp_product)
     corrections = []
     stocks_to_upsert = []
+    corr_pids = []
     for pid in all_products:
         reconstructed = net_by_product.get(pid, Decimal('0'))
         real = real_qty_by_myerp_product.get(pid, Decimal('0'))
@@ -758,9 +806,10 @@ def phase3_stock_finalize(net_by_product, real_qty_by_src_product, product_map, 
             direction = StockMovement.Direction.IN if diff > 0 else StockMovement.Direction.OUT
             corrections.append(StockMovement(
                 warehouse_id=TARGET_WAREHOUSE_ID, product_id=pid, direction=direction,
-                quantity=abs(diff), cost_price=0, date=last_date,
+                quantity=abs(diff), cost_price=0, date=correction_date,
                 note="Корректировка при переносе данных из Polisem",
             ))
+            corr_pids.append((pid, direction, abs(diff)))
         stocks_to_upsert.append(WarehouseStock(warehouse_id=TARGET_WAREHOUSE_ID, product_id=pid, quantity=real))
 
     StockMovement.objects.bulk_create(corrections, batch_size=2000)
@@ -769,6 +818,35 @@ def phase3_stock_finalize(net_by_product, real_qty_by_src_product, product_map, 
         update_conflicts=True, unique_fields=['warehouse', 'product'], update_fields=['quantity'],
     )
     print(f"  Корректирующих StockMovement: {len(corrections)}")
+
+    # ⚠️ БАГ найден 2026-08-10: report_views.py::product_turnover и
+    # _compute_product_card_rows считают Начало/Приход/Расход/Конец
+    # ИСКЛЮЧИТЕЛЬНО из DocumentItem — голая StockMovement (без Document)
+    # им попросту не видна, хотя WarehouseStock/остатки уже верны. Заводим
+    # для каждой корректировки формальный Document+DocumentItem (price=0/
+    # cost_price=0 — это не сделка, а факт "остаток довели до источника",
+    # без journal_entry — не бухгалтерская проводка). НЕ вызываем
+    # Document.post()/save() с полной бизнес-логикой — тогда создалась бы
+    # ВТОРАЯ StockMovement на ту же корректировку (задвоение), только
+    # bulk_create Document+DocumentItem напрямую.
+    corr_docs = [
+        Document(
+            number=f"POL-CORR-{pid:06d}", document_type=direction, status=Document.Status.POSTED,
+            date=correction_date, warehouse_id=TARGET_WAREHOUSE_ID, branch_id=TARGET_BRANCH_ID,
+            note="Корректировка остатка при переносе данных из Polisem",
+            extra_data={'row_type': 'stock_correction'},
+        )
+        for pid, direction, qty in corr_pids
+    ]
+    created_corr_docs = Document.objects.bulk_create(corr_docs)
+    corr_items = [
+        DocumentItem(document_id=doc.id, product_id=pid, quantity=qty, price=0, cost_price=0, line_no=1)
+        for doc, (pid, direction, qty) in zip(created_corr_docs, corr_pids)
+    ]
+    DocumentItem.objects.bulk_create(corr_items)
+    for doc in created_corr_docs:
+        doc.recalculate()
+    print(f"  Document-корректировок (для видимости в DocumentItem-отчётах): {len(created_corr_docs)}")
     print(f"  WarehouseStock: выставлено остатков для {len(stocks_to_upsert)} товаров")
 
 
@@ -813,14 +891,38 @@ def main():
         all_item_meta = phase3_main(cur, product_map, counterparty_map, employee_map, trip_map)
         net_by_product, real_qty_by_src_product = phase3_stock(all_item_meta, cur)
 
-        cur.execute("SELECT max(invoice_date) AS d FROM store_invoice WHERE warehouse_id = %s", (SRC_WAREHOUSE_ID,))
-        last_date = cur.fetchone()['d'].date()
-        phase3_stock_finalize(net_by_product, real_qty_by_src_product, product_map, last_date)
+        # ⚠️ БАГ найден 2026-08-10: корректирующие StockMovement раньше
+        # датировались ПОСЛЕДНИМ днём истории (max(invoice_date)) — из-за
+        # этого report_views.py::product_turnover (DocumentItem-based, не
+        # видит "осиротевшие" StockMovement без Document вообще) показывал
+        # искажённый оборот ИМЕННО за последний день (корректировка,
+        # накопленная за ВСЮ историю, влезала в "Приход" одного конкретного
+        # дня вместо того, чтобы быть частью "Начало" с самого начала).
+        # Правильно — датировать корректировку ПЕРВЫМ днём МИНУС один (до
+        # начала вообще любой реальной истории), чтобы она входила в
+        # "Начало" ЛЮБОГО отчётного периода, а не торчала разовым "Приходом"
+        # в конкретный день. См. MIGRATION_TODO.txt.
+        cur.execute("""
+            SELECT min(invoice_date AT TIME ZONE 'Asia/Ashgabat')::date AS d
+            FROM store_invoice WHERE warehouse_id = %s
+        """, (SRC_WAREHOUSE_ID,))
+        first_date = cur.fetchone()['d']
+        correction_date = first_date - datetime.timedelta(days=1)
+        phase3_stock_finalize(net_by_product, real_qty_by_src_product, product_map, correction_date)
 
         phase4_closed_periods(cur)
 
     conn.close()
     print("\n=== ПЕРЕНОС ЗАВЕРШЁН ===")
+    print(
+        "ВАЖНО: WarehouseProductSnapshot снесён в ФАЗЕ 1 и НЕ пересоздаётся "
+        "автоматически здесь (пересчёт всех закрытых дат может занять больше "
+        "часа — сознательно не встроен в основной прогон). Отчёты по остаткам "
+        "уже КОРРЕКТНЫ и без этого шага (при отсутствии снапшота report_views.py "
+        "делает честный полный скан истории), но для скорости выполните вручную:\n"
+        "    python manage.py recompute_warehouse_snapshots --schema polisem "
+        f"--warehouse {TARGET_WAREHOUSE_ID} --full"
+    )
 
 
 if __name__ == '__main__':

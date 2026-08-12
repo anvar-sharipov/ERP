@@ -12,7 +12,7 @@ import psycopg2
 import psycopg2.extras
 from django_tenants.utils import schema_context
 
-SRC_DSN = dict(host='127.0.0.1', port=5432, user='postgres',
+SRC_DSN = dict(host='db', port=5432, user='postgres',
                password='novedu112garagoz', dbname='polisem_check')
 
 
