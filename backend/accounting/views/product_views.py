@@ -594,7 +594,7 @@ class CounterpartyViewSet(AuditMixin, viewsets.ModelViewSet):
         from django.contrib.contenttypes.models import ContentType
         from django.db.models import Sum, Q
         from accounting.models import AccountSubconto, TransactionLine
-        from accounting.views.transaction_views import _tl_scope_filter
+        from accounting.views.transaction_views import _tl_scope_filter, _subconto_value_id
         from users.scoping import get_user_scope
 
         date_from = request.query_params.get('date_from')
@@ -609,11 +609,11 @@ class CounterpartyViewSet(AuditMixin, viewsets.ModelViewSet):
             subconto_type__content_type=ContentType.objects.get_for_model(Counterparty),
         ).select_related('account', 'subconto_type')
 
-        def to_int(value):
-            try:
-                return int(value)
-            except (TypeError, ValueError):
-                return None
+        # ✅ to_int(value) раньше падал на TypeError для ручных проводок (subcontos
+        # хранит {"id":..,"name":..} для них, не голый id — см. _subconto_value_q в
+        # transaction_views.py) и молча их пропускал ("except: return None") — ручные
+        # проводки контрагенту никогда не попадали в это сальдо/оборот.
+        to_int = _subconto_value_id
 
         result = {}
 

@@ -196,7 +196,7 @@ export const AppLayout: React.FC = () => {
                 />
                 <div className="text-right text-xs text-gray-500">
                   <div>
-                    {t("Printed")}: {currentUser?.full_name}
+                    {t("Printed")}: {currentUser?.id}
                   </div>
                   <div>
                     {t("Date")}: {new Date().toLocaleString("ru-RU")}

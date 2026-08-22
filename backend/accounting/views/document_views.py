@@ -3,6 +3,7 @@ from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from django.core.exceptions import ValidationError
+from rest_framework.exceptions import ValidationError as DRFValidationError
 from django.db.models import Q
 
 from accounting.models import Document, DocumentItem, DocumentParticipant, AuditLog
@@ -334,7 +335,29 @@ class DocumentItemViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         document = Document.objects.get(pk=self.kwargs['document_pk'])
-        serializer.save(document=document)
+        # ✅ DocumentItem.save() бросает django.core.exceptions.ValidationError
+        # (запрет менять строки проведённого документа, теперь и недостаток
+        # товара на складе — см. check_stock_availability) — DRF ловит только
+        # rest_framework.exceptions.APIException, обычный Django ValidationError
+        # без перевода в DRF-исключение уронил бы запрос в 500 вместо понятного
+        # 400 (см. _get_error_detail — тот же паттерн, что и в post_document/
+        # unpost_document выше).
+        try:
+            serializer.save(document=document)
+        except ValidationError as e:
+            # ✅ DRFValidationError(строка) сериализуется в exception_handler как
+            # ГОЛЫЙ список (["текст"]), а не {"detail": "текст"} — фронтенд
+            # (DocumentFormPage.tsx::saveMutation onError) читает именно
+            # err.response.data.detail, так что без явной обёртки в dict понятное
+            # сообщение об ошибке (напр. "недостаточно товара на складе") терялось
+            # бы и подменялось дженериком "Ошибка сохранения".
+            raise DRFValidationError({'detail': _get_error_detail(e)})
+
+    def perform_update(self, serializer):
+        try:
+            serializer.save()
+        except ValidationError as e:
+            raise DRFValidationError({'detail': _get_error_detail(e)})
 
 
 class DocumentParticipantViewSet(viewsets.ModelViewSet):

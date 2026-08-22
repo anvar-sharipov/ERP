@@ -94,6 +94,54 @@ def check_period_open(date, branch_id=None, warehouse_id=None):
                     f"Вы указали {date.strftime('%d.%m.%Y')}."
                 )
         
+def check_stock_availability(warehouse_id, product, quantity, exclude_document_id=None):
+    """
+    Запрещает сохранять/проводить строку документа, если запрошенное
+    количество превышает физический остаток на складе за вычетом того, что уже
+    "занято" ДРУГИМИ непроведёнными документами того же рода (Расход/Возврат
+    поставщику/Перемещение — все три списывают товар со склада-источника при
+    проведении, см. Document._stock_direction) на этом же складе. exclude_document_id
+    исключает из подсчёта резерва сам документ, чья строка сейчас проверяется —
+    иначе документ конкурировал бы сам с собой за собственный резерв.
+
+    ✅ "Резерв" считается ЖИВЫМ запросом по черновикам (тот же принцип, что и в
+    product_views.py::stocks_map/report_views.py::stock_balance) — НЕ через
+    WarehouseStock.reserved_quantity, это поле нигде в коде не пишется и всегда
+    равно 0 (см. комментарий в product_views.py::stocks_map).
+    """
+    from decimal import Decimal
+    from django.db.models import Sum
+    from accounting.models import WarehouseStock, DocumentItem
+
+    if not warehouse_id:
+        return
+
+    stock_qty = (
+        WarehouseStock.objects
+        .filter(warehouse_id=warehouse_id, product_id=product.id)
+        .values_list('quantity', flat=True)
+        .first()
+    ) or Decimal('0')
+
+    reserved_qs = DocumentItem.objects.filter(
+        document__status='draft',
+        document__document_type__in=['out', 'return_out', 'move'],
+        document__warehouse_id=warehouse_id,
+        product_id=product.id,
+    )
+    if exclude_document_id:
+        reserved_qs = reserved_qs.exclude(document_id=exclude_document_id)
+    reserved = reserved_qs.aggregate(s=Sum('quantity'))['s'] or Decimal('0')
+
+    available = stock_qty - reserved
+    if available < quantity:
+        raise ValidationError(
+            f"Недостаточно товара «{product}» на складе. Остаток: {stock_qty}, "
+            f"занято другими черновиками (Расход/Возврат поставщику/Перемещение): {reserved}, "
+            f"доступно: {available}, запрошено: {quantity}."
+        )
+
+
 def generate_journal_number():
     year = now().year
 

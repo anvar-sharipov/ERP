@@ -266,7 +266,7 @@ const ProductRow = forwardRef<ProductRowHandle, ProductRowProps>(({
   // не рефетчится (см. useWarehouseStocks.ts), поэтому безопасна как зависимость.
   const activeProducts = useMemo(() => products.filter((p) => p.is_active !== false), [products]);
   const selectableProducts = useMemo(
-    () => (filterByStock ? activeProducts.filter((p) => (stockMap.get(p.id)?.available ?? 0) > 0) : activeProducts),
+    () => (filterByStock ? activeProducts.filter((p) => (stockMap.get(p.id)?.quantity ?? 0) > 0) : activeProducts),
     [activeProducts, filterByStock, stockMap],
   );
 

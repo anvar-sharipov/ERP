@@ -279,7 +279,14 @@ const MainRows = forwardRef<MainRowsHandle, MainRowsProps>(({ isPosted, mainItem
   const handleQtyKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLInputElement>, rowKey: string) => {
       const mIdx = indexOf(rowKey);
-      if (e.key === "Enter" || e.key === "ArrowRight") {
+      if (e.key === "Enter") {
+        // ✅ Цена меняется редко (по просьбе пользователя) — Enter из "Кол-во"
+        // ведёт СРАЗУ к поиску товара для следующей строки, минуя "Цену".
+        // Стрелка вправо (ручная навигация по ячейкам) на "Цену" по-прежнему
+        // переходит — трогаем только Enter-цепочку добавления строк.
+        e.preventDefault();
+        onFocusAddSelect();
+      } else if (e.key === "ArrowRight") {
         e.preventDefault();
         focusAndReveal(priceRefs.current[mIdx]);
       } else if (e.key === "ArrowDown") {

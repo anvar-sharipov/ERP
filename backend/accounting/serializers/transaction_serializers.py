@@ -356,6 +356,20 @@ class JournalEntryListSerializer(serializers.ModelSerializer):
         return self._subconto_type_map
 
     def _resolve_subconto_label(self, slug, pk):
+        # ✅ TransactionLine.subcontos хранит ДВА разных формата в одном и том же
+        # JSONField в зависимости от того, кто создал проводку:
+        #   - вручную (JournalEntryForm.tsx → TransactionLineSerializer, см.
+        #     SubcontoValueSerializer выше) — {"id": 5, "name": "ИП Ахмедов"},
+        #     имя уже снэпшочено на момент ввода, резолвить нечего;
+        #   - из документа (Document._resolve_account_subcontos) — просто pk
+        #     (int), имя нужно подтягивать через модель по content_type.
+        # Раньше эта функция понимала только второй вариант — любая ручная
+        # проводка с заполненным субконто валила ВЕСЬ список проводок
+        # (TypeError: unhashable type 'dict' на cache_key = (slug, pk) ниже,
+        # т.к. pk оказывался словарём).
+        if isinstance(pk, dict):
+            return pk.get('name') or None
+
         if not hasattr(self, '_subconto_label_cache'):
             self._subconto_label_cache = {}
         cache_key = (slug, pk)

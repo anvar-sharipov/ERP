@@ -61,6 +61,32 @@ def _broadcast_closed_period(request, instance, action_name):
 
 
 
+def _subconto_value_q(key_lookup, subconto_id):
+    """
+    TransactionLine.subcontos хранит ДВА разных формата в одном и том же JSONField
+    (см. JournalEntryListSerializer._resolve_subconto_label): {slug: id} — проводки
+    документа (Document._resolve_account_subcontos), {slug: {"id":.., "name":..}} —
+    ручные проводки (JournalEntryForm.tsx → TransactionLineSerializer/
+    SubcontoValueSerializer, формат там обязателен). Прямое равенство
+    `**{key_lookup: int(subconto_id)}` находит только первый формат — ручные
+    проводки с этим субконто тихо выпадали из оборотов/сальдо контрагента
+    (карточка субконто, разбивка по субконто, bulk-сальдо контрагентов). OR по
+    обоим формам находит проводку независимо от того, кем она создана.
+    """
+    sid = int(subconto_id)
+    return Q(**{key_lookup: sid}) | Q(**{f'{key_lookup}__id': sid})
+
+
+def _subconto_value_id(value):
+    """Достаёт id субконто из значения JSONField независимо от формата (см. _subconto_value_q)."""
+    if isinstance(value, dict):
+        value = value.get('id')
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
 def _tl_scope_filter(request, branch_ids, warehouse_ids):
     """
     Тот же смысл, что и _osv_base_filter, но для queryset TransactionLine
@@ -98,7 +124,9 @@ def _compute_subconto_card(request, account, subconto_slug, subconto_id, subcont
     base_filter = _tl_scope_filter(request, branch_ids, warehouse_ids)
     key_lookup = f'subcontos__{subconto_slug}'
 
-    base_qs = TransactionLine.objects.filter(base_filter, account_id=account.id, **{key_lookup: int(subconto_id)})
+    base_qs = TransactionLine.objects.filter(base_filter, account_id=account.id).filter(
+        _subconto_value_q(key_lookup, subconto_id)
+    )
 
     pre_totals = base_qs.filter(journal_entry__date__date__lt=date_from).aggregate(
         debit=Sum('amount', filter=Q(side='debit'), default=Decimal('0')),
@@ -192,7 +220,7 @@ def _compute_account_card(request, account, date_from, date_to, subconto_slug=No
     # report_views.py::_filter_product_card_rows для карточки товара.
     qs = TransactionLine.objects.filter(base_filter, account_id=account.id)
     if subconto_slug and subconto_id:
-        qs = qs.filter(**{f'subcontos__{subconto_slug}': int(subconto_id)})
+        qs = qs.filter(_subconto_value_q(f'subcontos__{subconto_slug}', subconto_id))
 
     pre_totals = qs.filter(journal_entry__date__date__lt=date_from).aggregate(
         debit=Sum('amount', filter=Q(side='debit'), default=Decimal('0')),
@@ -711,11 +739,11 @@ class JournalEntryViewSet(AuditMixin, BulkDestroyMixin, viewsets.ModelViewSet):
             )
             result = {}
             for row in rows:
-                try:
-                    key = int(row[key_lookup])
-                except (TypeError, ValueError):
+                key = _subconto_value_id(row[key_lookup])
+                if key is None:
                     continue
-                result[key] = (row['debit'] or Decimal('0'), row['credit'] or Decimal('0'))
+                d, c = result.get(key, (Decimal('0'), Decimal('0')))
+                result[key] = (d + (row['debit'] or Decimal('0')), c + (row['credit'] or Decimal('0')))
             return result
 
         pre_sums    = sums_by_key(base_qs.filter(journal_entry__date__date__lt=date_from))

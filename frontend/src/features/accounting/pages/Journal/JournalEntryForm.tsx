@@ -6,6 +6,7 @@ import { useTranslation } from "react-i18next";
 import { accountApi } from "../../services/accountingApi";
 import { Button } from "../../../../components/ui/Button";
 import { Input } from "../../../../components/ui/Input";
+import SearchableSelect from "../../../../components/ui/SearchableSelect";
 import { useNotify } from "../../../../core/context/NotificationContext";
 import { useDateStore } from "../../../../core/store/dateStore";
 import { useClosedPeriod } from "../../../../core/hooks/useClosedPeriod";
@@ -77,33 +78,28 @@ export default function JournalEntryForm({ initial, onSuccess, onCancel }: Props
     });
   }
 
-  function SubcontoField({ subcontoType, value, onChange, disabled }: { subcontoType: any; value: any; onChange: (val: any) => void; disabled?: boolean }) {
+  function SubcontoField({ subcontoType, value, onChange, disabled }: { subcontoType: any; value: any; onChange: (val: { id: number; name: string } | null) => void; disabled?: boolean }) {
     const { data: records = [] } = useSubcontoRecords(subcontoType.id);
+    // ✅ Значение — {id, name} (TransactionLineSerializer.validate требует именно
+    // этот формат для ручных проводок, см. SubcontoValueSerializer) — раньше был
+    // обычный <select>, теперь SearchableSelect (см. CLAUDE.md: любой select по
+    // списку данных — только через него), формат значения не меняли.
+    const options = records.map((r: any) => ({ id: r.id, label: r.name }));
 
     return (
       <div className="flex items-center gap-2">
         <span className="text-xs text-gray-400 w-24 shrink-0">{subcontoType.name}:</span>
-        <select
-          value={value?.id ?? ""}
-          onChange={(e) => {
-            const record = records.find((r: any) => r.id === Number(e.target.value));
+        <SearchableSelect
+          options={options}
+          value={value?.id ?? null}
+          onChange={(id) => {
+            const record = records.find((r: any) => r.id === id);
             onChange(record ? { id: record.id, name: record.name } : null);
           }}
+          placeholder={t("Select")}
           disabled={disabled}
-          className="flex-1 px-2 py-1 rounded border text-xs outline-none
-          bg-white dark:bg-slate-950
-          text-gray-900 dark:text-indigo-100
-          border-gray-300 dark:border-indigo-900/50
-          focus:border-indigo-500 dark:focus:border-indigo-500/50
-          disabled:opacity-60 disabled:cursor-not-allowed"
-        >
-          <option value="">{t("Select")}</option>
-          {records.map((r: any) => (
-            <option key={r.id} value={r.id}>
-              {r.name}
-            </option>
-          ))}
-        </select>
+          className="flex-1"
+        />
       </div>
     );
   }
@@ -140,7 +136,12 @@ export default function JournalEntryForm({ initial, onSuccess, onCancel }: Props
   // Живой баланс
   const debitTotal = lines.filter((l) => l.side === "debit").reduce((s, l) => s + (Number(l.amount) || 0), 0);
   const creditTotal = lines.filter((l) => l.side === "credit").reduce((s, l) => s + (Number(l.amount) || 0), 0);
-  const balanced = debitTotal > 0 && debitTotal === creditTotal;
+  // ✅ debitTotal > 0 раньше блокировал "красное сторно" (сумма проводки может
+  // быть отрицательной — см. TransactionLine.amount/validate_nonzero_amount в
+  // transaction.py, бэкенд уже это разрешает и проверяет только Дт==Кт и ≠0,
+  // а не знак) — ручная операция целиком в минус (обе ноги отрицательные, но
+  // равные) не проходила фронтовую проверку баланса, хотя бэкенд бы её принял.
+  const balanced = debitTotal !== 0 && debitTotal === creditTotal;
 
   const setLine = (idx: number, patch: Partial<Omit<TransactionLine, "id">>) => setLines((ls) => ls.map((l, i) => (i === idx ? { ...l, ...patch } : l)));
 
@@ -264,7 +265,6 @@ export default function JournalEntryForm({ initial, onSuccess, onCancel }: Props
                       <input
                         type="number"
                         step="0.01"
-                        min="0"
                         value={line.amount}
                         onChange={(e) => setLine(idx, { amount: e.target.value })}
                         disabled={isReadOnly}

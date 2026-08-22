@@ -36,7 +36,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# ✅ --default-timeout/--retries — pip по умолчанию рвёт скачивание пакета уже
+# через ~15с простоя на медленной/нестабильной сети (см. ReadTimeoutError на
+# files.pythonhosted.org при сборке) — увеличенный таймаут и ретраи переживают
+# такие сетевые заминки вместо провала всей сборки на последнем пакете.
+RUN pip install --no-cache-dir --default-timeout=200 --retries=5 -r requirements.txt
 
 # ✅ Контекст сборки — корень репо (там requirements.txt), но код бэкенда
 # нужен внутри /app БЕЗ вложенной папки backend/ — иначе manage.py оказывается

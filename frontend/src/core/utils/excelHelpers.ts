@@ -54,7 +54,7 @@ export const addExcelHeader = async (
   // --- 3. Информация ---
   const infoData = [
     { label: `${t("Company")}:`, value: company?.name || "—" },
-    { label: `${t("Operator")}:`, value: user?.full_name || "—" },
+    { label: `${t("Operator")}:`, value: user?.id ?? "—" },
     { label: `${t("DownloadDate")}:`, value: new Date().toLocaleString() },
   ];
 

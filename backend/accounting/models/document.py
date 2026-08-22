@@ -297,6 +297,17 @@ class Document(models.Model):
             raise ValidationError("Нельзя провести пустой документ.")
         # check_period_open(self.date)
         check_period_open(self.date, branch_id=self.branch_id, warehouse_id=self.warehouse_id)
+        # ✅ Та же проверка, что и при сохранении строки (DocumentItem.save() —
+        # см. accounting/utils.py::check_stock_availability) — повторяем и здесь
+        # на случай, если резерв на складе успел измениться (другой черновик
+        # сохранён/удалён) между сохранением строки и нажатием "Провести".
+        if self.document_type in (self.Type.OUT, self.Type.RETURN_OUT, self.Type.MOVE):
+            from accounting.utils import check_stock_availability
+            for item in self.items.select_related('product'):
+                check_stock_availability(
+                    self.warehouse_id, item.product, item.quantity,
+                    exclude_document_id=self.id,
+                )
         self._create_stock_movements()
         if self.document_type == self.Type.IN:
             self._update_product_cost_prices(user=user)
@@ -837,6 +848,20 @@ class DocumentItem(models.Model):
             self.unit = self.product.unit
         if not self.cost_price and self.product_id:
             self.cost_price = self.product.cost_price
+        # ✅ Расход/Возврат поставщику/Перемещение списывают товар со склада
+        # документа при проведении (см. Document._stock_direction) — запрет
+        # сохранять строку с количеством больше доступного (остаток минус то,
+        # что уже занято другими черновиками) действует уже здесь, при
+        # сохранении строки, а не только при проведении документа (см.
+        # accounting/utils.py::check_stock_availability).
+        if self.document.document_type in (
+            Document.Type.OUT, Document.Type.RETURN_OUT, Document.Type.MOVE
+        ):
+            from accounting.utils import check_stock_availability
+            check_stock_availability(
+                self.document.warehouse_id, self.product, self.quantity,
+                exclude_document_id=self.document_id,
+            )
         super().save(*args, **kwargs)
         self.document.recalculate()
 
